@@ -81,6 +81,50 @@
       border-radius: 16px; padding: 24px; box-shadow: 0 24px 64px rgba(0,0,0,.45);
     }
     .modal-overlay .modal-card h1 { font-size: 24px; }
+    .help-fab {
+      position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%);
+      z-index: 50; display: inline-flex; align-items: center; gap: 8px;
+      background: var(--card); color: var(--text); border: 1px solid var(--line);
+      border-radius: 999px; padding: 10px 18px; font-weight: 700; cursor: pointer;
+      box-shadow: 0 10px 28px rgba(0,0,0,.35);
+    }
+    .help-fab:hover { border-color: var(--accent); color: var(--accent); }
+    .help-fab .q {
+      width: 22px; height: 22px; border-radius: 50%; background: var(--accent); color: #042015;
+      display: grid; place-items: center; font-size: 14px; font-weight: 800;
+    }
+    .help-overlay {
+      position: fixed; inset: 0; z-index: 60;
+      display: grid; align-items: end; justify-items: center;
+      background: rgba(6, 10, 14, .72); backdrop-filter: blur(6px); padding: 16px;
+    }
+    .help-panel {
+      width: min(720px, 100%); max-height: min(88vh, 860px);
+      background: var(--card); border: 1px solid var(--line); border-radius: 20px 20px 16px 16px;
+      box-shadow: 0 -16px 48px rgba(0,0,0,.4); display: flex; flex-direction: column;
+      overflow: hidden;
+    }
+    .help-head {
+      display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+      padding: 20px 22px 12px; border-bottom: 1px solid var(--line);
+    }
+    .help-head h1 { font-size: 22px; margin: 0 0 4px; }
+    .help-body { padding: 18px 22px 8px; overflow: auto; flex: 1; }
+    .help-body h2 { font-size: 18px; margin: 0 0 8px; }
+    .help-body ol, .help-body ul { margin: 8px 0 12px; padding-left: 20px; }
+    .help-body li { margin: 6px 0; }
+    .help-progress { display: flex; gap: 6px; flex-wrap: wrap; margin: 0 0 16px; }
+    .help-progress button {
+      background: var(--bg); color: var(--muted); border: 1px solid var(--line);
+      border-radius: 999px; padding: 4px 10px; font-size: 12px; cursor: pointer;
+    }
+    .help-progress button.on { color: #042015; background: var(--accent); border-color: var(--accent); font-weight: 700; }
+    .help-nav {
+      display: flex; justify-content: space-between; gap: 8px; padding: 14px 22px 18px;
+      border-top: 1px solid var(--line);
+    }
+    #app { padding-bottom: 72px; }
+    #auth { padding-bottom: 88px; }
   </style>
 </head>
 <body>
@@ -96,6 +140,7 @@
       <input id="password" type="password" autocomplete="current-password" />
       <div style="height:16px"></div>
       <button class="btn" id="auth-btn" type="button" disabled>Continue</button>
+      <p class="muted" style="margin-top:16px;font-size:13px">Need the full path? Open <b>Help</b> at the bottom of the screen for the server and plugin walkthrough.</p>
     </div>
   </div>
 
@@ -114,7 +159,7 @@
       <div class="check"><input id="gh-setup-create" type="checkbox" /> <span>Create a private repository if it does not exist</span></div>
       <div style="height:16px"></div>
       <button class="btn" id="gh-setup-save" type="button">Save and continue</button>
-      <p class="muted" style="margin-top:14px;font-size:13px">Create a token at GitHub → Settings → Developer settings → Personal access tokens with the <code>repo</code> scope.</p>
+      <p class="muted" style="margin-top:14px;font-size:13px">Create a token at GitHub → Settings → Developer settings → Personal access tokens with the <code>repo</code> scope. Full new-user steps (server + plugin) are in <b>Help</b> at the bottom of the screen.</p>
     </div>
   </div>
 
@@ -136,6 +181,29 @@
       </div>
     </header>
     <main class="wrap" id="main"></main>
+  </div>
+
+  <button class="help-fab" id="help-fab" type="button" aria-haspopup="dialog" aria-controls="help-panel">
+    <span class="q" aria-hidden="true">?</span> Help
+  </button>
+  <div id="help-overlay" class="help-overlay hidden" role="presentation">
+    <aside id="help-panel" class="help-panel" role="dialog" aria-modal="true" aria-labelledby="help-title">
+      <div class="help-head">
+        <div>
+          <h1 id="help-title">Setup walkthrough</h1>
+          <p class="muted" style="margin:0">New-user path: start the server, connect GitHub, then sideload the Obsidian plugin.</p>
+        </div>
+        <button class="ghost" id="help-close" type="button">Close</button>
+      </div>
+      <div class="help-body">
+        <div class="help-progress" id="help-progress"></div>
+        <div id="help-step"></div>
+      </div>
+      <div class="help-nav">
+        <button class="btn secondary" id="help-prev" type="button">Back</button>
+        <button class="btn" id="help-next" type="button">Next</button>
+      </div>
+    </aside>
   </div>
 
 <script>
@@ -178,6 +246,157 @@ function when(t) {
   if (s < 86400) return Math.floor(s/3600) + " h ago";
   return d.toLocaleString();
 }
+
+const HELP_STEPS = [
+  {
+    title: "1. Start the Syncidian server",
+    html: () => `
+      <p>If you can open this dashboard, the server is already running. For a new machine, deploy it first.</p>
+      <h2>Docker (recommended)</h2>
+      <pre>git clone https://github.com/shangeethsivan/Syncidian.git
+cd Syncidian
+docker compose up --build -d</pre>
+      <p>Then open <code>${esc(location.origin)}</code> (local default is <code>http://localhost:8080</code>).</p>
+      <h2>Without Docker (Go 1.22+)</h2>
+      <pre>go run ./cmd/syncidian serve</pre>
+      <p class="muted">Data is stored in <code>./data</code> locally, or in a <code>/data</code> volume when you use Docker or Railway.</p>
+      <h2>Railway</h2>
+      <ol>
+        <li>New project → deploy this GitHub repo (Dockerfile is auto-detected).</li>
+        <li>Settings → Volumes → add a volume mounted at <code>/data</code>.</li>
+        <li>Generate a public domain, then open that URL.</li>
+      </ol>
+      <p>Health check: <code>GET ${esc(location.origin)}/health</code>.</p>
+    `,
+  },
+  {
+    title: "2. Connect a GitHub repository",
+    html: () => `
+      <p>GitHub is the durable, versioned source of truth. The popup on this screen is required before you can create an admin or sign in.</p>
+      <ol>
+        <li>Create a GitHub personal access token with the <code>repo</code> scope (GitHub → Settings → Developer settings → Personal access tokens).</li>
+        <li>Enter the repository as <code>owner/name</code>, for example <code>you/obsidian-vault</code>.</li>
+        <li>Choose the branch (usually <code>main</code>).</li>
+        <li>Optionally check “Create a private repository if it does not exist”.</li>
+        <li>Click <b>Save and continue</b>.</li>
+      </ol>
+      <p>The Obsidian plugin never sees GitHub credentials. You can change this later on the GitHub page.</p>
+    `,
+  },
+  {
+    title: "3. Create your admin account",
+    html: () => `
+      <p>On first launch this dashboard asks you to create the first admin. After that, the same form is a sign-in.</p>
+      <ol>
+        <li>Choose a username.</li>
+        <li>Choose a password of at least 8 characters.</li>
+        <li>Click <b>Create admin</b> (or <b>Sign in</b> on later visits).</li>
+      </ol>
+      <p class="muted">Each user is isolated: devices, tokens, vault files, and GitHub config stay private. Admins can add more users later on the Users page.</p>
+    `,
+  },
+  {
+    title: "4. Create an access token",
+    html: () => `
+      <p>The plugin authenticates with a dashboard token, not your password.</p>
+      <ol>
+        <li>Open the <b>Tokens</b> page after you sign in.</li>
+        <li>Name the token after the device, for example <code>MacBook Pro</code>.</li>
+        <li>Click <b>Create token</b>.</li>
+        <li>Copy the <code>sk_sync_…</code> value immediately — it is shown only once.</li>
+      </ol>
+      <p>Create one token per person. The same user can register many devices. Revoke a token any time from that page.</p>
+    `,
+  },
+  {
+    title: "5. Install the Obsidian plugin",
+    html: () => `
+      <p>Syncidian is <b>not</b> in the Community Plugin store yet. Sideload it once per vault.</p>
+      <h2>Installer script</h2>
+      <pre>chmod +x scripts/install-plugin.sh
+./scripts/install-plugin.sh "/path/to/YourVault"</pre>
+      <p>On a Mac this is often:</p>
+      <pre>./scripts/install-plugin.sh "$HOME/Documents/Obsidian/MyVault"</pre>
+      <h2>Or copy the files by hand</h2>
+      <p>Copy these three files into <code>{Vault}/.obsidian/plugins/syncidian/</code>:</p>
+      <ul>
+        <li><code>plugin/manifest.json</code></li>
+        <li><code>plugin/main.js</code></li>
+        <li><code>plugin/styles.css</code></li>
+      </ul>
+      <p>Then in Obsidian:</p>
+      <ol>
+        <li>Settings → Community plugins → turn <b>Restricted mode</b> off.</li>
+        <li>Reload plugins or restart Obsidian.</li>
+        <li>Enable <b>Syncidian</b>.</li>
+      </ol>
+      <p class="muted">Repeat the copy step on every device (Windows, Mac, Linux, Android, iOS). You can also point <a href="https://github.com/TfTHacker/obsidian42-brat" target="_blank" rel="noopener">BRAT</a> at this GitHub repo.</p>
+    `,
+  },
+  {
+    title: "6. Connect the plugin and sync",
+    html: () => `
+      <p>In Obsidian: Settings → Syncidian.</p>
+      <ol>
+        <li>Server URL: <code>${esc(location.origin)}</code></li>
+        <li>Access token: the <code>sk_sync_…</code> value from the Tokens page</li>
+        <li>Device name: for example <code>MacBook Pro</code></li>
+        <li>Click <b>Connect</b></li>
+      </ol>
+      <p>The device should appear on the Overview and Devices pages. Edits sync over HTTPS and a WebSocket; conflicts can be resolved as keep local, keep remote, or merge.</p>
+      <p>Optional next steps:</p>
+      <ul>
+        <li><b>MCP / AI</b> — point a client at <code>${esc(location.origin)}/mcp</code> with <code>Authorization: Bearer sk_sync_…</code></li>
+        <li>Re-open this walkthrough any time from <b>Help</b> at the bottom of the screen.</li>
+      </ul>
+    `,
+  },
+];
+let helpStep = 0;
+
+function renderHelp() {
+  const progress = $("help-progress");
+  progress.innerHTML = HELP_STEPS.map((s, i) =>
+    `<button type="button" data-help-step="${i}" class="${i === helpStep ? "on" : ""}">${i + 1}</button>`
+  ).join("");
+  progress.querySelectorAll("[data-help-step]").forEach((b) => {
+    b.onclick = () => { helpStep = Number(b.dataset.helpStep); renderHelp(); };
+  });
+  $("help-step").innerHTML = `<h2>${esc(HELP_STEPS[helpStep].title)}</h2>${HELP_STEPS[helpStep].html()}`;
+  $("help-prev").disabled = helpStep === 0;
+  $("help-next").textContent = helpStep === HELP_STEPS.length - 1 ? "Done" : "Next";
+}
+
+function openHelp(step) {
+  if (typeof step === "number") helpStep = step;
+  $("help-overlay").classList.remove("hidden");
+  renderHelp();
+  $("help-close").focus();
+}
+
+function closeHelp() {
+  $("help-overlay").classList.add("hidden");
+  $("help-fab").focus();
+}
+
+$("help-fab").onclick = () => openHelp();
+$("help-close").onclick = closeHelp;
+$("help-overlay").addEventListener("click", (e) => {
+  if (e.target === $("help-overlay")) closeHelp();
+});
+$("help-prev").onclick = () => {
+  if (helpStep > 0) { helpStep -= 1; renderHelp(); }
+};
+$("help-next").onclick = () => {
+  if (helpStep < HELP_STEPS.length - 1) { helpStep += 1; renderHelp(); }
+  else closeHelp();
+};
+document.addEventListener("keydown", (e) => {
+  if ($("help-overlay").classList.contains("hidden")) return;
+  if (e.key === "Escape") closeHelp();
+  if (e.key === "ArrowRight") $("help-next").click();
+  if (e.key === "ArrowLeft") $("help-prev").click();
+});
 
 async function boot() {
   const st = await api("/api/v1/setup");
@@ -421,12 +640,15 @@ async function overview(main) {
       <h2>Connect Obsidian</h2>
       <ol>
         <li>Create an access token on the Tokens page.</li>
-        <li>Install the plugin from this repository’s <code>plugin/</code> folder (manual sideload — see README).</li>
-        <li>In Obsidian: Settings → Syncidian → paste <code>${esc(location.origin)}</code> and the token.</li>
+        <li>Sideload the plugin from this repository’s <code>plugin/</code> folder (or run <code>scripts/install-plugin.sh</code>).</li>
+        <li>In Obsidian: Settings → Syncidian → paste <code>${esc(location.origin)}</code> and the token, then click Connect.</li>
       </ol>
+      <button class="btn secondary" id="open-help" type="button">Open setup walkthrough</button>
     </div>
     ${asList(conflicts).length ? `<div class="card"><h2>Conflicts</h2>${conflictList(asList(conflicts))}</div>` : ""}
   `;
+  const helpBtn = $("open-help");
+  if (helpBtn) helpBtn.onclick = () => openHelp(3);
 }
 
 function deviceTable(devices) {
