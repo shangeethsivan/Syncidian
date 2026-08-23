@@ -30,6 +30,8 @@ func (s *Server) handleGetGitHub(w http.ResponseWriter, r *http.Request, u *stor
 	})
 }
 
+// handleSetGitHub stores this user's one GitHub repository. Admins never reach here
+// (vaultAuthed). Saving again replaces the same row — one repo per user, not per server.
 func (s *Server) handleSetGitHub(w http.ResponseWriter, r *http.Request, u *store.User) {
 	var req struct {
 		Token      string `json:"token"`

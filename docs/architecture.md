@@ -245,6 +245,9 @@ flowchart LR
   subgraph dashboard [Dashboard]
     Setup["First-boot setup<br/>create admin"] --> Login["POST /api/v1/auth/login"]
     Login --> Cookie["HttpOnly cookie<br/>syncidian_session"]
+    Cookie --> Split{"Role"}
+    Split -->|"admin"| UsersOnly["Users page only"]
+    Split -->|"user"| VaultUI["GitHub · tokens · devices"]
   end
 
   subgraph pluginAuth [Plugin and MCP]
@@ -351,7 +354,8 @@ Vault bytes live on disk at `data/vaults/<userId>/`. SQLite (`data/syncidian.db`
 
 ```mermaid
 flowchart TB
-  S["One Syncidian process"] --> A["User A"]
+  S["One Syncidian process"] --> Admin["Admin<br/>users only · no repo sync"]
+  S --> A["User A"]
   S --> B["User B"]
   S --> C["User C"]
 
@@ -367,7 +371,7 @@ flowchart TB
   C --> CV["vaults/C"]
 ```
 
-A user only sees their own devices, tokens, vault, conflicts, activity, and GitHub mapping. The WebSocket hub broadcasts per `userID`.
+A regular user only sees their own devices, tokens, vault, conflicts, activity, and one GitHub repository. Admins manage accounts and cannot call vault, token, device, activity, or GitHub APIs. The WebSocket hub broadcasts per `userID`.
 
 ---
 

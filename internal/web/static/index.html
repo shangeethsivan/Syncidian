@@ -71,16 +71,6 @@
     pre { white-space: pre-wrap; background: var(--bg); padding: 12px; border-radius: 10px; overflow: auto; }
     .check { display: flex; gap: 8px; align-items: center; margin: 8px 0; }
     .check input { width: auto; }
-    .modal-overlay {
-      position: fixed; inset: 0; z-index: 40;
-      display: grid; place-items: center; padding: 24px;
-      background: rgba(6, 10, 14, .78); backdrop-filter: blur(6px);
-    }
-    .modal-overlay .modal-card {
-      width: min(480px, 100%); background: var(--card); border: 1px solid var(--line);
-      border-radius: 16px; padding: 24px; box-shadow: 0 24px 64px rgba(0,0,0,.45);
-    }
-    .modal-overlay .modal-card h1 { font-size: 24px; }
     .help-fab {
       position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%);
       z-index: 50; display: inline-flex; align-items: center; gap: 8px;
@@ -132,49 +122,22 @@
     <div class="card">
       <div class="brand"><span class="dot"></span> Syncidian</div>
       <h1 id="auth-title">Welcome</h1>
-      <p class="muted" id="auth-sub">Sign in to manage devices, tokens, and GitHub backup.</p>
+      <p class="muted" id="auth-sub">Sign in to manage your account.</p>
       <div id="flash"></div>
       <label>Username</label>
       <input id="username" autocomplete="username" />
       <label>Password</label>
       <input id="password" type="password" autocomplete="current-password" />
       <div style="height:16px"></div>
-      <button class="btn" id="auth-btn" type="button" disabled>Continue</button>
+      <button class="btn" id="auth-btn" type="button">Continue</button>
       <p class="muted" style="margin-top:16px;font-size:13px">Need the full path? Open <b>Help</b> at the bottom of the screen for the server and plugin walkthrough.</p>
-    </div>
-  </div>
-
-  <div id="gh-setup-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="gh-setup-title">
-    <div class="modal-card">
-      <div class="brand"><span class="dot"></span> Syncidian</div>
-      <h1 id="gh-setup-title">Configure GitHub repository</h1>
-      <p class="muted">GitHub is the durable source of truth for your vault. Connect a repository before you sign in or continue.</p>
-      <div id="gh-setup-flash"></div>
-      <label for="gh-setup-repo">Repository (owner/name)</label>
-      <input id="gh-setup-repo" placeholder="you/obsidian-vault" autocomplete="off" />
-      <label for="gh-setup-branch">Branch</label>
-      <input id="gh-setup-branch" value="main" autocomplete="off" />
-      <label for="gh-setup-token">Personal access token (repo scope)</label>
-      <input id="gh-setup-token" type="password" placeholder="ghp_…" autocomplete="off" />
-      <div class="check"><input id="gh-setup-create" type="checkbox" /> <span>Create a private repository if it does not exist</span></div>
-      <div style="height:16px"></div>
-      <button class="btn" id="gh-setup-save" type="button">Save and continue</button>
-      <p class="muted" style="margin-top:14px;font-size:13px">Create a token at GitHub → Settings → Developer settings → Personal access tokens with the <code>repo</code> scope. Full new-user steps (server + plugin) are in <b>Help</b> at the bottom of the screen.</p>
     </div>
   </div>
 
   <div id="app" class="hidden">
     <header class="app">
       <div class="brand"><span class="dot"></span> Syncidian</div>
-      <nav>
-        <button data-page="overview" class="active">Overview</button>
-        <button data-page="devices">Devices</button>
-        <button data-page="tokens">Tokens</button>
-        <button data-page="github">GitHub</button>
-        <button data-page="mcp">MCP / AI</button>
-        <button data-page="users">Users</button>
-        <button data-page="activity">Activity</button>
-      </nav>
+      <nav id="nav"></nav>
       <div class="row">
         <span class="muted" id="who"></span>
         <button class="ghost" id="logout" type="button">Log out</button>
@@ -191,7 +154,7 @@
       <div class="help-head">
         <div>
           <h1 id="help-title">Setup walkthrough</h1>
-          <p class="muted" style="margin:0">New-user path: start the server, connect GitHub, then sideload the Obsidian plugin.</p>
+          <p class="muted" style="margin:0">Admins manage users. Each user connects one GitHub repository after they sign in.</p>
         </div>
         <button class="ghost" id="help-close" type="button">Close</button>
       </div>
@@ -211,8 +174,6 @@ const $ = (id) => document.getElementById(id);
 let me = null;
 let needsSetup = false;
 let page = "overview";
-let pendingGitHub = null;
-let githubReady = false;
 
 async function api(path, opts = {}) {
   const res = await fetch(path, {
@@ -246,109 +207,100 @@ function when(t) {
   if (s < 86400) return Math.floor(s/3600) + " h ago";
   return d.toLocaleString();
 }
+function isAdmin() {
+  return !!(me && me.is_admin);
+}
 
 const HELP_STEPS = [
   {
     title: "1. Start the Syncidian server",
     html: () => `
-      <p>If you can open this dashboard, the server is already running. For a new machine, deploy it first.</p>
-      <h2>Docker (recommended)</h2>
+      <p>Deploy the server first. GitHub is not configured on the server itself.</p>
+      <h2>Docker</h2>
       <pre>git clone https://github.com/shangeethsivan/Syncidian.git
 cd Syncidian
 docker compose up --build -d</pre>
-      <p>Then open <code>${esc(location.origin)}</code> (local default is <code>http://localhost:8080</code>).</p>
-      <h2>Without Docker (Go 1.22+)</h2>
+      <h2>Go</h2>
       <pre>go run ./cmd/syncidian serve</pre>
-      <p class="muted">Data is stored in <code>./data</code> locally, or in a <code>/data</code> volume when you use Docker or Railway.</p>
-      <h2>Railway</h2>
-      <ol>
-        <li>New project → deploy this GitHub repo (Dockerfile is auto-detected).</li>
-        <li>Settings → Volumes → add a volume mounted at <code>/data</code>.</li>
-        <li>Generate a public domain, then open that URL.</li>
-      </ol>
-      <p>Health check: <code>GET ${esc(location.origin)}/health</code>.</p>
+      <p>Then open this dashboard at <code>${esc(location.origin)}</code>.</p>
+      <p class="muted">Data is stored in <code>./data</code> locally, or in a <code>/data</code> volume on Docker or Railway.</p>
     `,
   },
   {
-    title: "2. Connect a GitHub repository",
+    title: "2. Create the first admin",
     html: () => `
-      <p>GitHub is the durable, versioned source of truth. The popup on this screen is required before you can create an admin or sign in.</p>
-      <ol>
-        <li>Create a GitHub personal access token with the <code>repo</code> scope (GitHub → Settings → Developer settings → Personal access tokens).</li>
-        <li>Enter the repository as <code>owner/name</code>, for example <code>you/obsidian-vault</code>.</li>
-        <li>Choose the branch (usually <code>main</code>).</li>
-        <li>Optionally check “Create a private repository if it does not exist”.</li>
-        <li>Click <b>Save and continue</b>.</li>
-      </ol>
-      <p>The Obsidian plugin never sees GitHub credentials. You can change this later on the GitHub page.</p>
-    `,
-  },
-  {
-    title: "3. Create your admin account",
-    html: () => `
-      <p>On first launch this dashboard asks you to create the first admin. After that, the same form is a sign-in.</p>
+      <p>The first account is an admin. Admins manage users only — they do not connect a GitHub repository and never see another person’s vault, tokens, or GitHub credentials.</p>
       <ol>
         <li>Choose a username.</li>
         <li>Choose a password of at least 8 characters.</li>
-        <li>Click <b>Create admin</b> (or <b>Sign in</b> on later visits).</li>
+        <li>Click <b>Create admin</b>.</li>
       </ol>
-      <p class="muted">Each user is isolated: devices, tokens, vault files, and GitHub config stay private. Admins can add more users later on the Users page.</p>
     `,
   },
   {
-    title: "4. Create an access token",
+    title: "3. Create a regular user",
     html: () => `
-      <p>The plugin authenticates with a dashboard token, not your password.</p>
+      <p>On the <b>Users</b> page, create the person who will sync Obsidian. Each account is isolated.</p>
       <ol>
-        <li>Open the <b>Tokens</b> page after you sign in.</li>
-        <li>Name the token after the device, for example <code>MacBook Pro</code>.</li>
-        <li>Click <b>Create token</b>.</li>
-        <li>Copy the <code>sk_sync_…</code> value immediately — it is shown only once.</li>
+        <li>Enter a username and password.</li>
+        <li>Leave <b>Admin</b> unchecked for vault users.</li>
+        <li>That person signs in with those credentials.</li>
       </ol>
-      <p>Create one token per person. The same user can register many devices. Revoke a token any time from that page.</p>
+      <p class="muted">Admins manage users. They should not see any private info of users.</p>
     `,
   },
   {
-    title: "5. Install the Obsidian plugin",
+    title: "4. Connect your GitHub repository",
+    html: () => `
+      <p>GitHub backup is <b>per user</b>, not per server. One user can set up one GitHub repository.</p>
+      <ol>
+        <li>Sign in as that user (not as admin).</li>
+        <li>Open the <b>GitHub</b> page.</li>
+        <li>Create a GitHub personal access token with the <code>repo</code> scope.</li>
+        <li>Enter the repository as <code>owner/name</code>, for example <code>you/obsidian-vault</code>.</li>
+        <li>Save. Saving again replaces that same repository — you still have only one.</li>
+      </ol>
+      <p>The Obsidian plugin never sees GitHub credentials.</p>
+    `,
+  },
+  {
+    title: "5. Create an access token",
+    html: () => `
+      <p>The plugin authenticates with a dashboard token from <b>your</b> user, not the admin.</p>
+      <ol>
+        <li>Open the <b>Tokens</b> page after you sign in as a regular user.</li>
+        <li>Name the token after the device, for example <code>MacBook Pro</code>.</li>
+        <li>Click <b>Create token</b> and copy the <code>sk_sync_…</code> value immediately.</li>
+      </ol>
+    `,
+  },
+  {
+    title: "6. Install the Obsidian plugin",
     html: () => `
       <p>Syncidian is <b>not</b> in the Community Plugin store yet. Sideload it once per vault.</p>
-      <h2>Installer script</h2>
       <pre>chmod +x scripts/install-plugin.sh
 ./scripts/install-plugin.sh "/path/to/YourVault"</pre>
       <p>On a Mac this is often:</p>
       <pre>./scripts/install-plugin.sh "$HOME/Documents/Obsidian/MyVault"</pre>
-      <h2>Or copy the files by hand</h2>
-      <p>Copy these three files into <code>{Vault}/.obsidian/plugins/syncidian/</code>:</p>
-      <ul>
-        <li><code>plugin/manifest.json</code></li>
-        <li><code>plugin/main.js</code></li>
-        <li><code>plugin/styles.css</code></li>
-      </ul>
-      <p>Then in Obsidian:</p>
+      <p>Or copy <code>plugin/manifest.json</code>, <code>plugin/main.js</code>, and <code>plugin/styles.css</code> into <code>{Vault}/.obsidian/plugins/syncidian/</code>.</p>
       <ol>
         <li>Settings → Community plugins → turn <b>Restricted mode</b> off.</li>
         <li>Reload plugins or restart Obsidian.</li>
         <li>Enable <b>Syncidian</b>.</li>
       </ol>
-      <p class="muted">Repeat the copy step on every device (Windows, Mac, Linux, Android, iOS). You can also point <a href="https://github.com/TfTHacker/obsidian42-brat" target="_blank" rel="noopener">BRAT</a> at this GitHub repo.</p>
     `,
   },
   {
-    title: "6. Connect the plugin and sync",
+    title: "7. Connect the plugin and sync",
     html: () => `
       <p>In Obsidian: Settings → Syncidian.</p>
       <ol>
         <li>Server URL: <code>${esc(location.origin)}</code></li>
-        <li>Access token: the <code>sk_sync_…</code> value from the Tokens page</li>
+        <li>Access token: the <code>sk_sync_…</code> value from that user’s Tokens page</li>
         <li>Device name: for example <code>MacBook Pro</code></li>
         <li>Click <b>Connect</b></li>
       </ol>
-      <p>The device should appear on the Overview and Devices pages. Edits sync over HTTPS and a WebSocket; conflicts can be resolved as keep local, keep remote, or merge.</p>
-      <p>Optional next steps:</p>
-      <ul>
-        <li><b>MCP / AI</b> — point a client at <code>${esc(location.origin)}/mcp</code> with <code>Authorization: Bearer sk_sync_…</code></li>
-        <li>Re-open this walkthrough any time from <b>Help</b> at the bottom of the screen.</li>
-      </ul>
+      <p>Optional: point an MCP client at <code>${esc(location.origin)}/mcp</code> with the same token.</p>
     `,
   },
 ];
@@ -398,177 +350,79 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "ArrowLeft") $("help-prev").click();
 });
 
+function navItems() {
+  if (isAdmin()) {
+    return [
+      ["overview", "Overview"],
+      ["users", "Users"],
+    ];
+  }
+  return [
+    ["overview", "Overview"],
+    ["devices", "Devices"],
+    ["tokens", "Tokens"],
+    ["github", "GitHub"],
+    ["mcp", "MCP / AI"],
+    ["activity", "Activity"],
+  ];
+}
+
+function paintNav() {
+  const items = navItems();
+  if (!items.some(([id]) => id === page)) page = items[0][0];
+  $("nav").innerHTML = items.map(([id, label]) =>
+    `<button type="button" data-page="${id}" class="${page === id ? "active" : ""}">${label}</button>`
+  ).join("");
+  $("nav").querySelectorAll("button").forEach((b) => {
+    b.onclick = () => {
+      page = b.dataset.page;
+      paintNav();
+      render();
+    };
+  });
+}
+
 async function boot() {
   const st = await api("/api/v1/setup");
   needsSetup = st.needs_setup;
   try {
     const m = await api("/api/v1/me");
     me = m.user;
-    await enterAppOrGitHubGate();
+    showApp();
   } catch {
     showAuth();
   }
 }
 
-function setAuthEnabled(enabled) {
-  $("auth-btn").disabled = !enabled;
-  $("username").disabled = !enabled;
-  $("password").disabled = !enabled;
-}
-
-function showGitHubModal(prefill) {
-  const cfg = prefill || pendingGitHub || {};
-  $("gh-setup-repo").value = cfg.repo || $("gh-setup-repo").value || "";
-  $("gh-setup-branch").value = cfg.branch || $("gh-setup-branch").value || "main";
-  if (cfg.token) $("gh-setup-token").value = cfg.token;
-  $("gh-setup-create").checked = !!cfg.create_repo;
-  $("gh-setup-modal").classList.remove("hidden");
-  setAuthEnabled(false);
-}
-
-function hideGitHubModal() {
-  $("gh-setup-modal").classList.add("hidden");
-}
-
-function readGitHubSetup() {
-  return {
-    repo: $("gh-setup-repo").value.trim(),
-    branch: $("gh-setup-branch").value.trim() || "main",
-    token: $("gh-setup-token").value,
-    create_repo: $("gh-setup-create").checked,
-  };
-}
-
-function validateGitHubSetup(cfg) {
-  if (!cfg.repo || !cfg.repo.includes("/")) return "Repository must be owner/name, for example you/obsidian-vault.";
-  if (!cfg.token) return "A GitHub personal access token is required.";
-  return "";
-}
-
-async function saveGitHub(cfg) {
-  return api("/api/v1/github", { method: "POST", body: JSON.stringify(cfg) });
-}
-
-function rememberPendingGitHub(cfg) {
-  pendingGitHub = cfg;
-  try {
-    if (cfg) sessionStorage.setItem("syncidian_pending_github", JSON.stringify(cfg));
-    else sessionStorage.removeItem("syncidian_pending_github");
-  } catch { /* ignore quota / private mode */ }
-}
-
-function loadPendingGitHub() {
-  if (pendingGitHub) return pendingGitHub;
-  try {
-    const raw = sessionStorage.getItem("syncidian_pending_github");
-    if (!raw) return null;
-    pendingGitHub = JSON.parse(raw);
-    return pendingGitHub;
-  } catch {
-    return null;
-  }
-}
-
-async function enterAppOrGitHubGate() {
-  $("app").classList.add("hidden");
-  loadPendingGitHub();
-  try {
-    const gh = await api("/api/v1/github");
-    if (gh.configured) {
-      if (pendingGitHub) {
-        try { await saveGitHub(pendingGitHub); } catch { /* keep the existing repo */ }
-        rememberPendingGitHub(null);
-      }
-      githubReady = true;
-      hideGitHubModal();
-      showApp();
-      return;
-    }
-    if (pendingGitHub) {
-      try {
-        await saveGitHub(pendingGitHub);
-        rememberPendingGitHub(null);
-        githubReady = true;
-        hideGitHubModal();
-        showApp();
-        return;
-      } catch (e) {
-        flash($("gh-setup-flash"), e.message);
-      }
-    }
-  } catch (e) {
-    flash($("gh-setup-flash"), e.message);
-  }
-  githubReady = false;
-  $("auth").classList.remove("hidden");
-  showGitHubModal(pendingGitHub);
-}
-
 function showAuth() {
-  githubReady = false;
   $("app").classList.add("hidden");
   $("auth").classList.remove("hidden");
   $("auth-title").textContent = needsSetup ? "Create the first admin" : "Sign in";
   $("auth-sub").textContent = needsSetup
-    ? "Configure GitHub first, then choose a username and a password of at least 8 characters."
-    : "Configure GitHub first, then sign in to manage devices, tokens, and backup.";
+    ? "Choose a username and a password of at least 8 characters. Admins manage users and do not connect GitHub."
+    : "Admins manage users. Regular users connect one GitHub repository after sign-in.";
   $("auth-btn").textContent = needsSetup ? "Create admin" : "Sign in";
-  flash($("flash"), githubReady || pendingGitHub ? "" : "Configure your GitHub repository in the popup to continue.");
-  showGitHubModal();
+  $("auth-btn").disabled = false;
 }
 
 function showApp() {
   $("auth").classList.add("hidden");
-  hideGitHubModal();
   $("app").classList.remove("hidden");
-  $("who").textContent = me.username;
+  $("who").textContent = isAdmin() ? me.username + " · admin" : me.username;
+  paintNav();
   render();
 }
 
-$("gh-setup-save").onclick = async () => {
-  flash($("gh-setup-flash"), "");
-  const cfg = readGitHubSetup();
-  const err = validateGitHubSetup(cfg);
-  if (err) {
-    flash($("gh-setup-flash"), err);
-    return;
-  }
-  rememberPendingGitHub(cfg);
-  if (me) {
-    $("gh-setup-save").disabled = true;
-    try {
-      await saveGitHub(cfg);
-      rememberPendingGitHub(null);
-      githubReady = true;
-      hideGitHubModal();
-      showApp();
-    } catch (e) {
-      flash($("gh-setup-flash"), e.message);
-    } finally {
-      $("gh-setup-save").disabled = false;
-    }
-    return;
-  }
-  githubReady = true;
-  hideGitHubModal();
-  setAuthEnabled(true);
-  flash($("flash"), "GitHub repository saved. You can now continue.", "ok");
-};
-
 $("auth-btn").onclick = async () => {
   flash($("flash"), "");
-  if (!githubReady && !pendingGitHub) {
-    showGitHubModal();
-    flash($("flash"), "Configure your GitHub repository before continuing.");
-    return;
-  }
   try {
     const body = JSON.stringify({ username: $("username").value, password: $("password").value });
     if (needsSetup) await api("/api/v1/setup", { method: "POST", body });
     else await api("/api/v1/auth/login", { method: "POST", body });
     const m = await api("/api/v1/me");
     me = m.user;
-    await enterAppOrGitHubGate();
+    needsSetup = false;
+    showApp();
   } catch (e) {
     flash($("flash"), e.message);
   }
@@ -578,35 +432,55 @@ $("logout").onclick = async () => {
   await api("/api/v1/auth/logout", { method: "POST", body: "{}" });
   me = null;
   needsSetup = false;
-  rememberPendingGitHub(null);
-  githubReady = false;
-  $("gh-setup-token").value = "";
+  page = "overview";
   showAuth();
 };
-
-document.querySelectorAll("nav button").forEach((b) => {
-  b.onclick = () => {
-    document.querySelectorAll("nav button").forEach((x) => x.classList.remove("active"));
-    b.classList.add("active");
-    page = b.dataset.page;
-    render();
-  };
-});
 
 async function render() {
   const main = $("main");
   main.innerHTML = "<p class='muted'>Loading…</p>";
   try {
+    if (isAdmin()) {
+      if (page === "users") await users(main);
+      else await adminOverview(main);
+      return;
+    }
     if (page === "overview") await overview(main);
     if (page === "devices") await devices(main);
     if (page === "tokens") await tokens(main);
     if (page === "github") await github(main);
     if (page === "mcp") await mcp(main);
-    if (page === "users") await users(main);
     if (page === "activity") await activity(main);
   } catch (e) {
     main.innerHTML = `<div class="flash err">${esc(e.message)}</div>`;
   }
+}
+
+async function adminOverview(main) {
+  const list = asList(await api("/api/v1/users"));
+  const vaultUsers = list.filter((u) => !u.is_admin).length;
+  main.innerHTML = `
+    <h1>Admin</h1>
+    <p class="muted">Admins manage users. They should not see any private info of users — no vaults, tokens, devices, activity, or GitHub credentials.</p>
+    <div class="grid">
+      <div class="stat">Accounts<b>${list.length}</b></div>
+      <div class="stat">Vault users<b>${vaultUsers}</b></div>
+    </div>
+    <div class="card">
+      <h2>What you can do</h2>
+      <ul>
+        <li>Create regular users on the <b>Users</b> page.</li>
+        <li>Each user signs in and connects <b>one GitHub repository</b> of their own.</li>
+        <li>You never configure repo sync for the server, and you never open another user’s notes.</li>
+      </ul>
+      <div class="row">
+        <button class="btn" id="go-users" type="button">Manage users</button>
+        <button class="btn secondary" id="go-help" type="button">Open setup Help</button>
+      </div>
+    </div>
+  `;
+  $("go-users").onclick = () => { page = "users"; paintNav(); render(); };
+  $("go-help").onclick = () => openHelp(2);
 }
 
 async function overview(main) {
@@ -618,7 +492,7 @@ async function overview(main) {
   ]);
   main.innerHTML = `
     <h1>Overview</h1>
-    <p class="muted">What is happening with your devices?</p>
+    <p class="muted">Your devices, tokens, and one GitHub repository stay private to this account.</p>
     <div class="grid">
       <div class="stat">Active clients<b>${stats.active_clients ?? 0}</b></div>
       <div class="stat">Devices<b>${stats.device_count ?? 0}</b></div>
@@ -628,9 +502,10 @@ async function overview(main) {
       <div class="stat">Open conflicts<b>${stats.conflict_count ?? 0}</b></div>
     </div>
     <div class="card">
-      <h2>GitHub source of truth</h2>
-      <p>${gh.configured ? `<span class="pill ok">Connected</span> ${esc(gh.repo)} (${esc(gh.branch)})` : `<span class="pill warn">Not configured</span> Sync still works between devices. Add GitHub for durable backup.`}</p>
+      <h2>Your GitHub repository</h2>
+      <p>${gh.configured ? `<span class="pill ok">Connected</span> ${esc(gh.repo)} (${esc(gh.branch)})` : `<span class="pill warn">Not configured</span> Connect your GitHub repository on the GitHub page. One user can set up one repository.`}</p>
       ${gh.last_error ? `<p class="flash err">${esc(gh.last_error)}</p>` : ""}
+      ${gh.configured ? "" : `<button class="btn" id="go-github" type="button">Connect GitHub</button>`}
     </div>
     <div class="card">
       <h2>Devices</h2>
@@ -640,15 +515,17 @@ async function overview(main) {
       <h2>Connect Obsidian</h2>
       <ol>
         <li>Create an access token on the Tokens page.</li>
-        <li>Sideload the plugin from this repository’s <code>plugin/</code> folder (or run <code>scripts/install-plugin.sh</code>).</li>
+        <li>Sideload the plugin from this repository’s <code>plugin/</code> folder (or run <code>scripts/install-plugin.sh</code>, or open <b>Help</b>).</li>
         <li>In Obsidian: Settings → Syncidian → paste <code>${esc(location.origin)}</code> and the token, then click Connect.</li>
       </ol>
       <button class="btn secondary" id="open-help" type="button">Open setup walkthrough</button>
     </div>
     ${asList(conflicts).length ? `<div class="card"><h2>Conflicts</h2>${conflictList(asList(conflicts))}</div>` : ""}
   `;
+  const go = $("go-github");
+  if (go) go.onclick = () => { page = "github"; paintNav(); render(); };
   const helpBtn = $("open-help");
-  if (helpBtn) helpBtn.onclick = () => openHelp(3);
+  if (helpBtn) helpBtn.onclick = () => openHelp(5);
 }
 
 function deviceTable(devices) {
@@ -673,16 +550,13 @@ function conflictList(items) {
 async function devices(main) {
   const list = asList(await api("/api/v1/devices"));
   main.innerHTML = `<h1>Devices</h1><div class="card">${deviceTable(list)}</div>`;
-  list.forEach((d) => {
-    /* delete buttons added if needed */
-  });
 }
 
 async function tokens(main) {
   const list = asList(await api("/api/v1/tokens"));
   main.innerHTML = `
     <h1>Access tokens</h1>
-    <p class="muted">Tokens authenticate the Obsidian plugin. GitHub credentials stay on this server.</p>
+    <p class="muted">Tokens authenticate the Obsidian plugin. GitHub credentials stay on this server under your user.</p>
     <div class="card">
       <label>Token name</label>
       <div class="row">
@@ -717,7 +591,7 @@ async function github(main) {
   const gh = await api("/api/v1/github");
   main.innerHTML = `
     <h1>GitHub</h1>
-    <p class="muted">GitHub is the durable, versioned source of truth. The plugin never needs GitHub credentials.</p>
+    <p class="muted">Connect your GitHub repository here. One user can set up one GitHub repository. This is not a server-wide setting — admins manage users and never see this page.</p>
     <div class="card">
       <p>${gh.configured ? `<span class="pill ok">Connected</span> ${esc(gh.repo)}` : `<span class="pill warn">Not configured</span>`}</p>
       ${gh.last_error ? `<div class="flash err">${esc(gh.last_error)}</div>` : ""}
@@ -741,7 +615,8 @@ async function github(main) {
         repo: $("gh-repo").value, branch: $("gh-branch").value, token: $("gh-token").value,
         create_repo: $("gh-create").checked
       })});
-      flash($("gh-flash"), out.git_error ? ("Saved, but push failed: " + out.git_error) : "GitHub connected.", out.git_error ? "err" : "ok");
+      flash($("gh-flash"), out.git_error ? ("Saved, but push failed: " + out.git_error) : "GitHub connected. This account now has one repository.", out.git_error ? "err" : "ok");
+      setTimeout(() => github(main), 400);
     } catch (e) { flash($("gh-flash"), e.message); }
   };
   const sync = $("gh-sync");
@@ -752,12 +627,7 @@ async function github(main) {
   const del = $("gh-del");
   if (del) del.onclick = async () => {
     await api("/api/v1/github", { method: "DELETE" });
-    githubReady = false;
-    pendingGitHub = null;
-    $("app").classList.add("hidden");
-    $("auth").classList.remove("hidden");
-    flash($("flash"), "GitHub was disconnected. Configure a repository to continue.");
-    showGitHubModal();
+    github(main);
   };
 }
 
@@ -801,11 +671,11 @@ async function users(main) {
   const list = asList(await api("/api/v1/users"));
   main.innerHTML = `
     <h1>Users</h1>
-    <p class="muted">Each user is isolated: devices, tokens, vault, and GitHub config are private.</p>
-    ${me.is_admin ? `<div class="card">
+    <p class="muted">Admins manage users. This list shows only username, role, and created time — no vaults, tokens, or GitHub details.</p>
+    ${isAdmin() ? `<div class="card">
       <label>Username</label><input id="u-name" />
       <label>Password</label><input id="u-pass" type="password" />
-      <div class="check"><input id="u-admin" type="checkbox" /> Admin</div>
+      <div class="check"><input id="u-admin" type="checkbox" /> Admin (user management only; no repo sync)</div>
       <button class="btn" id="u-create" type="button">Create user</button>
       <div id="u-flash"></div>
     </div>` : ""}
@@ -833,7 +703,6 @@ async function activity(main) {
 boot().catch((e) => {
   $("auth").classList.add("hidden");
   $("app").classList.add("hidden");
-  hideGitHubModal();
   const wrap = document.createElement("div");
   wrap.className = "wrap";
   wrap.innerHTML = `<div class="flash err">${esc(e.message)}</div><p class="muted">Open Help at the bottom of the screen for the setup walkthrough.</p>`;

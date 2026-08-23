@@ -230,6 +230,28 @@ func (s *Store) ListUsers() ([]User, error) {
 	return out, rows.Err()
 }
 
+// ListUsersPublic returns account records without password hashes. Used by admin listing.
+func (s *Store) ListUsersPublic() ([]User, error) {
+	rows, err := s.db.Query(`SELECT id, username, is_admin, created_at FROM users ORDER BY created_at`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []User
+	for rows.Next() {
+		u := User{}
+		var admin int
+		var created string
+		if err := rows.Scan(&u.ID, &u.Username, &admin, &created); err != nil {
+			return nil, err
+		}
+		u.IsAdmin = admin == 1
+		u.CreatedAt = parseTime(created)
+		out = append(out, u)
+	}
+	return out, rows.Err()
+}
+
 func (s *Store) scanUser(row *sql.Row) (*User, error) {
 	u := &User{}
 	var admin int

@@ -6,7 +6,7 @@ Syncidian is an open-source, self-hostable **Obsidian synchronization and AI bri
 
 It runs as an Obsidian plugin on your devices and connects to a lightweight Syncidian server that coordinates synchronization between them.
 
-The server manages GitHub integration centrally, while GitHub acts as the durable, versioned **source of truth** for your vault.
+Each user connects their own GitHub repository (one repo per account). GitHub acts as the durable, versioned **source of truth** for that user's vault. Admins manage users only and never see vault or GitHub data.
 
 Syncidian also includes a built-in **MCP server**, allowing compatible AI tools and agents to securely interact with your Obsidian knowledge base.
 
@@ -38,7 +38,7 @@ cd Syncidian
 docker compose up --build -d
 ```
 
-Open [http://localhost:8080](http://localhost:8080). The dashboard has a **Help** button at the bottom of the screen with a step-by-step walkthrough (server, GitHub, admin account, tokens, and plugin). Create the first admin user, then go to **Tokens** and create an access token (`sk_sync_…`). Copy it once — it is not shown again.
+Open [http://localhost:8080](http://localhost:8080) and create the first admin. Admins do not configure GitHub. Create a regular user, sign in as that user, connect **one GitHub repository** on the GitHub page, then create an access token (`sk_sync_…`). Copy the token once — it is not shown again. A **Help** control at the bottom of the dashboard walks through the same path.
 
 **Without Docker (Go 1.22+):**
 
@@ -54,7 +54,7 @@ Data is stored in `./data` by default (`SYNCIDIAN_DATA` to change it). Docker Co
 2. **Settings → Volumes → Add volume**, mount path **`/data`**.
 3. Generate a public domain. The server listens on Railway’s `PORT` and uses `RAILWAY_PUBLIC_DOMAIN` for the dashboard URL unless you set `SYNCIDIAN_PUBLIC_URL`.
 4. Optional variables: `SYNCIDIAN_BOOTSTRAP_USER`, `SYNCIDIAN_BOOTSTRAP_PASSWORD`.
-5. Open the public URL, create the admin user, then point the plugin at that URL.
+5. Open the public URL, create the admin, create a regular user, then point the plugin at that URL with that user's token.
 
 Health check: `GET /health`.
 
@@ -95,7 +95,7 @@ Repeat the plugin copy + token on each device (Windows, Mac, Android, iOS). Crea
 
 ## 3. Optional: GitHub backup
 
-In the dashboard → **GitHub**, paste a GitHub personal access token with `repo` scope and `owner/name`. The plugin never needs GitHub credentials. Until GitHub is connected, devices still sync through the server.
+Sign in as a regular user (not admin) and open **GitHub**. Paste a personal access token with `repo` scope and `owner/name`. Each user has one repository. The plugin never needs GitHub credentials. Until that user connects GitHub, their devices still sync through the server.
 
 ## 4. Optional: MCP / AI
 
@@ -307,31 +307,26 @@ No separate services should be required for the basic deployment.
 
 # 🐙 Configure GitHub
 
-GitHub configuration happens **on the Syncidian server**.
+GitHub configuration is **per user**, not per server.
 
-The Obsidian plugin does not need direct GitHub credentials.
+The Obsidian plugin does not need direct GitHub credentials. The admin login does not configure repo sync.
 
-The server administrator configures:
+Each regular user configures:
 
-* GitHub authentication
-* Private repository
-* Repository mapping
-* Git configuration
-* Backup settings
+* Their GitHub personal access token
+* One private repository (`owner/name`)
+* The branch to use for backup
 
 Example:
 
 ```text
 Syncidian Server
-       │
-       ▼
-GitHub Authentication
-       │
-       ▼
-Private Repository
+ ├── Admin — manage users only
+ ├── User A — one GitHub repo
+ └── User B — one GitHub repo
 ```
 
-This keeps GitHub credentials and Git operations centralized.
+Admins never see another user's repository, token, vault, or activity.
 
 ---
 
@@ -1052,7 +1047,7 @@ The self-hosted version will remain free and open source.
 
 ## 🐙 GitHub
 
-* [x] Server-side GitHub configuration
+* [x] Per-user GitHub configuration (one repo per account; admins do not configure repo sync)
 * [x] GitHub authentication
 * [x] Private repository support
 * [x] User-to-repository mapping
