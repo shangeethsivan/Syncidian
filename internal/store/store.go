@@ -550,7 +550,7 @@ func (s *Store) ListConflicts(userID string, openOnly bool) ([]Conflict, error) 
 		return nil, err
 	}
 	defer rows.Close()
-	var out []Conflict
+	out := make([]Conflict, 0)
 	for rows.Next() {
 		c := Conflict{}
 		var created string
@@ -593,7 +593,7 @@ func (s *Store) ListActivity(userID string, limit int) ([]Activity, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []Activity
+	out := make([]Activity, 0)
 	for rows.Next() {
 		a := Activity{}
 		var created string

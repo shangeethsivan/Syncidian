@@ -134,6 +134,9 @@ function flash(el, msg, kind = "err") {
 function esc(s) {
   return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;" }[c]));
 }
+function asList(v) {
+  return Array.isArray(v) ? v : [];
+}
 function when(t) {
   if (!t) return "—";
   const d = new Date(t);
@@ -255,11 +258,12 @@ async function overview(main) {
         <li>In Obsidian: Settings → Syncidian → paste <code>${esc(location.origin)}</code> and the token.</li>
       </ol>
     </div>
-    ${conflicts.length ? `<div class="card"><h2>Conflicts</h2>${conflictList(conflicts)}</div>` : ""}
+    ${asList(conflicts).length ? `<div class="card"><h2>Conflicts</h2>${conflictList(asList(conflicts))}</div>` : ""}
   `;
 }
 
 function deviceTable(devices) {
+  devices = asList(devices);
   if (!devices.length) return `<p class="muted">No devices yet. Connect the Obsidian plugin to register this computer.</p>`;
   return `<table><thead><tr><th>Device</th><th>Platform</th><th>Status</th><th>Last seen</th><th>Last sync</th><th>Syncs</th></tr></thead><tbody>
     ${devices.map(d => `<tr>
@@ -271,13 +275,14 @@ function deviceTable(devices) {
 }
 
 function conflictList(items) {
+  items = asList(items);
   return `<table><thead><tr><th>Path</th><th>Created</th></tr></thead><tbody>
     ${items.map(c => `<tr><td>${esc(c.Path || c.path)}</td><td>${when(c.CreatedAt || c.created_at)}</td></tr>`).join("")}
   </tbody></table>`;
 }
 
 async function devices(main) {
-  const list = await api("/api/v1/devices");
+  const list = asList(await api("/api/v1/devices"));
   main.innerHTML = `<h1>Devices</h1><div class="card">${deviceTable(list)}</div>`;
   list.forEach((d) => {
     /* delete buttons added if needed */
@@ -285,7 +290,7 @@ async function devices(main) {
 }
 
 async function tokens(main) {
-  const list = await api("/api/v1/tokens");
+  const list = asList(await api("/api/v1/tokens"));
   main.innerHTML = `
     <h1>Access tokens</h1>
     <p class="muted">Tokens authenticate the Obsidian plugin. GitHub credentials stay on this server.</p>
@@ -399,7 +404,7 @@ async function mcp(main) {
 }
 
 async function users(main) {
-  const list = await api("/api/v1/users");
+  const list = asList(await api("/api/v1/users"));
   main.innerHTML = `
     <h1>Users</h1>
     <p class="muted">Each user is isolated: devices, tokens, vault, and GitHub config are private.</p>
@@ -424,10 +429,10 @@ async function users(main) {
 }
 
 async function activity(main) {
-  const items = await api("/api/v1/activity");
+  const items = asList(await api("/api/v1/activity"));
   main.innerHTML = `<h1>Activity</h1><div class="card"><table>
     <thead><tr><th>When</th><th>Action</th><th>Detail</th></tr></thead>
-    <tbody>${(items || []).map(a => `<tr><td>${when(a.CreatedAt || a.created_at)}</td><td>${esc(a.Action || a.action)}</td><td>${esc(a.Detail || a.detail || a.Path || a.path || "")}</td></tr>`).join("") || "<tr><td colspan=3 class='muted'>No activity yet</td></tr>"}
+    <tbody>${items.map(a => `<tr><td>${when(a.CreatedAt || a.created_at)}</td><td>${esc(a.Action || a.action)}</td><td>${esc(a.Detail || a.detail || a.Path || a.path || "")}</td></tr>`).join("") || "<tr><td colspan=3 class='muted'>No activity yet</td></tr>"}
   </tbody></table></div>`;
 }
 
