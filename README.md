@@ -152,37 +152,16 @@ Syncidian isn't just another file synchronization tool.
 
 The long-term goal is to make synchronization almost invisible.
 
-```text
-                 ┌─────────────────────────┐
-                 │       AI TOOLS          │
-                 │                         │
-                 │ Claude · Gemini · Agents│
-                 │       MCP Clients       │
-                 └────────────┬────────────┘
-                              │
-                             MCP
-                              │
-                              ▼
-┌─────────────┐      ┌──────────────────────┐
-│  Obsidian   │◄────►│      Syncidian       │
-│  Windows    │      │       Server         │
-└─────────────┘      │                      │
-                     │  Sync + Git + MCP    │
-┌─────────────┐      │  Auth + Dashboard    │
-│  Obsidian   │◄────►│                      │
-│   macOS     │      └──────────┬───────────┘
-└─────────────┘                 │
-                                │
-┌─────────────┐                 │
-│  Obsidian   │◄────────────────┤
-│   Android   │                 │
-└─────────────┘                 │
-                                ▼
-┌─────────────┐        ┌─────────────────────┐
-│  Obsidian   │        │    Private GitHub   │
-│    iOS      │        │      Repository     │
-└─────────────┘        │  Source of Truth    │
-                       └─────────────────────┘
+```mermaid
+flowchart TB
+  AI["AI tools<br/>Claude · Gemini · agents"] -->|"MCP"| Server
+
+  Win["Obsidian Windows"] <--> Server
+  Mac["Obsidian macOS"] <--> Server
+  And["Obsidian Android"] <--> Server
+  iOS["Obsidian iOS"] <--> Server
+
+  Server["Syncidian server<br/>Sync + Git + MCP + Auth + Dashboard"] --> GH["Private GitHub repo<br/>source of truth"]
 ```
 
 Eventually, Syncidian should be able to detect a conflict, have a small LLM resolve it automatically, validate the result, commit it to GitHub, and propagate the resolution to every device.
@@ -193,39 +172,24 @@ Eventually, Syncidian should be able to detect a conflict, have a small LLM reso
 
 # 🏗️ Architecture
 
-Syncidian separates the system into four major components:
+Syncidian separates the system into four major components. GitHub renders the chart below; full sync, auth, MCP, and data-model diagrams live in [`docs/architecture.md`](docs/architecture.md).
 
-```text
-┌────────────────────────────────────────────────────┐
-│                    SYNCIDIAN                       │
-│                                                    │
-│  ┌──────────────┐                                  │
-│  │ Obsidian     │                                  │
-│  │ Plugin       │                                  │
-│  └──────┬───────┘                                  │
-│         │                                           │
-│         │ HTTPS / WebSocket                         │
-│         ▼                                           │
-│  ┌──────────────────────────────────────────────┐   │
-│  │             Syncidian Server                │   │
-│  │                                              │   │
-│  │  Sync Engine                                │   │
-│  │  Authentication                             │   │
-│  │  Device Management                          │   │
-│  │  Git Integration                            │   │
-│  │  MCP Server                                 │   │
-│  │  Conflict Resolution                        │   │
-│  │  Web Dashboard                              │   │
-│  └─────────────┬────────────────┬─────────────┘   │
-│                │                │                  │
-│                ▼                ▼                  │
-│         ┌─────────────┐   ┌───────────────┐       │
-│         │   GitHub    │   │ Small LLM     │       │
-│         │             │   │ Conflict      │       │
-│         │ Source of   │   │ Resolver      │       │
-│         │ Truth       │   │               │       │
-│         └─────────────┘   └───────────────┘       │
-└────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+  Plugin["Obsidian plugin"] -->|"HTTPS / WebSocket"| SyncSrv
+
+  subgraph SyncSrv [Syncidian server]
+    Sync[Sync engine]
+    Auth[Authentication]
+    Devices[Device management]
+    Git[Git integration]
+    MCP[MCP server]
+    Conflicts[Conflict resolution]
+    Dash[Web dashboard]
+  end
+
+  SyncSrv --> GitHub["GitHub<br/>source of truth"]
+  SyncSrv -.->|"planned"| LLM["Small LLM<br/>conflict resolver"]
 ```
 
 ---
@@ -485,23 +449,14 @@ The Syncidian server is the **coordination layer**.
 
 GitHub is the **primary source of truth**.
 
-```text
-                 GitHub
-              Source of Truth
-                    ▲
-                    │
-                    │ Git
-                    │
-            ┌───────┴────────┐
-            │   Syncidian    │
-            │     Server     │
-            └───────┬────────┘
-                    │
-          ┌─────────┼─────────┐
-          │         │         │
-          ▼         ▼         ▼
-       Windows     macOS    Android
-       Obsidian   Obsidian  Obsidian
+```mermaid
+flowchart TB
+  GH["GitHub — source of truth"]
+  Srv["Syncidian server"]
+  GH <-->|"Git"| Srv
+  Srv --> Win["Windows Obsidian"]
+  Srv --> Mac["macOS Obsidian"]
+  Srv --> And["Android Obsidian"]
 ```
 
 The server coordinates changes between clients and synchronizes the durable state with GitHub.
@@ -512,23 +467,13 @@ The server coordinates changes between clients and synchronizes the durable stat
 
 When a user edits a note:
 
-```text
-Edit note
-   │
-   ▼
-Obsidian Plugin
-   │
-   │ Detect change
-   ▼
-Syncidian Server
-   │
-   ├───────────────► Other Devices
-   │
-   ▼
-GitHub
-   │
-   ▼
-Source of Truth
+```mermaid
+flowchart TD
+  Edit[Edit note] --> Plugin[Obsidian plugin]
+  Plugin -->|Detect change| Srv[Syncidian server]
+  Srv --> Other[Other devices]
+  Srv --> GH[GitHub]
+  GH --> SoT[Source of truth]
 ```
 
 The user does not need to manually:
@@ -705,24 +650,10 @@ Syncidian includes a built-in **Model Context Protocol (MCP) server**.
 
 This provides a controlled interface between your Obsidian knowledge base and AI tools.
 
-```text
-┌───────────────────────────┐
-│         AI Tools          │
-│                           │
-│ Claude · Gemini · Agents  │
-│ Other MCP Clients         │
-└─────────────┬─────────────┘
-              │
-              │ MCP
-              ▼
-┌───────────────────────────┐
-│         Syncidian         │
-│                           │
-│       MCP Server          │
-│            │              │
-│            ▼              │
-│      Obsidian Vault       │
-└───────────────────────────┘
+```mermaid
+flowchart TB
+  Tools["AI tools<br/>Claude · Gemini · agents"] -->|"MCP"| MCP["Syncidian MCP server"]
+  MCP --> Vault["Obsidian vault"]
 ```
 
 Potential capabilities:
