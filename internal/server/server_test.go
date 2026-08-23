@@ -158,6 +158,12 @@ func TestDashboardServed(t *testing.T) {
 	if res.StatusCode != 200 || !bytes.Contains(b, []byte("Syncidian")) {
 		t.Fatalf("dashboard status %d", res.StatusCode)
 	}
+	if !bytes.Contains(b, []byte("function asList")) {
+		t.Fatal("dashboard must guard null list responses")
+	}
+	if bytes.Contains(b, []byte("conflicts.length")) {
+		t.Fatal("unguarded conflicts.length would throw when API returns null")
+	}
 	for _, needle := range []string{
 		`id="gh-setup-modal"`,
 		`id="gh-setup-repo"`,
@@ -204,6 +210,45 @@ func TestGitHubRequiredForNewUser(t *testing.T) {
 	}, cookies, "")
 	if res.StatusCode != http.StatusBadRequest {
 		t.Fatalf("expected missing token to fail, got %d %v", res.StatusCode, m)
+	}
+}
+
+func TestEmptyListEndpointsReturnArrays(t *testing.T) {
+	hs, done := newTestServer(t)
+	defer done()
+
+	res, m := doJSON(t, http.MethodPost, hs.URL+"/api/v1/setup", map[string]string{
+		"username": "ada", "password": "password1",
+	}, nil, "")
+	if res.StatusCode != http.StatusCreated {
+		t.Fatalf("setup status %d %v", res.StatusCode, m)
+	}
+	cookies := res.Cookies()
+
+	for _, path := range []string{"/api/v1/conflicts", "/api/v1/activity", "/api/v1/devices", "/api/v1/tokens"} {
+		req, err := http.NewRequest(http.MethodGet, hs.URL+path, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, c := range cookies {
+			req.AddCookie(c)
+		}
+		res, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		raw, _ := io.ReadAll(res.Body)
+		res.Body.Close()
+		if res.StatusCode != 200 {
+			t.Fatalf("%s status %d %s", path, res.StatusCode, raw)
+		}
+		var list []any
+		if err := json.Unmarshal(raw, &list); err != nil {
+			t.Fatalf("%s: expected JSON array, got %s (%v)", path, raw, err)
+		}
+		if list == nil {
+			t.Fatalf("%s: decoded as null, want empty array", path)
+		}
 	}
 }
 

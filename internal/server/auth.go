@@ -269,6 +269,9 @@ func (s *Server) handleActivity(w http.ResponseWriter, r *http.Request, u *store
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	if items == nil {
+		items = []store.Activity{}
+	}
 	writeJSON(w, http.StatusOK, items)
 }
 

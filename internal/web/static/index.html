@@ -425,11 +425,12 @@ async function overview(main) {
         <li>In Obsidian: Settings → Syncidian → paste <code>${esc(location.origin)}</code> and the token.</li>
       </ol>
     </div>
-    ${conflicts.length ? `<div class="card"><h2>Conflicts</h2>${conflictList(conflicts)}</div>` : ""}
+    ${asList(conflicts).length ? `<div class="card"><h2>Conflicts</h2>${conflictList(asList(conflicts))}</div>` : ""}
   `;
 }
 
 function deviceTable(devices) {
+  devices = asList(devices);
   if (!devices.length) return `<p class="muted">No devices yet. Connect the Obsidian plugin to register this computer.</p>`;
   return `<table><thead><tr><th>Device</th><th>Platform</th><th>Status</th><th>Last seen</th><th>Last sync</th><th>Syncs</th></tr></thead><tbody>
     ${devices.map(d => `<tr>
@@ -441,6 +442,7 @@ function deviceTable(devices) {
 }
 
 function conflictList(items) {
+  items = asList(items);
   return `<table><thead><tr><th>Path</th><th>Created</th></tr></thead><tbody>
     ${items.map(c => `<tr><td>${esc(c.Path || c.path)}</td><td>${when(c.CreatedAt || c.created_at)}</td></tr>`).join("")}
   </tbody></table>`;
