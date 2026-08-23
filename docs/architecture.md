@@ -275,7 +275,9 @@ flowchart LR
     Land --> Login["Later visits: POST /api/v1/auth/login"]
     Setup --> Cookie["HttpOnly cookie<br/>syncidian_session"]
     Login --> Cookie
-    Cookie --> GH["Optional GitHub page<br/>one repo per user"]
+    Cookie --> Split{"Role"}
+    Split -->|"admin"| UsersOnly["Users page only<br/>no GitHub"]
+    Split -->|"user"| VaultUI["Optional GitHub page<br/>one repo per user"]
   end
 
   subgraph pluginAuth [Plugin and MCP]
@@ -384,7 +386,8 @@ Vault bytes live on disk at `data/vaults/<userId>/`. SQLite (`data/syncidian.db`
 
 ```mermaid
 flowchart TB
-  S["One Syncidian process"] --> A["User A"]
+  S["One Syncidian process"] --> Admin["Admin<br/>users only · no repo sync"]
+  S --> A["User A"]
   S --> B["User B"]
   S --> C["User C"]
 
@@ -400,9 +403,9 @@ flowchart TB
   C --> CV["vaults/C"]
 ```
 
-A user only sees their own devices, tokens, vault, conflicts, activity, and GitHub mapping. The WebSocket hub broadcasts per `userID`.
+A regular user only sees their own devices, tokens, vault, conflicts, activity, and one GitHub repository. Admins manage accounts and cannot call vault, token, device, activity, or GitHub APIs. The WebSocket hub broadcasts per `userID`.
 
-Admins can create users and list `publicUser` fields (`id`, `username`, `is_admin`, `created_at`). They do **not** receive another user's GitHub PAT, repository, vault bytes, tokens, or activity. Admin login does not require `github_config`.
+Admins can create users and list `adminUserSummary` fields (`username`, `is_admin`, `created_at`). They do **not** receive another user's GitHub PAT, repository, vault bytes, tokens, or activity. Admin login does not require `github_config`.
 
 ---
 

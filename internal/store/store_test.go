@@ -30,7 +30,7 @@ func TestCreateUserAndToken(t *testing.T) {
 	}
 }
 
-func TestGitHubConfigIsPerUser(t *testing.T) {
+func TestOneGitHubRepoPerUser(t *testing.T) {
 	st, err := Open(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
@@ -45,19 +45,28 @@ func TestGitHubConfigIsPerUser(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := st.SetGitHub(GitHubConfig{UserID: bob.ID, Token: "ghp_bob", Repo: "bob/vault", Branch: "main"}); err != nil {
+
+	if err := st.SetGitHub(GitHubConfig{UserID: bob.ID, Token: "tok-a", Repo: "bob/first", Branch: "main"}); err != nil {
 		t.Fatal(err)
+	}
+	if err := st.SetGitHub(GitHubConfig{UserID: bob.ID, Token: "tok-b", Repo: "bob/second", Branch: "main"}); err != nil {
+		t.Fatal(err)
+	}
+	got, err := st.GetGitHub(bob.ID)
+	if err != nil || got == nil || got.Repo != "bob/second" || got.Token != "tok-b" {
+		t.Fatalf("bob should have one replaced repo: %+v %v", got, err)
+	}
+	if other, err := st.GetGitHub(ada.ID); err != nil || other != nil {
+		t.Fatalf("admin must not inherit a repo: %+v %v", other, err)
 	}
 
-	adaGH, err := st.GetGitHub(ada.ID)
-	if err != nil {
-		t.Fatal(err)
+	public, err := st.ListUsersPublic()
+	if err != nil || len(public) != 2 {
+		t.Fatalf("public users %d %v", len(public), err)
 	}
-	if adaGH != nil {
-		t.Fatalf("admin must not inherit another user's GitHub config: %+v", adaGH)
-	}
-	bobGH, err := st.GetGitHub(bob.ID)
-	if err != nil || bobGH == nil || bobGH.Repo != "bob/vault" {
-		t.Fatalf("bob github: %+v %v", bobGH, err)
+	for _, u := range public {
+		if u.PasswordHash != "" {
+			t.Fatalf("ListUsersPublic leaked password hash for %s", u.Username)
+		}
 	}
 }

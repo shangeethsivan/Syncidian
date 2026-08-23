@@ -137,15 +137,7 @@
   <div id="app" class="hidden">
     <header class="app">
       <div class="brand"><span class="dot"></span> Syncidian</div>
-      <nav>
-        <button data-page="overview" class="active">Overview</button>
-        <button data-page="devices">Devices</button>
-        <button data-page="tokens">Tokens</button>
-        <button data-page="github">GitHub</button>
-        <button data-page="mcp">MCP / AI</button>
-        <button data-page="users">Users</button>
-        <button data-page="activity">Activity</button>
-      </nav>
+      <nav id="nav"></nav>
       <div class="row">
         <span class="muted" id="who"></span>
         <button class="ghost" id="logout" type="button">Log out</button>
@@ -215,92 +207,100 @@ function when(t) {
   if (s < 86400) return Math.floor(s/3600) + " h ago";
   return d.toLocaleString();
 }
+function isAdmin() {
+  return !!(me && me.is_admin);
+}
 
 const HELP_STEPS = [
   {
     title: "1. Start the Syncidian server",
     html: () => `
-      <p>If you can open this dashboard, the server is already running. For a new machine, deploy it first.</p>
-      <h2>Docker (recommended)</h2>
+      <p>Deploy the server first. GitHub is not configured on the server itself.</p>
+      <h2>Docker</h2>
       <pre>git clone https://github.com/shangeethsivan/Syncidian.git
 cd Syncidian
 docker compose up --build -d</pre>
-      <p>Then open <code>${esc(location.origin)}</code> (local default is <code>http://localhost:8080</code>).</p>
-      <h2>Without Docker (Go 1.22+)</h2>
+      <h2>Go</h2>
       <pre>go run ./cmd/syncidian serve</pre>
-      <p class="muted">Data is stored in <code>./data</code> locally, or in a <code>/data</code> volume when you use Docker or Railway.</p>
-      <h2>Railway</h2>
-      <ol>
-        <li>New project → deploy this GitHub repo (Dockerfile is auto-detected).</li>
-        <li>Settings → Volumes → add a volume mounted at <code>/data</code>.</li>
-        <li>Generate a public domain, then open that URL.</li>
-      </ol>
-      <p>Health check: <code>GET ${esc(location.origin)}/health</code>.</p>
+      <p>Then open this dashboard at <code>${esc(location.origin)}</code>.</p>
+      <p class="muted">Data is stored in <code>./data</code> locally, or in a <code>/data</code> volume on Docker or Railway.</p>
     `,
   },
   {
     title: "2. Authenticate",
     html: () => `
-      <p>The landing page always asks you to authenticate. GitHub is never configured before sign-in.</p>
+      <p>The landing page always asks you to authenticate. GitHub is never configured before sign-in. The first account is an admin. Admins manage users only — they do not connect a GitHub repository and never see another person’s vault, tokens, or GitHub credentials.</p>
       <ol>
-        <li>On first launch, create the first admin username and a password of at least 8 characters.</li>
-        <li>On later visits, sign in with your own account.</li>
+        <li>Choose a username.</li>
+        <li>Choose a password of at least 8 characters.</li>
+        <li>Click <b>Create admin</b>.</li>
       </ol>
-      <p>Admin accounts only manage users. They do not need a GitHub repository and cannot see another user’s vault, tokens, activity, or GitHub credentials.</p>
     `,
   },
   {
-    title: "3. Admins manage users",
+    title: "3. Create a regular user",
     html: () => `
-      <p>After the first admin signs in, they can create isolated user accounts on the <b>Users</b> page.</p>
+      <p>On the <b>Users</b> page, create the person who will sync Obsidian. Each account is isolated.</p>
       <ol>
-        <li>Open <b>Users</b>.</li>
-        <li>Choose a username and a password of at least 8 characters.</li>
-        <li>Leave Admin unchecked for a regular vault user.</li>
+        <li>Enter a username and password.</li>
+        <li>Leave <b>Admin</b> unchecked for vault users.</li>
+        <li>That person signs in with those credentials.</li>
       </ol>
-      <p class="muted">Each user later signs in themselves and connects at most one GitHub repository to their own account. Admins never see that private mapping.</p>
+      <p class="muted">Admins manage users. They should not see any private info of users.</p>
     `,
   },
   {
     title: "4. Connect your GitHub repository",
     html: () => `
-      <p>GitHub backup is <b>per user</b>, optional, and only available after login. One repository per account.</p>
+      <p>GitHub backup is <b>per user</b>, not per server. One user can set up one GitHub repository.</p>
       <ol>
-        <li>Sign in as the user who owns the vault.</li>
+        <li>Sign in as that user (not as admin).</li>
         <li>Open the <b>GitHub</b> page.</li>
         <li>Create a GitHub personal access token with the <code>repo</code> scope.</li>
         <li>Enter the repository as <code>owner/name</code>, for example <code>you/obsidian-vault</code>.</li>
-        <li>Optionally create a private repository if it does not exist, then click <b>Save</b>.</li>
+        <li>Save. Saving again replaces that same repository — you still have only one.</li>
       </ol>
-      <p>The Obsidian plugin never sees GitHub credentials. Admin login does not require this step.</p>
+      <p>The Obsidian plugin never sees GitHub credentials.</p>
     `,
   },
   {
-    title: "5. Create an access token and install the plugin",
+    title: "5. Create an access token",
     html: () => `
-      <p>The plugin authenticates with a dashboard token, not your password.</p>
+      <p>The plugin authenticates with a dashboard token from <b>your</b> user, not the admin.</p>
       <ol>
-        <li>Open the <b>Tokens</b> page after you sign in.</li>
+        <li>Open the <b>Tokens</b> page after you sign in as a regular user.</li>
         <li>Name the token after the device, for example <code>MacBook Pro</code>.</li>
-        <li>Click <b>Create token</b> and copy the <code>sk_sync_…</code> value immediately — it is shown only once.</li>
+        <li>Click <b>Create token</b> and copy the <code>sk_sync_…</code> value immediately.</li>
       </ol>
-      <h2>Sideload the plugin</h2>
+    `,
+  },
+  {
+    title: "6. Install the Obsidian plugin",
+    html: () => `
+      <p>Syncidian is <b>not</b> in the Community Plugin store yet. Sideload it once per vault.</p>
       <pre>chmod +x scripts/install-plugin.sh
 ./scripts/install-plugin.sh "/path/to/YourVault"</pre>
-      <p>Or copy <code>plugin/manifest.json</code>, <code>plugin/main.js</code>, and <code>plugin/styles.css</code> into <code>{Vault}/.obsidian/plugins/syncidian/</code>. Then enable Syncidian in Obsidian (Restricted mode off).</p>
+      <p>On a Mac this is often:</p>
+      <pre>./scripts/install-plugin.sh "$HOME/Documents/Obsidian/MyVault"</pre>
+      <p>Or copy <code>plugin/manifest.json</code>, <code>plugin/main.js</code>, and <code>plugin/styles.css</code> into <code>{Vault}/.obsidian/plugins/syncidian/</code>.</p>
+      <ol>
+        <li>Settings → Community plugins → turn <b>Restricted mode</b> off.</li>
+        <li>Reload plugins or restart Obsidian.</li>
+        <li>Enable <b>Syncidian</b>.</li>
+      </ol>
     `,
   },
   {
-    title: "6. Connect the plugin and sync",
+    title: "7. Connect the plugin and sync",
     html: () => `
       <p>In Obsidian: Settings → Syncidian.</p>
       <ol>
         <li>Server URL: <code>${esc(location.origin)}</code></li>
-        <li>Access token: the <code>sk_sync_…</code> value from the Tokens page</li>
+        <li>Access token: the <code>sk_sync_…</code> value from that user’s Tokens page</li>
         <li>Device name: for example <code>MacBook Pro</code></li>
         <li>Click <b>Connect</b></li>
       </ol>
-      <p>The device should appear on Overview and Devices. Optional: point an MCP client at <code>${esc(location.origin)}/mcp</code> with the same Bearer token.</p>
+      <p>Optional: point an MCP client at <code>${esc(location.origin)}/mcp</code> with the same token.</p>
     `,
   },
 ];
@@ -350,6 +350,38 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "ArrowLeft") $("help-prev").click();
 });
 
+function navItems() {
+  if (isAdmin()) {
+    return [
+      ["overview", "Overview"],
+      ["users", "Users"],
+    ];
+  }
+  return [
+    ["overview", "Overview"],
+    ["devices", "Devices"],
+    ["tokens", "Tokens"],
+    ["github", "GitHub"],
+    ["mcp", "MCP / AI"],
+    ["activity", "Activity"],
+  ];
+}
+
+function paintNav() {
+  const items = navItems();
+  if (!items.some(([id]) => id === page)) page = items[0][0];
+  $("nav").innerHTML = items.map(([id, label]) =>
+    `<button type="button" data-page="${id}" class="${page === id ? "active" : ""}">${label}</button>`
+  ).join("");
+  $("nav").querySelectorAll("button").forEach((b) => {
+    b.onclick = () => {
+      page = b.dataset.page;
+      paintNav();
+      render();
+    };
+  });
+}
+
 async function boot() {
   const st = await api("/api/v1/setup");
   needsSetup = st.needs_setup;
@@ -367,8 +399,8 @@ function showAuth() {
   $("auth").classList.remove("hidden");
   $("auth-title").textContent = needsSetup ? "Create the first admin" : "Sign in";
   $("auth-sub").textContent = needsSetup
-    ? "The landing page always starts with authentication. Choose a username and a password of at least 8 characters. GitHub backup is optional and happens after login, per user."
-    : "Sign in to continue. Each user configures their own GitHub repository after login. Admins can manage users without connecting a repo.";
+    ? "The landing page always starts with authentication. Choose a username and a password of at least 8 characters. GitHub backup happens after login, per user. Admins manage users and do not connect GitHub."
+    : "Sign in to continue. Each user configures their own GitHub repository after login. Admins manage users without connecting a repo.";
   $("auth-btn").textContent = needsSetup ? "Create admin" : "Sign in";
   $("auth-btn").disabled = false;
   $("username").disabled = false;
@@ -378,15 +410,8 @@ function showAuth() {
 function showApp() {
   $("auth").classList.add("hidden");
   $("app").classList.remove("hidden");
-  $("who").textContent = me.is_admin ? me.username + " · admin" : me.username;
-  render();
-}
-
-function goPage(name) {
-  page = name;
-  document.querySelectorAll("nav button").forEach((x) => {
-    x.classList.toggle("active", x.dataset.page === name);
-  });
+  $("who").textContent = isAdmin() ? me.username + " · admin" : me.username;
+  paintNav();
   render();
 }
 
@@ -398,6 +423,7 @@ $("auth-btn").onclick = async () => {
     else await api("/api/v1/auth/login", { method: "POST", body });
     const m = await api("/api/v1/me");
     me = m.user;
+    needsSetup = false;
     showApp();
   } catch (e) {
     flash($("flash"), e.message);
@@ -408,27 +434,55 @@ $("logout").onclick = async () => {
   await api("/api/v1/auth/logout", { method: "POST", body: "{}" });
   me = null;
   needsSetup = false;
+  page = "overview";
   showAuth();
 };
-
-document.querySelectorAll("nav button").forEach((b) => {
-  b.onclick = () => goPage(b.dataset.page);
-});
 
 async function render() {
   const main = $("main");
   main.innerHTML = "<p class='muted'>Loading…</p>";
   try {
+    if (isAdmin()) {
+      if (page === "users") await users(main);
+      else await adminOverview(main);
+      return;
+    }
     if (page === "overview") await overview(main);
     if (page === "devices") await devices(main);
     if (page === "tokens") await tokens(main);
     if (page === "github") await github(main);
     if (page === "mcp") await mcp(main);
-    if (page === "users") await users(main);
     if (page === "activity") await activity(main);
   } catch (e) {
     main.innerHTML = `<div class="flash err">${esc(e.message)}</div>`;
   }
+}
+
+async function adminOverview(main) {
+  const list = asList(await api("/api/v1/users"));
+  const vaultUsers = list.filter((u) => !u.is_admin).length;
+  main.innerHTML = `
+    <h1>Admin</h1>
+    <p class="muted">Admins manage users. They should not see any private info of users — no vaults, tokens, devices, activity, or GitHub credentials.</p>
+    <div class="grid">
+      <div class="stat">Accounts<b>${list.length}</b></div>
+      <div class="stat">Vault users<b>${vaultUsers}</b></div>
+    </div>
+    <div class="card">
+      <h2>What you can do</h2>
+      <ul>
+        <li>Create regular users on the <b>Users</b> page.</li>
+        <li>Each user signs in and connects <b>one GitHub repository</b> of their own.</li>
+        <li>You never configure repo sync for the server, and you never open another user’s notes.</li>
+      </ul>
+      <div class="row">
+        <button class="btn" id="go-users" type="button">Manage users</button>
+        <button class="btn secondary" id="go-help" type="button">Open setup Help</button>
+      </div>
+    </div>
+  `;
+  $("go-users").onclick = () => { page = "users"; paintNav(); render(); };
+  $("go-help").onclick = () => openHelp(2);
 }
 
 async function overview(main) {
@@ -438,26 +492,9 @@ async function overview(main) {
     api("/api/v1/github"),
     api("/api/v1/conflicts").then(asList),
   ]);
-  const adminCard = me.is_admin ? `
-    <div class="card">
-      <h2>Admin</h2>
-      <p>This account manages users. GitHub backup is not required for admin login. You only see usernames and roles — never another user’s vault, tokens, activity, or GitHub credentials.</p>
-      <button class="btn secondary" id="goto-users" type="button">Manage users</button>
-    </div>` : "";
-  const ghCard = me.is_admin && !gh.configured ? `
-    <div class="card">
-      <h2>Your GitHub backup (optional)</h2>
-      <p><span class="pill off">Not required</span> Admins do not need a repository to manage the server. If you also keep a personal vault here, connect your own repo after login on the GitHub page.</p>
-    </div>` : `
-    <div class="card">
-      <h2>Your GitHub repository</h2>
-      <p>${gh.configured ? `<span class="pill ok">Connected</span> ${esc(gh.repo)} (${esc(gh.branch)}) — this mapping is private to your account.` : `<span class="pill warn">Not configured</span> Optional. After login you can connect one GitHub repository for this user. Device sync still works without it.`}</p>
-      ${gh.last_error ? `<p class="flash err">${esc(gh.last_error)}</p>` : ""}
-      ${gh.configured ? "" : `<button class="btn secondary" id="goto-github" type="button">Configure your GitHub repository</button>`}
-    </div>`;
   main.innerHTML = `
     <h1>Overview</h1>
-    <p class="muted">${me.is_admin ? "Manage users and your own account. Other users’ private data stays hidden." : "What is happening with your devices?"}</p>
+    <p class="muted">Your devices, tokens, and one GitHub repository stay private to this account.</p>
     <div class="grid">
       <div class="stat">Active clients<b>${stats.active_clients ?? 0}</b></div>
       <div class="stat">Devices<b>${stats.device_count ?? 0}</b></div>
@@ -466,8 +503,12 @@ async function overview(main) {
       <div class="stat">Last sync<b>${when(stats.last_sync)}</b></div>
       <div class="stat">Open conflicts<b>${stats.conflict_count ?? 0}</b></div>
     </div>
-    ${adminCard}
-    ${ghCard}
+    <div class="card">
+      <h2>Your GitHub repository</h2>
+      <p>${gh.configured ? `<span class="pill ok">Connected</span> ${esc(gh.repo)} (${esc(gh.branch)})` : `<span class="pill warn">Not configured</span> Connect your GitHub repository on the GitHub page. One user can set up one repository.`}</p>
+      ${gh.last_error ? `<p class="flash err">${esc(gh.last_error)}</p>` : ""}
+      ${gh.configured ? "" : `<button class="btn" id="go-github" type="button">Connect GitHub</button>`}
+    </div>
     <div class="card">
       <h2>Devices</h2>
       ${deviceTable(devices)}
@@ -476,19 +517,17 @@ async function overview(main) {
       <h2>Connect Obsidian</h2>
       <ol>
         <li>Create an access token on the Tokens page.</li>
-        <li>Sideload the plugin from this repository’s <code>plugin/</code> folder (or run <code>scripts/install-plugin.sh</code>).</li>
+        <li>Sideload the plugin from this repository’s <code>plugin/</code> folder (or run <code>scripts/install-plugin.sh</code>, or open <b>Help</b>).</li>
         <li>In Obsidian: Settings → Syncidian → paste <code>${esc(location.origin)}</code> and the token, then click Connect.</li>
       </ol>
       <button class="btn secondary" id="open-help" type="button">Open setup walkthrough</button>
     </div>
     ${asList(conflicts).length ? `<div class="card"><h2>Conflicts</h2>${conflictList(asList(conflicts))}</div>` : ""}
   `;
+  const go = $("go-github");
+  if (go) go.onclick = () => { page = "github"; paintNav(); render(); };
   const helpBtn = $("open-help");
-  if (helpBtn) helpBtn.onclick = () => openHelp(4);
-  const usersBtn = $("goto-users");
-  if (usersBtn) usersBtn.onclick = () => goPage("users");
-  const ghBtn = $("goto-github");
-  if (ghBtn) ghBtn.onclick = () => goPage("github");
+  if (helpBtn) helpBtn.onclick = () => openHelp(5);
 }
 
 function deviceTable(devices) {
@@ -519,7 +558,7 @@ async function tokens(main) {
   const list = asList(await api("/api/v1/tokens"));
   main.innerHTML = `
     <h1>Access tokens</h1>
-    <p class="muted">Tokens authenticate the Obsidian plugin. GitHub credentials stay on this server, scoped to your user.</p>
+    <p class="muted">Tokens authenticate the Obsidian plugin. GitHub credentials stay on this server under your user.</p>
     <div class="card">
       <label>Token name</label>
       <div class="row">
@@ -554,9 +593,9 @@ async function github(main) {
   const gh = await api("/api/v1/github");
   main.innerHTML = `
     <h1>GitHub</h1>
-    <p class="muted">One repository per signed-in user. This is not a server-wide setting. The plugin never needs GitHub credentials. ${me.is_admin ? "Admin accounts do not need this to manage users." : ""}</p>
+    <p class="muted">Connect your GitHub repository here. One user can set up one GitHub repository. This is not a server-wide setting — admins manage users and never see this page.</p>
     <div class="card">
-      <p>${gh.configured ? `<span class="pill ok">Connected</span> ${esc(gh.repo)}` : `<span class="pill warn">Not configured</span> Optional backup for <b>your</b> vault only.`}</p>
+      <p>${gh.configured ? `<span class="pill ok">Connected</span> ${esc(gh.repo)}` : `<span class="pill warn">Not configured</span>`}</p>
       ${gh.last_error ? `<div class="flash err">${esc(gh.last_error)}</div>` : ""}
       <label>Repository (owner/name)</label>
       <input id="gh-repo" placeholder="you/obsidian-vault" value="${esc(gh.repo || "")}" />
@@ -578,7 +617,8 @@ async function github(main) {
         repo: $("gh-repo").value, branch: $("gh-branch").value, token: $("gh-token").value,
         create_repo: $("gh-create").checked
       })});
-      flash($("gh-flash"), out.git_error ? ("Saved, but push failed: " + out.git_error) : "GitHub connected to your account.", out.git_error ? "err" : "ok");
+      flash($("gh-flash"), out.git_error ? ("Saved, but push failed: " + out.git_error) : "GitHub connected. This account now has one repository.", out.git_error ? "err" : "ok");
+      setTimeout(() => github(main), 400);
     } catch (e) { flash($("gh-flash"), e.message); }
   };
   const sync = $("gh-sync");
@@ -633,13 +673,11 @@ async function users(main) {
   const list = asList(await api("/api/v1/users"));
   main.innerHTML = `
     <h1>Users</h1>
-    <p class="muted">${me.is_admin
-      ? "Admins only see usernames and roles. Vault files, tokens, devices, activity, and GitHub credentials stay private to each user."
-      : "You can only see your own account. Vaults and GitHub mappings are not shared."}</p>
-    ${me.is_admin ? `<div class="card">
+    <p class="muted">Admins manage users. This list shows only username, role, and created time — no vaults, tokens, or GitHub details.</p>
+    ${isAdmin() ? `<div class="card">
       <label>Username</label><input id="u-name" />
       <label>Password</label><input id="u-pass" type="password" />
-      <div class="check"><input id="u-admin" type="checkbox" /> Admin</div>
+      <div class="check"><input id="u-admin" type="checkbox" /> Admin (user management only; no repo sync)</div>
       <button class="btn" id="u-create" type="button">Create user</button>
       <div id="u-flash"></div>
     </div>` : ""}
@@ -658,9 +696,7 @@ async function users(main) {
 
 async function activity(main) {
   const items = asList(await api("/api/v1/activity"));
-  main.innerHTML = `<h1>Activity</h1>
-    <p class="muted">Your account only. Admins do not receive other users’ activity.</p>
-    <div class="card"><table>
+  main.innerHTML = `<h1>Activity</h1><div class="card"><table>
     <thead><tr><th>When</th><th>Action</th><th>Detail</th></tr></thead>
     <tbody>${items.map(a => `<tr><td>${when(a.CreatedAt || a.created_at)}</td><td>${esc(a.Action || a.action)}</td><td>${esc(a.Detail || a.detail || a.Path || a.path || "")}</td></tr>`).join("") || "<tr><td colspan=3 class='muted'>No activity yet</td></tr>"}
   </tbody></table></div>`;

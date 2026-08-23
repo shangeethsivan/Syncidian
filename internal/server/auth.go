@@ -111,10 +111,10 @@ func (s *Server) handleStats(w http.ResponseWriter, r *http.Request, u *store.Us
 
 func (s *Server) handleListUsers(w http.ResponseWriter, r *http.Request, u *store.User) {
 	if !u.IsAdmin {
-		writeJSON(w, http.StatusOK, []any{publicUser(u)})
+		writeJSON(w, http.StatusOK, []any{adminUserSummary(u)})
 		return
 	}
-	users, err := s.Store.ListUsers()
+	users, err := s.Store.ListUsersPublic()
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -122,7 +122,7 @@ func (s *Server) handleListUsers(w http.ResponseWriter, r *http.Request, u *stor
 	// Admins may manage accounts but never receive vault, token, activity, or GitHub fields.
 	out := make([]any, 0, len(users))
 	for i := range users {
-		out = append(out, publicUser(&users[i]))
+		out = append(out, adminUserSummary(&users[i]))
 	}
 	writeJSON(w, http.StatusOK, out)
 }

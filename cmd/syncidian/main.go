@@ -149,6 +149,9 @@ func runToken(args []string) error {
 	if err != nil || u == nil {
 		return fmt.Errorf("user not found")
 	}
+	if u.IsAdmin {
+		return fmt.Errorf("admins manage users and cannot hold vault access tokens")
+	}
 	name := "Obsidian"
 	if len(args) > 2 {
 		name = strings.Join(args[2:], " ")

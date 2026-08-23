@@ -469,7 +469,7 @@ class SyncidianSettingTab extends PluginSettingTab {
     containerEl.empty();
     containerEl.createEl("h2", { text: "Syncidian" });
     containerEl.createEl("p", {
-      text: "Point this vault at your Syncidian server. GitHub is configured on the server, not here.",
+      text: "Point this vault at your Syncidian server. GitHub is configured per user in the dashboard, not here.",
     });
     new Setting(containerEl)
       .setName("Server URL")

@@ -67,6 +67,34 @@ func doJSON(t *testing.T, method, url string, body any, cookies []*http.Cookie, 
 	return res, m
 }
 
+func setupAdmin(t *testing.T, hs *httptest.Server) []*http.Cookie {
+	t.Helper()
+	res, m := doJSON(t, http.MethodPost, hs.URL+"/api/v1/setup", map[string]string{
+		"username": "ada", "password": "password1",
+	}, nil, "")
+	if res.StatusCode != http.StatusCreated {
+		t.Fatalf("setup status %d %v", res.StatusCode, m)
+	}
+	return res.Cookies()
+}
+
+func createAndLoginUser(t *testing.T, hs *httptest.Server, adminCookies []*http.Cookie, username string) []*http.Cookie {
+	t.Helper()
+	res, m := doJSON(t, http.MethodPost, hs.URL+"/api/v1/users", map[string]any{
+		"username": username, "password": "password1", "admin": false,
+	}, adminCookies, "")
+	if res.StatusCode != http.StatusCreated {
+		t.Fatalf("create user %s: %d %v", username, res.StatusCode, m)
+	}
+	res, m = doJSON(t, http.MethodPost, hs.URL+"/api/v1/auth/login", map[string]string{
+		"username": username, "password": "password1",
+	}, nil, "")
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("login %s: %d %v", username, res.StatusCode, m)
+	}
+	return res.Cookies()
+}
+
 func TestHealthAndSetupFlow(t *testing.T) {
 	hs, done := newTestServer(t)
 	defer done()
@@ -81,19 +109,15 @@ func TestHealthAndSetupFlow(t *testing.T) {
 		t.Fatalf("expected needs_setup: %v", m)
 	}
 
-	res, m = doJSON(t, http.MethodPost, hs.URL+"/api/v1/setup", map[string]string{
-		"username": "ada", "password": "password1",
-	}, nil, "")
-	if res.StatusCode != http.StatusCreated {
-		t.Fatalf("setup status %d %v", res.StatusCode, m)
-	}
-	cookies := res.Cookies()
+	adminCookies := setupAdmin(t, hs)
 
-	res, m = doJSON(t, http.MethodGet, hs.URL+"/api/v1/me", nil, cookies, "")
+	res, m = doJSON(t, http.MethodGet, hs.URL+"/api/v1/me", nil, adminCookies, "")
 	user, _ := m["user"].(map[string]any)
-	if user["username"] != "ada" {
+	if user["username"] != "ada" || user["is_admin"] != true {
 		t.Fatalf("me: %v", m)
 	}
+
+	cookies := createAndLoginUser(t, hs, adminCookies, "bob")
 
 	res, m = doJSON(t, http.MethodPost, hs.URL+"/api/v1/tokens", map[string]string{"name": "plugin"}, cookies, "")
 	token, _ := m["token"].(string)
@@ -169,12 +193,17 @@ func TestDashboardServed(t *testing.T) {
 		`Authenticate to continue`,
 		`id="help-fab"`,
 		`id="help-overlay"`,
+		`id="help-panel"`,
+		`Setup walkthrough`,
+		`HELP_STEPS`,
+		`scripts/install-plugin.sh`,
+		`Settings → Syncidian`,
+		`Connect your GitHub repository`,
 		`The landing page always asks you to authenticate`,
-		`GitHub backup is <b>per user</b>`,
-		`Admins only see usernames and roles`,
+		`one GitHub repository`,
 	} {
 		if !bytes.Contains(b, []byte(needle)) {
-			t.Fatalf("dashboard missing auth-first / help markup %q", needle)
+			t.Fatalf("dashboard missing required markup %q", needle)
 		}
 	}
 	for _, forbidden := range []string{
@@ -206,185 +235,109 @@ func TestGitHubRequiresAuth(t *testing.T) {
 	}
 }
 
-func TestAdminCannotSeeOtherUserPrivateData(t *testing.T) {
-	dir := t.TempDir()
-	st, err := store.Open(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer st.Close()
-	srv := New(config.Config{Addr: ":0", DataDir: dir, PublicURL: "http://localhost"}, st, nil)
-	hs := httptest.NewServer(srv.Handler())
-	defer hs.Close()
+func TestAdminDoesNotNeedGitHubAndCannotSeePrivateUserData(t *testing.T) {
+	hs, done := newTestServer(t)
+	defer done()
 
-	res, m := doJSON(t, http.MethodPost, hs.URL+"/api/v1/setup", map[string]string{
-		"username": "admin", "password": "password1",
-	}, nil, "")
-	if res.StatusCode != http.StatusCreated {
-		t.Fatalf("setup %d %v", res.StatusCode, m)
-	}
-	adminCookies := res.Cookies()
+	adminCookies := setupAdmin(t, hs)
 
-	res, m = doJSON(t, http.MethodPost, hs.URL+"/api/v1/users", map[string]any{
-		"username": "bob", "password": "password1", "admin": false,
-	}, adminCookies, "")
-	if res.StatusCode != http.StatusCreated {
-		t.Fatalf("create user %d %v", res.StatusCode, m)
-	}
-	bobID, _ := m["id"].(string)
-	if bobID == "" {
-		t.Fatalf("expected user id: %v", m)
-	}
-
-	res, m = doJSON(t, http.MethodPost, hs.URL+"/api/v1/auth/login", map[string]string{
-		"username": "bob", "password": "password1",
-	}, nil, "")
-	if res.StatusCode != http.StatusOK {
-		t.Fatalf("bob login %d %v", res.StatusCode, m)
-	}
-	bobCookies := res.Cookies()
-
-	if err := st.SetGitHub(store.GitHubConfig{
-		UserID: bobID,
-		Token:  "ghp_bob_secret",
-		Repo:   "bob/private-vault",
-		Branch: "main",
-	}); err != nil {
-		t.Fatal(err)
-	}
-	_, err = st.CreateToken(bobID, "obsidian", "sk_sync_bobsecret", "sk_sync_bobs…")
-	if err != nil {
-		t.Fatal(err)
-	}
-	_ = st.AddActivity(store.Activity{UserID: bobID, Action: "note.edit", Path: "Secret.md", Detail: "private note"})
-
-	res, m = doJSON(t, http.MethodGet, hs.URL+"/api/v1/github", nil, adminCookies, "")
-	if res.StatusCode != 200 {
-		t.Fatalf("admin github %d %v", res.StatusCode, m)
-	}
-	if m["configured"] != false {
-		t.Fatalf("admin must not see bob's GitHub config: %v", m)
-	}
-	raw, _ := json.Marshal(m)
-	if strings.Contains(string(raw), "bob/private-vault") || strings.Contains(string(raw), "ghp_bob_secret") {
-		t.Fatalf("admin github response leaked user repo or token: %s", raw)
-	}
-
-	res, m = doJSON(t, http.MethodGet, hs.URL+"/api/v1/github", nil, bobCookies, "")
-	if m["configured"] != true || m["repo"] != "bob/private-vault" {
-		t.Fatalf("bob should see his own repo: %v", m)
-	}
-	if _, ok := m["token"]; ok {
-		t.Fatalf("github GET must never return the raw token: %v", m)
-	}
-
-	req, err := http.NewRequest(http.MethodGet, hs.URL+"/api/v1/tokens", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, c := range adminCookies {
-		req.AddCookie(c)
-	}
-	res, err = http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatal(err)
-	}
-	tokenRaw, _ := io.ReadAll(res.Body)
-	res.Body.Close()
-	if strings.Contains(string(tokenRaw), "sk_sync_bobsecret") || strings.Contains(string(tokenRaw), "obsidian") {
-		t.Fatalf("admin tokens leaked bob's token: %s", tokenRaw)
-	}
-
-	req, err = http.NewRequest(http.MethodGet, hs.URL+"/api/v1/activity", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, c := range adminCookies {
-		req.AddCookie(c)
-	}
-	res, err = http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatal(err)
-	}
-	actRaw, _ := io.ReadAll(res.Body)
-	res.Body.Close()
-	if strings.Contains(string(actRaw), "Secret.md") || strings.Contains(string(actRaw), "note.edit") {
-		t.Fatalf("admin activity leaked bob's events: %s", actRaw)
-	}
-
-	req, err = http.NewRequest(http.MethodGet, hs.URL+"/api/v1/users", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, c := range adminCookies {
-		req.AddCookie(c)
-	}
-	res, err = http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatal(err)
-	}
-	usersRaw, _ := io.ReadAll(res.Body)
-	res.Body.Close()
-	if res.StatusCode != 200 {
-		t.Fatalf("users %d %s", res.StatusCode, usersRaw)
-	}
-	for _, secret := range []string{"ghp_bob_secret", "bob/private-vault", "sk_sync_bobsecret", "Secret.md", "password_hash"} {
-		if strings.Contains(string(usersRaw), secret) {
-			t.Fatalf("admin user list leaked private field %q: %s", secret, usersRaw)
+	for _, path := range []string{
+		"/api/v1/github",
+		"/api/v1/tokens",
+		"/api/v1/devices",
+		"/api/v1/activity",
+		"/api/v1/conflicts",
+		"/api/v1/stats",
+		"/api/v1/mcp",
+	} {
+		res, m := doJSON(t, http.MethodGet, hs.URL+path, nil, adminCookies, "")
+		if res.StatusCode != http.StatusForbidden {
+			t.Fatalf("admin GET %s: want 403, got %d %v", path, res.StatusCode, m)
 		}
 	}
+
+	res, m := doJSON(t, http.MethodPost, hs.URL+"/api/v1/github", map[string]any{
+		"repo": "ada/vault", "token": "ghp_test",
+	}, adminCookies, "")
+	if res.StatusCode != http.StatusForbidden {
+		t.Fatalf("admin POST github: want 403, got %d %v", res.StatusCode, m)
+	}
+
+	bobCookies := createAndLoginUser(t, hs, adminCookies, "bob")
+	res, m = doJSON(t, http.MethodGet, hs.URL+"/api/v1/github", nil, bobCookies, "")
+	if res.StatusCode != 200 || m["configured"] != false {
+		t.Fatalf("bob github before setup: %d %v", res.StatusCode, m)
+	}
+
+	req, err := http.NewRequest(http.MethodGet, hs.URL+"/api/v1/users", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range adminCookies {
+		req.AddCookie(c)
+	}
+	res, err = http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := io.ReadAll(res.Body)
+	res.Body.Close()
 	var users []map[string]any
-	if err := json.Unmarshal(usersRaw, &users); err != nil {
-		t.Fatalf("users decode: %s", usersRaw)
+	if err := json.Unmarshal(raw, &users); err != nil {
+		t.Fatalf("users list: %s %v", raw, err)
 	}
 	if len(users) != 2 {
-		t.Fatalf("expected admin + bob, got %s", usersRaw)
+		t.Fatalf("want 2 users, got %s", raw)
 	}
 	for _, u := range users {
-		if _, ok := u["password_hash"]; ok {
-			t.Fatalf("user list must not include password_hash: %v", u)
+		if _, ok := u["id"]; ok {
+			t.Fatalf("admin user list must not include ids: %v", u)
 		}
-		if _, ok := u["token"]; ok {
-			t.Fatalf("user list must not include tokens: %v", u)
+		if _, ok := u["password_hash"]; ok {
+			t.Fatalf("admin user list must not include password hashes: %v", u)
 		}
 		if _, ok := u["repo"]; ok {
-			t.Fatalf("user list must not include github repo: %v", u)
+			t.Fatalf("admin user list must not include github repo: %v", u)
+		}
+		if _, ok := u["token"]; ok {
+			t.Fatalf("admin user list must not include tokens: %v", u)
+		}
+		if u["username"] == nil || u["is_admin"] == nil {
+			t.Fatalf("admin user list missing public fields: %v", u)
 		}
 	}
 }
 
-func TestGitHubRequiredForNewUser(t *testing.T) {
+func TestGitHubIsPerUserNotPerServer(t *testing.T) {
 	hs, done := newTestServer(t)
 	defer done()
 
-	res, m := doJSON(t, http.MethodPost, hs.URL+"/api/v1/setup", map[string]string{
-		"username": "ada", "password": "password1",
-	}, nil, "")
-	if res.StatusCode != http.StatusCreated {
-		t.Fatalf("setup %d %v", res.StatusCode, m)
-	}
-	cookies := res.Cookies()
+	adminCookies := setupAdmin(t, hs)
+	bob := createAndLoginUser(t, hs, adminCookies, "bob")
+	cara := createAndLoginUser(t, hs, adminCookies, "cara")
 
-	res, m = doJSON(t, http.MethodGet, hs.URL+"/api/v1/github", nil, cookies, "")
-	if res.StatusCode != 200 {
-		t.Fatalf("github status %d %v", res.StatusCode, m)
-	}
-	if m["configured"] != false {
-		t.Fatalf("new user should not have GitHub configured: %v", m)
+	res, m := doJSON(t, http.MethodGet, hs.URL+"/api/v1/github", nil, bob, "")
+	if res.StatusCode != 200 || m["configured"] != false {
+		t.Fatalf("bob should start unconfigured: %d %v", res.StatusCode, m)
 	}
 
 	res, m = doJSON(t, http.MethodPost, hs.URL+"/api/v1/github", map[string]any{
 		"repo": "not-a-repo", "token": "ghp_test",
-	}, cookies, "")
+	}, bob, "")
 	if res.StatusCode != http.StatusBadRequest {
 		t.Fatalf("expected invalid repo to fail, got %d %v", res.StatusCode, m)
 	}
 
 	res, m = doJSON(t, http.MethodPost, hs.URL+"/api/v1/github", map[string]any{
-		"repo": "ada/vault", "token": "",
-	}, cookies, "")
+		"repo": "bob/vault", "token": "",
+	}, bob, "")
 	if res.StatusCode != http.StatusBadRequest {
 		t.Fatalf("expected missing token to fail, got %d %v", res.StatusCode, m)
+	}
+
+	res, m = doJSON(t, http.MethodGet, hs.URL+"/api/v1/github", nil, cara, "")
+	if res.StatusCode != 200 || m["configured"] != false {
+		t.Fatalf("cara must not inherit a server-wide repo: %d %v", res.StatusCode, m)
 	}
 }
 
@@ -392,13 +345,8 @@ func TestEmptyListEndpointsReturnArrays(t *testing.T) {
 	hs, done := newTestServer(t)
 	defer done()
 
-	res, m := doJSON(t, http.MethodPost, hs.URL+"/api/v1/setup", map[string]string{
-		"username": "ada", "password": "password1",
-	}, nil, "")
-	if res.StatusCode != http.StatusCreated {
-		t.Fatalf("setup status %d %v", res.StatusCode, m)
-	}
-	cookies := res.Cookies()
+	adminCookies := setupAdmin(t, hs)
+	cookies := createAndLoginUser(t, hs, adminCookies, "bob")
 
 	for _, path := range []string{"/api/v1/conflicts", "/api/v1/activity", "/api/v1/devices", "/api/v1/tokens"} {
 		req, err := http.NewRequest(http.MethodGet, hs.URL+path, nil)
@@ -434,7 +382,7 @@ func TestVaultIsolation(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer st.Close()
-	u, err := st.CreateUser("a", "x", true)
+	u, err := st.CreateUser("a", "x", false)
 	if err != nil {
 		t.Fatal(err)
 	}

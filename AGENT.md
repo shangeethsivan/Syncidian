@@ -38,8 +38,8 @@ Document and implement these unless a later change explicitly replaces them — 
 
 1. **Landing page always authenticates.** Unauthenticated visitors see sign-in or first-admin setup only. No GitHub repository form before login.
 2. **GitHub is per user, after login.** One repository per `user_id`. `GET/POST /api/v1/github` requires `authenticate()`.
-3. **Admin login does not need repo sync.** Admins manage users. They must not see another user’s vault, tokens, activity, devices, MCP permissions, or GitHub PAT/repo.
-4. **Admin user list is public fields only:** `id`, `username`, `is_admin`, `created_at`.
+3. **Admin login does not need repo sync.** Admins manage users. Vault/GitHub/token/device/activity/MCP routes use `vaultAuthed` and return 403 for admins.
+4. **Admin user list is public fields only:** `username`, `is_admin`, `created_at` (no `id`, vault, tokens, or GitHub).
 5. Device sync works without GitHub. GitHub is optional durable backup.
 
 ## How to update diagrams
