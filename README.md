@@ -38,7 +38,7 @@ cd Syncidian
 docker compose up --build -d
 ```
 
-Open [http://localhost:8080](http://localhost:8080), create the first admin user, then go to **Tokens** and create an access token (`sk_sync_…`). Copy it once — it is not shown again.
+Open [http://localhost:8080](http://localhost:8080). The dashboard has a **Help** button at the bottom of the screen with a step-by-step walkthrough (server, GitHub, admin account, tokens, and plugin). Create the first admin user, then go to **Tokens** and create an access token (`sk_sync_…`). Copy it once — it is not shown again.
 
 **Without Docker (Go 1.22+):**
 

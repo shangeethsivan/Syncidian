@@ -171,9 +171,16 @@ func TestDashboardServed(t *testing.T) {
 		`id="gh-setup-save"`,
 		`Configure GitHub repository`,
 		`id="auth-btn" type="button" disabled`,
+		`id="help-fab"`,
+		`id="help-overlay"`,
+		`id="help-panel"`,
+		`Setup walkthrough`,
+		`HELP_STEPS`,
+		`scripts/install-plugin.sh`,
+		`Settings → Syncidian`,
 	} {
 		if !bytes.Contains(b, []byte(needle)) {
-			t.Fatalf("login page missing required GitHub setup popup markup %q", needle)
+			t.Fatalf("dashboard missing required setup walkthrough markup %q", needle)
 		}
 	}
 }
