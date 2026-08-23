@@ -60,41 +60,41 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/v1/auth/login", s.handleLogin)
 	mux.HandleFunc("POST /api/v1/auth/logout", s.authed(s.handleLogout))
 	mux.HandleFunc("GET /api/v1/me", s.authed(s.handleMe))
-	mux.HandleFunc("GET /api/v1/stats", s.authed(s.handleStats))
+	mux.HandleFunc("GET /api/v1/stats", s.vaultAuthed(s.handleStats))
 
 	mux.HandleFunc("GET /api/v1/users", s.authed(s.handleListUsers))
 	mux.HandleFunc("POST /api/v1/users", s.authed(s.handleCreateUser))
 
-	mux.HandleFunc("GET /api/v1/tokens", s.authed(s.handleListTokens))
-	mux.HandleFunc("POST /api/v1/tokens", s.authed(s.handleCreateToken))
-	mux.HandleFunc("POST /api/v1/tokens/{id}/revoke", s.authed(s.handleRevokeToken))
+	mux.HandleFunc("GET /api/v1/tokens", s.vaultAuthed(s.handleListTokens))
+	mux.HandleFunc("POST /api/v1/tokens", s.vaultAuthed(s.handleCreateToken))
+	mux.HandleFunc("POST /api/v1/tokens/{id}/revoke", s.vaultAuthed(s.handleRevokeToken))
 
-	mux.HandleFunc("POST /api/v1/devices/register", s.authed(s.handleRegisterDevice))
-	mux.HandleFunc("GET /api/v1/devices", s.authed(s.handleListDevices))
-	mux.HandleFunc("POST /api/v1/devices/{id}/heartbeat", s.authed(s.handleHeartbeat))
-	mux.HandleFunc("DELETE /api/v1/devices/{id}", s.authed(s.handleDeleteDevice))
+	mux.HandleFunc("POST /api/v1/devices/register", s.vaultAuthed(s.handleRegisterDevice))
+	mux.HandleFunc("GET /api/v1/devices", s.vaultAuthed(s.handleListDevices))
+	mux.HandleFunc("POST /api/v1/devices/{id}/heartbeat", s.vaultAuthed(s.handleHeartbeat))
+	mux.HandleFunc("DELETE /api/v1/devices/{id}", s.vaultAuthed(s.handleDeleteDevice))
 
-	mux.HandleFunc("POST /api/v1/sync/plan", s.authed(s.handleSyncPlan))
-	mux.HandleFunc("POST /api/v1/sync/push", s.authed(s.handleSyncPush))
-	mux.HandleFunc("GET /api/v1/sync/file", s.authed(s.handleSyncFile))
-	mux.HandleFunc("GET /api/v1/sync/manifest", s.authed(s.handleManifest))
+	mux.HandleFunc("POST /api/v1/sync/plan", s.vaultAuthed(s.handleSyncPlan))
+	mux.HandleFunc("POST /api/v1/sync/push", s.vaultAuthed(s.handleSyncPush))
+	mux.HandleFunc("GET /api/v1/sync/file", s.vaultAuthed(s.handleSyncFile))
+	mux.HandleFunc("GET /api/v1/sync/manifest", s.vaultAuthed(s.handleManifest))
 
-	mux.HandleFunc("GET /api/v1/conflicts", s.authed(s.handleListConflicts))
-	mux.HandleFunc("GET /api/v1/conflicts/{id}", s.authed(s.handleGetConflict))
-	mux.HandleFunc("POST /api/v1/conflicts/{id}/resolve", s.authed(s.handleResolveConflict))
+	mux.HandleFunc("GET /api/v1/conflicts", s.vaultAuthed(s.handleListConflicts))
+	mux.HandleFunc("GET /api/v1/conflicts/{id}", s.vaultAuthed(s.handleGetConflict))
+	mux.HandleFunc("POST /api/v1/conflicts/{id}/resolve", s.vaultAuthed(s.handleResolveConflict))
 
-	mux.HandleFunc("GET /api/v1/github", s.authed(s.handleGetGitHub))
-	mux.HandleFunc("POST /api/v1/github", s.authed(s.handleSetGitHub))
-	mux.HandleFunc("DELETE /api/v1/github", s.authed(s.handleDeleteGitHub))
-	mux.HandleFunc("POST /api/v1/github/sync", s.authed(s.handleGitHubSyncNow))
+	mux.HandleFunc("GET /api/v1/github", s.vaultAuthed(s.handleGetGitHub))
+	mux.HandleFunc("POST /api/v1/github", s.vaultAuthed(s.handleSetGitHub))
+	mux.HandleFunc("DELETE /api/v1/github", s.vaultAuthed(s.handleDeleteGitHub))
+	mux.HandleFunc("POST /api/v1/github/sync", s.vaultAuthed(s.handleGitHubSyncNow))
 
-	mux.HandleFunc("GET /api/v1/mcp", s.authed(s.handleGetMCP))
-	mux.HandleFunc("POST /api/v1/mcp", s.authed(s.handleSetMCP))
-	mux.HandleFunc("POST /mcp", s.authed(s.handleMCP))
-	mux.HandleFunc("GET /mcp", s.authed(s.handleMCPInfo))
+	mux.HandleFunc("GET /api/v1/mcp", s.vaultAuthed(s.handleGetMCP))
+	mux.HandleFunc("POST /api/v1/mcp", s.vaultAuthed(s.handleSetMCP))
+	mux.HandleFunc("POST /mcp", s.vaultAuthed(s.handleMCP))
+	mux.HandleFunc("GET /mcp", s.vaultAuthed(s.handleMCPInfo))
 
-	mux.HandleFunc("GET /api/v1/activity", s.authed(s.handleActivity))
-	mux.HandleFunc("GET /api/v1/ws", s.authed(s.handleWS))
+	mux.HandleFunc("GET /api/v1/activity", s.vaultAuthed(s.handleActivity))
+	mux.HandleFunc("GET /api/v1/ws", s.vaultAuthed(s.handleWS))
 
 	static, err := fs.Sub(web.FS, "static")
 	if err != nil {
@@ -144,6 +144,18 @@ func (s *Server) authed(fn func(http.ResponseWriter, *http.Request, *store.User)
 		}
 		fn(w, r.WithContext(context.WithValue(r.Context(), userKey, user)), user)
 	}
+}
+
+// vaultAuthed is for a regular user's own vault, tokens, devices, and GitHub repo.
+// Admins manage accounts only and cannot read or write that private data.
+func (s *Server) vaultAuthed(fn func(http.ResponseWriter, *http.Request, *store.User)) http.HandlerFunc {
+	return s.authed(func(w http.ResponseWriter, r *http.Request, u *store.User) {
+		if u.IsAdmin {
+			writeError(w, http.StatusForbidden, "admins manage users and cannot access private vault or GitHub data")
+			return
+		}
+		fn(w, r, u)
+	})
 }
 
 func (s *Server) authenticate(r *http.Request) (*store.User, error) {
@@ -259,6 +271,15 @@ func safeJoin(root, rel string) (string, bool) {
 func publicUser(u *store.User) map[string]any {
 	return map[string]any{
 		"id":         u.ID,
+		"username":   u.Username,
+		"is_admin":   u.IsAdmin,
+		"created_at": u.CreatedAt,
+	}
+}
+
+// adminUserSummary is the only user record an admin may see: no id, vault, tokens, or GitHub.
+func adminUserSummary(u *store.User) map[string]any {
+	return map[string]any{
 		"username":   u.Username,
 		"is_admin":   u.IsAdmin,
 		"created_at": u.CreatedAt,

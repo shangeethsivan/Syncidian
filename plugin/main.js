@@ -468,7 +468,7 @@ var SyncidianSettingTab = class extends import_obsidian.PluginSettingTab {
     containerEl.empty();
     containerEl.createEl("h2", { text: "Syncidian" });
     containerEl.createEl("p", {
-      text: "Point this vault at your Syncidian server. GitHub is configured on the server, not here."
+      text: "Point this vault at your Syncidian server. GitHub is configured per user in the dashboard, not here."
     });
     new import_obsidian.Setting(containerEl).setName("Server URL").setDesc("Example: http://localhost:8080 or https://sync.example.com").addText(
       (t) => t.setPlaceholder("http://localhost:8080").setValue(this.plugin.settings.serverUrl).onChange(async (v) => {
