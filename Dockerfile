@@ -13,25 +13,30 @@ RUN CGO_ENABLED=0 GOOS=linux go build \
 
 FROM alpine:3.20
 
-RUN apk add --no-cache ca-certificates git wget \
-    && adduser -D -H -u 10001 syncidian
+# Do not add a Docker VOLUME instruction. Railway rejects it ("use Railway
+# Volumes"). Persist /data at runtime instead: Railway Volume, Compose, or -v.
+RUN apk add --no-cache ca-certificates git wget su-exec \
+    && adduser -D -u 10001 syncidian
 
 WORKDIR /app
 
 COPY --from=builder /out/syncidian /app/syncidian
+COPY docker-entrypoint.sh /app/docker-entrypoint.sh
 
-RUN mkdir -p /data && chown -R syncidian:syncidian /data /app
+RUN mkdir -p /data \
+    && chown -R syncidian:syncidian /data /app /home/syncidian \
+    && chmod 0755 /app/docker-entrypoint.sh
 
-USER syncidian
-
+# Image defaults. Railway injects PORT (and RAILWAY_* vars) at runtime.
+ENV PORT=8080
 ENV SYNCIDIAN_DATA=/data
-ENV SYNCIDIAN_ADDR=:8080
+ENV HOME=/home/syncidian
 
 EXPOSE 8080
 
-VOLUME ["/data"]
-
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s \
-  CMD wget -qO- http://127.0.0.1:8080/health || exit 1
+  CMD /bin/sh -c 'wget -qO- "http://127.0.0.1:${PORT:-8080}/health" || exit 1'
 
-ENTRYPOINT ["/app/syncidian"]
+# Start as root so a Railway/host volume mounted on /data can be chowned,
+# then drop to the syncidian user. `docker run --user` still works.
+ENTRYPOINT ["/app/docker-entrypoint.sh"]
