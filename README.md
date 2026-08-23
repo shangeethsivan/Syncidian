@@ -24,6 +24,104 @@ docker run -d \
 
 ---
 
+# 🚀 Quick start (Mac, Linux, or Windows with Docker)
+
+This repository is ready to run. Clone it, start the server, sideload the Obsidian plugin, and sync.
+
+## 1. Start the server
+
+**With Docker (recommended):**
+
+```bash
+git clone https://github.com/shangeethsivan/Syncidian.git
+cd Syncidian
+docker compose up --build -d
+```
+
+Open [http://localhost:8080](http://localhost:8080), create the first admin user, then go to **Tokens** and create an access token (`sk_sync_…`). Copy it once — it is not shown again.
+
+**Without Docker (Go 1.22+):**
+
+```bash
+go run ./cmd/syncidian serve
+```
+
+Data is stored in `./data` by default (`SYNCIDIAN_DATA` to change it).
+
+## 2. Install the Obsidian plugin (manual — required)
+
+The plugin is **not** in the Obsidian Community Plugin store yet. Every vault/machine needs a one-time sideload. There is no extra server-side plugin deployment.
+
+```bash
+# from this repository
+chmod +x scripts/install-plugin.sh
+./scripts/install-plugin.sh "/path/to/YourVault"
+```
+
+On a Mac this is often something like:
+
+```bash
+./scripts/install-plugin.sh "$HOME/Documents/Obsidian/MyVault"
+```
+
+Or copy these files by hand into `{Vault}/.obsidian/plugins/syncidian/`:
+
+* `plugin/manifest.json`
+* `plugin/main.js`
+* `plugin/styles.css`
+
+Then in Obsidian:
+
+1. Settings → Community plugins → turn **Restricted mode off** (allow community plugins).
+2. Reload plugins / restart Obsidian.
+3. Enable **Syncidian**.
+4. Settings → Syncidian:
+   * Server URL: `http://localhost:8080` (or your deployed URL)
+   * Access token: the `sk_sync_…` value from the dashboard
+   * Device name: e.g. `MacBook Pro`
+5. Click **Connect**.
+
+Repeat the plugin copy + token on each device (Windows, Mac, Android, iOS). Create one token per person; the same user can register many devices.
+
+## 3. Optional: GitHub backup
+
+In the dashboard → **GitHub**, paste a GitHub personal access token with `repo` scope and `owner/name`. The plugin never needs GitHub credentials. Until GitHub is connected, devices still sync through the server.
+
+## 4. Optional: MCP / AI
+
+Dashboard → **MCP / AI** sets tool permissions (search/read on by default). Point an MCP client at:
+
+```text
+POST http://localhost:8080/mcp
+Authorization: Bearer sk_sync_…
+```
+
+---
+
+# 📦 Publishing the Obsidian plugin
+
+**You do not need to publish anything to start using Syncidian.** Sideloading from this repo is enough.
+
+If you later want it in Obsidian’s Community Plugin browser, that is a **manual** process (Obsidian does not auto-publish from this repository):
+
+1. Keep `plugin/manifest.json`, `plugin/main.js`, and `plugin/styles.css` in git (already done).
+2. Create a GitHub Release whose tag matches `manifest.json` `version` (for example `0.1.0`) and attach those three files, or a `syncidian.zip` containing them.
+3. Open a pull request against [obsidianmd/obsidian-releases](https://github.com/obsidianmd/obsidian-releases) adding Syncidian to `community-plugins.json`.
+4. Wait for Obsidian’s review. They may ask for changes. This can take days to weeks.
+5. After approval, users can install from Community plugins → Browse → “Syncidian” instead of copying files.
+
+Until that review lands, tell testers to use `scripts/install-plugin.sh` or the [BRAT](https://github.com/TfTHacker/obsidian42-brat) plugin pointed at this GitHub repo.
+
+Rebuilding the plugin after TypeScript changes:
+
+```bash
+cd plugin && npm install && npm run build
+```
+
+`plugin/main.js` is the compiled artifact Obsidian loads. Commit it so people can install without Node.js.
+
+---
+
 # ✨ What is Syncidian?
 
 Syncidian brings three capabilities together:
@@ -175,18 +273,20 @@ The Obsidian plugin should require as little configuration as possible.
 
 Run Syncidian on your own infrastructure.
 
-The simplest deployment is Docker.
+The simplest deployment is Docker Compose from this repository:
+
+```bash
+docker compose up --build -d
+```
+
+Equivalent one-container flow:
 
 ```bash
 docker build -t syncidian .
-```
-
-Then:
-
-```bash
 docker run -d \
   --name syncidian \
   -p 8080:8080 \
+  -v syncidian-data:/data \
   syncidian
 ```
 
@@ -999,58 +1099,58 @@ The self-hosted version will remain free and open source.
 
 ## 🔄 Sync Engine
 
-* [ ] Obsidian plugin
-* [ ] File change detection
+* [x] Obsidian plugin
+* [x] File change detection
 * [ ] Encrypted communication
-* [ ] Device registration
-* [ ] Multi-device synchronization
+* [x] Device registration
+* [x] Multi-device synchronization
 * [ ] Offline synchronization
-* [ ] Conflict detection
-* [ ] Conflict resolution UI
-* [ ] Background synchronization
+* [x] Conflict detection
+* [x] Conflict resolution UI
+* [x] Background synchronization
 
 ## 🐙 GitHub
 
-* [ ] Server-side GitHub configuration
-* [ ] GitHub authentication
-* [ ] Private repository support
-* [ ] User-to-repository mapping
-* [ ] Automatic commits
-* [ ] Pull latest changes
+* [x] Server-side GitHub configuration
+* [x] GitHub authentication
+* [x] Private repository support
+* [x] User-to-repository mapping
+* [x] Automatic commits
+* [x] Pull latest changes
 * [ ] Restore from history
-* [ ] Git conflict handling
+* [x] Git conflict handling
 
 ## 👥 Multi-User
 
-* [ ] User accounts
-* [ ] User isolation
-* [ ] Multiple devices per user
-* [ ] Access tokens
-* [ ] Device management
+* [x] User accounts
+* [x] User isolation
+* [x] Multiple devices per user
+* [x] Access tokens
+* [x] Device management
 * [ ] Sync groups
 
 ## 📊 Dashboard
 
-* [ ] Web dashboard
-* [ ] Active clients
-* [ ] Offline clients
-* [ ] Last seen
-* [ ] Last successful sync
-* [ ] Sync count
-* [ ] Files synchronized
-* [ ] Recent activity
-* [ ] Server health
+* [x] Web dashboard
+* [x] Active clients
+* [x] Offline clients
+* [x] Last seen
+* [x] Last successful sync
+* [x] Sync count
+* [x] Files synchronized
+* [x] Recent activity
+* [x] Server health
 
 ## 🤖 MCP / AI
 
-* [ ] Built-in MCP server
-* [ ] Vault search
-* [ ] Read notes
-* [ ] Create notes
-* [ ] Update notes
+* [x] Built-in MCP server
+* [x] Vault search
+* [x] Read notes
+* [x] Create notes
+* [x] Update notes
 * [ ] Related-note discovery
-* [ ] Permission management
-* [ ] MCP authentication
+* [x] Permission management
+* [x] MCP authentication
 
 ## 🧠 AI Conflict Resolution
 
@@ -1067,8 +1167,8 @@ The self-hosted version will remain free and open source.
 
 ## 🔐 Authentication
 
-* [ ] Access tokens
-* [ ] Token revocation
+* [x] Access tokens
+* [x] Token revocation
 * [ ] Token rotation
 * [ ] Device tokens
 * [ ] OAuth
@@ -1076,14 +1176,14 @@ The self-hosted version will remain free and open source.
 
 ## 🚀 Deployment
 
-* [ ] Dockerfile
-* [ ] Single-container deployment
-* [ ] Docker Compose
+* [x] Dockerfile
+* [x] Single-container deployment
+* [x] Docker Compose
 * [ ] Pre-built container images
 * [ ] GHCR publishing
-* [ ] VPS deployment guide
-* [ ] Home server deployment
-* [ ] Health checks
+* [x] VPS deployment guide
+* [x] Home server deployment
+* [x] Health checks
 * [ ] Monitoring
 
 ## 🌐 Hosted Service

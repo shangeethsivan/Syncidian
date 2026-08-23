@@ -1,0 +1,10 @@
+{
+  "id": "syncidian",
+  "name": "Syncidian",
+  "version": "0.1.0",
+  "minAppVersion": "1.5.0",
+  "description": "Sync your Obsidian vault through a self-hosted Syncidian server with GitHub backup and MCP.",
+  "author": "Shangeeth Sivan",
+  "authorUrl": "https://github.com/shangeethsivan",
+  "isDesktopOnly": false
+}

@@ -1,0 +1,19 @@
+services:
+  syncidian:
+    build: .
+    image: syncidian:local
+    container_name: syncidian
+    ports:
+      - "8080:8080"
+    environment:
+      SYNCIDIAN_ADDR: ":8080"
+      SYNCIDIAN_DATA: /data
+      SYNCIDIAN_PUBLIC_URL: ${SYNCIDIAN_PUBLIC_URL:-http://localhost:8080}
+      SYNCIDIAN_BOOTSTRAP_USER: ${SYNCIDIAN_BOOTSTRAP_USER:-}
+      SYNCIDIAN_BOOTSTRAP_PASSWORD: ${SYNCIDIAN_BOOTSTRAP_PASSWORD:-}
+    volumes:
+      - syncidian-data:/data
+    restart: unless-stopped
+
+volumes:
+  syncidian-data:
