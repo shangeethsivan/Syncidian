@@ -831,7 +831,13 @@ async function activity(main) {
 }
 
 boot().catch((e) => {
-  document.body.innerHTML = `<div class="wrap"><div class="flash err">${esc(e.message)}</div></div>`;
+  $("auth").classList.add("hidden");
+  $("app").classList.add("hidden");
+  hideGitHubModal();
+  const wrap = document.createElement("div");
+  wrap.className = "wrap";
+  wrap.innerHTML = `<div class="flash err">${esc(e.message)}</div><p class="muted">Open Help at the bottom of the screen for the setup walkthrough.</p>`;
+  document.body.insertBefore(wrap, $("help-fab"));
 });
 </script>
 </body>
