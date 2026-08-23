@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Syncidian</title>
+  <style>
+    :root {
+      --bg: #0b0f14;
+      --bg2: #101720;
+      --card: #151d27;
+      --line: #243040;
+      --text: #e8eef4;
+      --muted: #8b9bb0;
+      --accent: #3ee0a4;
+      --accent2: #2bbf88;
+      --danger: #ff6b7a;
+      --warn: #ffc857;
+      --blue: #6cb6ff;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text); font: 15px/1.45 ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif; }
+    a { color: var(--accent); }
+    button, input, select, textarea { font: inherit; }
+    .wrap { max-width: 1080px; margin: 0 auto; padding: 24px; }
+    header.app {
+      display: flex; align-items: center; justify-content: space-between; gap: 16px;
+      padding: 16px 24px; border-bottom: 1px solid var(--line); background: var(--bg2);
+      position: sticky; top: 0; z-index: 5;
+    }
+    .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; letter-spacing: .02em; }
+    .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 12px var(--accent); }
+    nav { display: flex; gap: 6px; flex-wrap: wrap; }
+    nav button, .ghost {
+      background: transparent; color: var(--muted); border: 1px solid transparent; padding: 8px 12px; border-radius: 8px; cursor: pointer;
+    }
+    nav button.active, nav button:hover, .ghost:hover { color: var(--text); background: var(--card); border-color: var(--line); }
+    .btn {
+      background: var(--accent); color: #042015; border: 0; padding: 10px 16px; border-radius: 10px; font-weight: 700; cursor: pointer;
+    }
+    .btn.secondary { background: var(--card); color: var(--text); border: 1px solid var(--line); }
+    .btn.danger { background: #3a1520; color: var(--danger); border: 1px solid #5a2230; }
+    .btn:disabled { opacity: .5; cursor: not-allowed; }
+    .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 20px; margin: 16px 0; }
+    h1 { font-size: 28px; margin: 8px 0 4px; }
+    h2 { font-size: 18px; margin: 0 0 12px; }
+    p.muted, .muted { color: var(--muted); }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+    .stat { background: var(--bg2); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+    .stat b { display: block; font-size: 22px; margin-top: 6px; }
+    label { display: block; font-size: 13px; color: var(--muted); margin: 12px 0 6px; }
+    input, textarea {
+      width: 100%; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px;
+    }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+    th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+    .pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 8px; border-radius: 999px; font-size: 12px; }
+    .ok { background: #123528; color: var(--accent); }
+    .off { background: #1b2230; color: var(--muted); }
+    .warn { background: #33280f; color: var(--warn); }
+    .err { background: #3a1520; color: var(--danger); }
+    .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    .hidden { display: none !important; }
+    .auth { min-height: 100vh; display: grid; place-items: center; padding: 24px; }
+    .auth .card { width: min(440px, 100%); }
+    .flash { padding: 10px 12px; border-radius: 10px; margin: 10px 0; }
+    .flash.err { background: #3a1520; color: var(--danger); }
+    .flash.ok { background: #123528; color: var(--accent); }
+    .token { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--bg); padding: 12px; border-radius: 10px; word-break: break-all; }
+    pre { white-space: pre-wrap; background: var(--bg); padding: 12px; border-radius: 10px; overflow: auto; }
+    .check { display: flex; gap: 8px; align-items: center; margin: 8px 0; }
+    .check input { width: auto; }
+  </style>
+</head>
+<body>
+  <div id="auth" class="auth hidden">
+    <div class="card">
+      <div class="brand"><span class="dot"></span> Syncidian</div>
+      <h1 id="auth-title">Welcome</h1>
+      <p class="muted" id="auth-sub">Sign in to manage devices, tokens, and GitHub backup.</p>
+      <div id="flash"></div>
+      <label>Username</label>
+      <input id="username" autocomplete="username" />
+      <label>Password</label>
+      <input id="password" type="password" autocomplete="current-password" />
+      <div style="height:16px"></div>
+      <button class="btn" id="auth-btn" type="button">Continue</button>
+    </div>
+  </div>
+
+  <div id="app" class="hidden">
+    <header class="app">
+      <div class="brand"><span class="dot"></span> Syncidian</div>
+      <nav>
+        <button data-page="overview" class="active">Overview</button>
+        <button data-page="devices">Devices</button>
+        <button data-page="tokens">Tokens</button>
+        <button data-page="github">GitHub</button>
+        <button data-page="mcp">MCP / AI</button>
+        <button data-page="users">Users</button>
+        <button data-page="activity">Activity</button>
+      </nav>
+      <div class="row">
+        <span class="muted" id="who"></span>
+        <button class="ghost" id="logout" type="button">Log out</button>
+      </div>
+    </header>
+    <main class="wrap" id="main"></main>
+  </div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let me = null;
+let needsSetup = false;
+let page = "overview";
+
+async function api(path, opts = {}) {
+  const res = await fetch(path, {
+    credentials: "same-origin",
+    headers: { "Content-Type": "application/json", ...(opts.headers || {}) },
+    ...opts,
+  });
+  const text = await res.text();
+  let data = null;
+  try { data = text ? JSON.parse(text) : null; } catch { data = { error: text }; }
+  if (!res.ok) throw new Error((data && data.error) || res.statusText);
+  return data;
+}
+
+function flash(el, msg, kind = "err") {
+  el.innerHTML = msg ? `<div class="flash ${kind}">${esc(msg)}</div>` : "";
+}
+function esc(s) {
+  return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;" }[c]));
+}
+function when(t) {
+  if (!t) return "—";
+  const d = new Date(t);
+  if (Number.isNaN(d.getTime())) return "—";
+  const s = Math.round((Date.now() - d.getTime()) / 1000);
+  if (s < 60) return "just now";
+  if (s < 3600) return Math.floor(s/60) + " min ago";
+  if (s < 86400) return Math.floor(s/3600) + " h ago";
+  return d.toLocaleString();
+}
+
+async function boot() {
+  const st = await api("/api/v1/setup");
+  needsSetup = st.needs_setup;
+  try {
+    const m = await api("api/v1/me".startsWith("/") ? "/api/v1/me" : "/api/v1/me");
+    me = m.user;
+    showApp();
+  } catch {
+    showAuth();
+  }
+}
+
+function showAuth() {
+  $("app").classList.add("hidden");
+  $("auth").classList.remove("hidden");
+  $("auth-title").textContent = needsSetup ? "Create the first admin" : "Sign in";
+  $("auth-sub").textContent = needsSetup
+    ? "This is first-run setup. Choose a username and a password of at least 8 characters."
+    : "Sign in to manage devices, tokens, and GitHub backup.";
+  $("auth-btn").textContent = needsSetup ? "Create admin" : "Sign in";
+}
+
+function showApp() {
+  $("auth").classList.add("hidden");
+  $("app").classList.remove("hidden");
+  $("who").textContent = me.username;
+  render();
+}
+
+$("auth-btn").onclick = async () => {
+  flash($("flash"), "");
+  try {
+    const body = JSON.stringify({ username: $("username").value, password: $("password").value });
+    if (needsSetup) await api("/api/v1/setup", { method: "POST", body });
+    else await api("/api/v1/auth/login", { method: "POST", body });
+    const m = await api("/api/v1/me");
+    me = m.user;
+    showApp();
+  } catch (e) {
+    flash($("flash"), e.message);
+  }
+};
+
+$("logout").onclick = async () => {
+  await api("/api/v1/auth/logout", { method: "POST", body: "{}" });
+  me = null;
+  needsSetup = false;
+  showAuth();
+};
+
+document.querySelectorAll("nav button").forEach((b) => {
+  b.onclick = () => {
+    document.querySelectorAll("nav button").forEach((x) => x.classList.remove("active"));
+    b.classList.add("active");
+    page = b.dataset.page;
+    render();
+  };
+});
+
+async function render() {
+  const main = $("main");
+  main.innerHTML = "<p class='muted'>Loading…</p>";
+  try {
+    if (page === "overview") await overview(main);
+    if (page === "devices") await devices(main);
+    if (page === "tokens") await tokens(main);
+    if (page === "github") await github(main);
+    if (page === "mcp") await mcp(main);
+    if (page === "users") await users(main);
+    if (page === "activity") await activity(main);
+  } catch (e) {
+    main.innerHTML = `<div class="flash err">${esc(e.message)}</div>`;
+  }
+}
+
+async function overview(main) {
+  const [stats, devices, gh, conflicts] = await Promise.all([
+    api("/api/v1/stats"),
+    api("/api/v1/devices"),
+    api("/api/v1/github"),
+    api("/api/v1/conflicts"),
+  ]);
+  main.innerHTML = `
+    <h1>Overview</h1>
+    <p class="muted">What is happening with your devices?</p>
+    <div class="grid">
+      <div class="stat">Active clients<b>${stats.active_clients ?? 0}</b></div>
+      <div class="stat">Devices<b>${stats.device_count ?? 0}</b></div>
+      <div class="stat">Total syncs<b>${stats.total_syncs ?? 0}</b></div>
+      <div class="stat">Files synced<b>${stats.files_synced ?? 0}</b></div>
+      <div class="stat">Last sync<b>${when(stats.last_sync)}</b></div>
+      <div class="stat">Open conflicts<b>${stats.conflict_count ?? 0}</b></div>
+    </div>
+    <div class="card">
+      <h2>GitHub source of truth</h2>
+      <p>${gh.configured ? `<span class="pill ok">Connected</span> ${esc(gh.repo)} (${esc(gh.branch)})` : `<span class="pill warn">Not configured</span> Sync still works between devices. Add GitHub for durable backup.`}</p>
+      ${gh.last_error ? `<p class="flash err">${esc(gh.last_error)}</p>` : ""}
+    </div>
+    <div class="card">
+      <h2>Devices</h2>
+      ${deviceTable(devices)}
+    </div>
+    <div class="card">
+      <h2>Connect Obsidian</h2>
+      <ol>
+        <li>Create an access token on the Tokens page.</li>
+        <li>Install the plugin from this repository’s <code>plugin/</code> folder (manual sideload — see README).</li>
+        <li>In Obsidian: Settings → Syncidian → paste <code>${esc(location.origin)}</code> and the token.</li>
+      </ol>
+    </div>
+    ${conflicts.length ? `<div class="card"><h2>Conflicts</h2>${conflictList(conflicts)}</div>` : ""}
+  `;
+}
+
+function deviceTable(devices) {
+  if (!devices.length) return `<p class="muted">No devices yet. Connect the Obsidian plugin to register this computer.</p>`;
+  return `<table><thead><tr><th>Device</th><th>Platform</th><th>Status</th><th>Last seen</th><th>Last sync</th><th>Syncs</th></tr></thead><tbody>
+    ${devices.map(d => `<tr>
+      <td>${esc(d.name)}</td><td>${esc(d.platform || "—")}</td>
+      <td><span class="pill ${d.status === "active" ? "ok" : "off"}">${d.status === "active" ? "● Active" : "○ Offline"}</span></td>
+      <td>${when(d.last_seen_at)}</td><td>${when(d.last_sync_at)}</td><td>${d.sync_count}</td>
+    </tr>`).join("")}
+  </tbody></table>`;
+}
+
+function conflictList(items) {
+  return `<table><thead><tr><th>Path</th><th>Created</th></tr></thead><tbody>
+    ${items.map(c => `<tr><td>${esc(c.Path || c.path)}</td><td>${when(c.CreatedAt || c.created_at)}</td></tr>`).join("")}
+  </tbody></table>`;
+}
+
+async function devices(main) {
+  const list = await api("/api/v1/devices");
+  main.innerHTML = `<h1>Devices</h1><div class="card">${deviceTable(list)}</div>`;
+  list.forEach((d) => {
+    /* delete buttons added if needed */
+  });
+}
+
+async function tokens(main) {
+  const list = await api("/api/v1/tokens");
+  main.innerHTML = `
+    <h1>Access tokens</h1>
+    <p class="muted">Tokens authenticate the Obsidian plugin. GitHub credentials stay on this server.</p>
+    <div class="card">
+      <label>Token name</label>
+      <div class="row">
+        <input id="tok-name" placeholder="MacBook Pro" />
+        <button class="btn" id="tok-create" type="button">Create token</button>
+      </div>
+      <div id="tok-flash"></div>
+    </div>
+    <div class="card">
+      <table><thead><tr><th>Name</th><th>Prefix</th><th>Created</th><th>Last used</th><th></th></tr></thead>
+      <tbody>${list.map(t => `<tr>
+        <td>${esc(t.name)}</td><td class="muted">${esc(t.prefix)}</td>
+        <td>${when(t.created_at)}</td><td>${when(t.last_used_at)}</td>
+        <td>${t.revoked ? `<span class="pill off">revoked</span>` : `<button class="btn danger" data-revoke="${t.id}" type="button">Revoke</button>`}</td>
+      </tr>`).join("")}</tbody></table>
+    </div>`;
+  $("tok-create").onclick = async () => {
+    try {
+      const t = await api("/api/v1/tokens", { method: "POST", body: JSON.stringify({ name: $("tok-name").value }) });
+      $("tok-flash").innerHTML = `<div class="flash ok">Copy this token now. It will not be shown again.</div><div class="token">${esc(t.token)}</div>`;
+    } catch (e) { flash($("tok-flash"), e.message); }
+  };
+  main.querySelectorAll("[data-revoke]").forEach((b) => {
+    b.onclick = async () => {
+      await api(`/api/v1/tokens/${b.dataset.revoke}/revoke`, { method: "POST", body: "{}" });
+      tokens(main);
+    };
+  });
+}
+
+async function github(main) {
+  const gh = await api("/api/v1/github");
+  main.innerHTML = `
+    <h1>GitHub</h1>
+    <p class="muted">GitHub is the durable, versioned source of truth. The plugin never needs GitHub credentials.</p>
+    <div class="card">
+      <p>${gh.configured ? `<span class="pill ok">Connected</span> ${esc(gh.repo)}` : `<span class="pill warn">Not configured</span>`}</p>
+      ${gh.last_error ? `<div class="flash err">${esc(gh.last_error)}</div>` : ""}
+      <label>Repository (owner/name)</label>
+      <input id="gh-repo" placeholder="you/obsidian-vault" value="${esc(gh.repo || "")}" />
+      <label>Branch</label>
+      <input id="gh-branch" value="${esc(gh.branch || "main")}" />
+      <label>Personal access token (repo scope)</label>
+      <input id="gh-token" type="password" placeholder="${gh.token_set ? "••••••••  (leave blank to keep)" : "ghp_…"}" />
+      <div class="check"><input id="gh-create" type="checkbox" /> <span>Create a private repository if it does not exist</span></div>
+      <div class="row" style="margin-top:12px">
+        <button class="btn" id="gh-save" type="button">Save</button>
+        ${gh.configured ? `<button class="btn secondary" id="gh-sync" type="button">Pull from GitHub now</button>
+        <button class="btn danger" id="gh-del" type="button">Disconnect</button>` : ""}
+      </div>
+      <div id="gh-flash"></div>
+    </div>`;
+  $("gh-save").onclick = async () => {
+    try {
+      const out = await api("/api/v1/github", { method: "POST", body: JSON.stringify({
+        repo: $("gh-repo").value, branch: $("gh-branch").value, token: $("gh-token").value,
+        create_repo: $("gh-create").checked
+      })});
+      flash($("gh-flash"), out.git_error ? ("Saved, but push failed: " + out.git_error) : "GitHub connected.", out.git_error ? "err" : "ok");
+    } catch (e) { flash($("gh-flash"), e.message); }
+  };
+  const sync = $("gh-sync");
+  if (sync) sync.onclick = async () => {
+    try { await api("/api/v1/github/sync", { method: "POST", body: "{}" }); flash($("gh-flash"), "Pulled from GitHub.", "ok"); }
+    catch (e) { flash($("gh-flash"), e.message); }
+  };
+  const del = $("gh-del");
+  if (del) del.onclick = async () => {
+    await api("/api/v1/github", { method: "DELETE" });
+    github(main);
+  };
+}
+
+async function mcp(main) {
+  const p = await api("/api/v1/mcp");
+  main.innerHTML = `
+    <h1>MCP / AI</h1>
+    <p class="muted">Least privilege by default. AI tools authenticate with the same access token as Obsidian.</p>
+    <div class="card">
+      <div class="check"><input id="m-search" type="checkbox" ${p.Search || p.search ? "checked" : ""} /> Search notes</div>
+      <div class="check"><input id="m-read" type="checkbox" ${p.Read || p.read ? "checked" : ""} /> Read notes</div>
+      <div class="check"><input id="m-create" type="checkbox" ${p.Create || p.create ? "checked" : ""} /> Create notes</div>
+      <div class="check"><input id="m-modify" type="checkbox" ${p.Modify || p.modify ? "checked" : ""} /> Modify notes</div>
+      <button class="btn" id="m-save" type="button">Save permissions</button>
+      <div id="m-flash"></div>
+    </div>
+    <div class="card">
+      <h2>Connect an MCP client</h2>
+      <p>POST JSON-RPC to <code>${esc(location.origin)}/mcp</code> with <code>Authorization: Bearer sk_sync_…</code></p>
+      <pre>{
+  "mcpServers": {
+    "syncidian": {
+      "url": "${esc(location.origin)}/mcp",
+      "headers": { "Authorization": "Bearer sk_sync_YOUR_TOKEN" }
+    }
+  }
+}</pre>
+    </div>`;
+  $("m-save").onclick = async () => {
+    try {
+      await api("/api/v1/mcp", { method: "POST", body: JSON.stringify({
+        search: $("m-search").checked, read: $("m-read").checked,
+        create: $("m-create").checked, modify: $("m-modify").checked
+      })});
+      flash($("m-flash"), "Saved.", "ok");
+    } catch (e) { flash($("m-flash"), e.message); }
+  };
+}
+
+async function users(main) {
+  const list = await api("/api/v1/users");
+  main.innerHTML = `
+    <h1>Users</h1>
+    <p class="muted">Each user is isolated: devices, tokens, vault, and GitHub config are private.</p>
+    ${me.is_admin ? `<div class="card">
+      <label>Username</label><input id="u-name" />
+      <label>Password</label><input id="u-pass" type="password" />
+      <div class="check"><input id="u-admin" type="checkbox" /> Admin</div>
+      <button class="btn" id="u-create" type="button">Create user</button>
+      <div id="u-flash"></div>
+    </div>` : ""}
+    <div class="card"><table><thead><tr><th>Username</th><th>Role</th><th>Created</th></tr></thead>
+    <tbody>${list.map(u => `<tr><td>${esc(u.username)}</td><td>${u.is_admin ? "admin" : "user"}</td><td>${when(u.created_at)}</td></tr>`).join("")}</tbody></table></div>`;
+  const btn = $("u-create");
+  if (btn) btn.onclick = async () => {
+    try {
+      await api("/api/v1/users", { method: "POST", body: JSON.stringify({
+        username: $("u-name").value, password: $("u-pass").value, admin: $("u-admin").checked
+      })});
+      users(main);
+    } catch (e) { flash($("u-flash"), e.message); }
+  };
+}
+
+async function activity(main) {
+  const items = await api("/api/v1/activity");
+  main.innerHTML = `<h1>Activity</h1><div class="card"><table>
+    <thead><tr><th>When</th><th>Action</th><th>Detail</th></tr></thead>
+    <tbody>${(items || []).map(a => `<tr><td>${when(a.CreatedAt || a.created_at)}</td><td>${esc(a.Action || a.action)}</td><td>${esc(a.Detail || a.detail || a.Path || a.path || "")}</td></tr>`).join("") || "<tr><td colspan=3 class='muted'>No activity yet</td></tr>"}
+  </tbody></table></div>`;
+}
+
+boot().catch((e) => {
+  document.body.innerHTML = `<div class="wrap"><div class="flash err">${esc(e.message)}</div></div>`;
+});
+</script>
+</body>
+</html>

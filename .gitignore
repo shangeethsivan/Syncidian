@@ -1,0 +1,26 @@
+# Data and secrets
+/data/
+*.db
+*.db-shm
+*.db-wal
+secret.key
+
+# Go
+/bin/
+/dist/
+*.exe
+*.test
+*.out
+vendor/
+
+# Node / plugin build caches
+plugin/node_modules/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+.env
+.env.local

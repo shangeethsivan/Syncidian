@@ -1,0 +1,19 @@
+{
+  "name": "syncidian",
+  "version": "0.1.0",
+  "description": "Obsidian plugin for the Syncidian sync server",
+  "main": "main.js",
+  "scripts": {
+    "dev": "node esbuild.config.mjs",
+    "build": "node esbuild.config.mjs production"
+  },
+  "keywords": ["obsidian", "sync"],
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "esbuild": "^0.20.0",
+    "obsidian": "latest",
+    "tslib": "^2.6.2",
+    "typescript": "^5.3.3"
+  }
+}

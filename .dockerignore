@@ -1,0 +1,5 @@
+.git
+data
+*.db
+plugin/node_modules
+.env
