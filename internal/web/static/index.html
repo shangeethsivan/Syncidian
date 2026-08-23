@@ -130,7 +130,7 @@
       <input id="password" type="password" autocomplete="current-password" />
       <div style="height:16px"></div>
       <button class="btn" id="auth-btn" type="button">Continue</button>
-      <p class="muted" style="margin-top:16px;font-size:13px">Need the full path? Open <b>Help</b> at the bottom of the screen.</p>
+      <p class="muted" style="margin-top:16px;font-size:13px">Need the full path? Open <b>Help</b> at the bottom of the screen for the server and plugin walkthrough.</p>
     </div>
   </div>
 
@@ -217,10 +217,13 @@ const HELP_STEPS = [
     html: () => `
       <p>Deploy the server first. GitHub is not configured on the server itself.</p>
       <h2>Docker</h2>
-      <pre>docker compose up --build -d</pre>
+      <pre>git clone https://github.com/shangeethsivan/Syncidian.git
+cd Syncidian
+docker compose up --build -d</pre>
       <h2>Go</h2>
       <pre>go run ./cmd/syncidian serve</pre>
       <p>Then open this dashboard at <code>${esc(location.origin)}</code>.</p>
+      <p class="muted">Data is stored in <code>./data</code> locally, or in a <code>/data</code> volume on Docker or Railway.</p>
     `,
   },
   {
@@ -277,6 +280,8 @@ const HELP_STEPS = [
       <p>Syncidian is <b>not</b> in the Community Plugin store yet. Sideload it once per vault.</p>
       <pre>chmod +x scripts/install-plugin.sh
 ./scripts/install-plugin.sh "/path/to/YourVault"</pre>
+      <p>On a Mac this is often:</p>
+      <pre>./scripts/install-plugin.sh "$HOME/Documents/Obsidian/MyVault"</pre>
       <p>Or copy <code>plugin/manifest.json</code>, <code>plugin/main.js</code>, and <code>plugin/styles.css</code> into <code>{Vault}/.obsidian/plugins/syncidian/</code>.</p>
       <ol>
         <li>Settings → Community plugins → turn <b>Restricted mode</b> off.</li>
@@ -510,14 +515,17 @@ async function overview(main) {
       <h2>Connect Obsidian</h2>
       <ol>
         <li>Create an access token on the Tokens page.</li>
-        <li>Install the plugin from this repository’s <code>plugin/</code> folder (or open <b>Help</b>).</li>
-        <li>In Obsidian: Settings → Syncidian → paste <code>${esc(location.origin)}</code> and the token.</li>
+        <li>Sideload the plugin from this repository’s <code>plugin/</code> folder (or run <code>scripts/install-plugin.sh</code>, or open <b>Help</b>).</li>
+        <li>In Obsidian: Settings → Syncidian → paste <code>${esc(location.origin)}</code> and the token, then click Connect.</li>
       </ol>
+      <button class="btn secondary" id="open-help" type="button">Open setup walkthrough</button>
     </div>
     ${asList(conflicts).length ? `<div class="card"><h2>Conflicts</h2>${conflictList(asList(conflicts))}</div>` : ""}
   `;
   const go = $("go-github");
   if (go) go.onclick = () => { page = "github"; paintNav(); render(); };
+  const helpBtn = $("open-help");
+  if (helpBtn) helpBtn.onclick = () => openHelp(5);
 }
 
 function deviceTable(devices) {
@@ -693,7 +701,12 @@ async function activity(main) {
 }
 
 boot().catch((e) => {
-  document.body.innerHTML = `<div class="wrap"><div class="flash err">${esc(e.message)}</div></div>`;
+  $("auth").classList.add("hidden");
+  $("app").classList.add("hidden");
+  const wrap = document.createElement("div");
+  wrap.className = "wrap";
+  wrap.innerHTML = `<div class="flash err">${esc(e.message)}</div><p class="muted">Open Help at the bottom of the screen for the setup walkthrough.</p>`;
+  document.body.insertBefore(wrap, $("help-fab"));
 });
 </script>
 </body>
