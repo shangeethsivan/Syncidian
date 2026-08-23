@@ -164,6 +164,53 @@ func TestDashboardServed(t *testing.T) {
 	if bytes.Contains(b, []byte("conflicts.length")) {
 		t.Fatal("unguarded conflicts.length would throw when API returns null")
 	}
+	for _, needle := range []string{
+		`id="gh-setup-modal"`,
+		`id="gh-setup-repo"`,
+		`id="gh-setup-token"`,
+		`id="gh-setup-save"`,
+		`Configure GitHub repository`,
+		`id="auth-btn" type="button" disabled`,
+	} {
+		if !bytes.Contains(b, []byte(needle)) {
+			t.Fatalf("login page missing required GitHub setup popup markup %q", needle)
+		}
+	}
+}
+
+func TestGitHubRequiredForNewUser(t *testing.T) {
+	hs, done := newTestServer(t)
+	defer done()
+
+	res, m := doJSON(t, http.MethodPost, hs.URL+"/api/v1/setup", map[string]string{
+		"username": "ada", "password": "password1",
+	}, nil, "")
+	if res.StatusCode != http.StatusCreated {
+		t.Fatalf("setup %d %v", res.StatusCode, m)
+	}
+	cookies := res.Cookies()
+
+	res, m = doJSON(t, http.MethodGet, hs.URL+"/api/v1/github", nil, cookies, "")
+	if res.StatusCode != 200 {
+		t.Fatalf("github status %d %v", res.StatusCode, m)
+	}
+	if m["configured"] != false {
+		t.Fatalf("new user should not have GitHub configured: %v", m)
+	}
+
+	res, m = doJSON(t, http.MethodPost, hs.URL+"/api/v1/github", map[string]any{
+		"repo": "not-a-repo", "token": "ghp_test",
+	}, cookies, "")
+	if res.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected invalid repo to fail, got %d %v", res.StatusCode, m)
+	}
+
+	res, m = doJSON(t, http.MethodPost, hs.URL+"/api/v1/github", map[string]any{
+		"repo": "ada/vault", "token": "",
+	}, cookies, "")
+	if res.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected missing token to fail, got %d %v", res.StatusCode, m)
+	}
 }
 
 func TestEmptyListEndpointsReturnArrays(t *testing.T) {
