@@ -66,8 +66,8 @@ Usage:
   syncidian version
 
 Environment:
-  SYNCIDIAN_ADDR                 Listen address (default :8080)
-  SYNCIDIAN_DATA                 Data directory (default ./data)
+  SYNCIDIAN_ADDR                 Listen address (default :8080, or $PORT)
+  SYNCIDIAN_DATA                 Data directory (default ./data, or $RAILWAY_VOLUME_MOUNT_PATH)
   SYNCIDIAN_PUBLIC_URL           Public URL shown in the dashboard
   SYNCIDIAN_BOOTSTRAP_USER       Create this admin on first boot
   SYNCIDIAN_BOOTSTRAP_PASSWORD   Password for the bootstrap admin

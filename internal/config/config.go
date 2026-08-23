@@ -16,14 +16,19 @@ type Config struct {
 
 func FromEnv() Config {
 	c := Config{
-		Addr:      env("SYNCIDIAN_ADDR", ":8080"),
-		DataDir:   env("SYNCIDIAN_DATA", "./data"),
-		PublicURL: env("SYNCIDIAN_PUBLIC_URL", "http://localhost:8080"),
+		Addr:      firstEnv("SYNCIDIAN_ADDR", "PORT"),
+		DataDir:   firstEnv("SYNCIDIAN_DATA", "RAILWAY_VOLUME_MOUNT_PATH"),
+		PublicURL: publicURL(),
 		GitName:   env("SYNCIDIAN_GIT_NAME", "Syncidian"),
 		GitEmail:  env("SYNCIDIAN_GIT_EMAIL", "syncidian@localhost"),
 	}
-	if !strings.HasPrefix(c.Addr, ":") && !strings.Contains(c.Addr, ":") {
+	if c.Addr == "" {
+		c.Addr = ":8080"
+	} else if !strings.HasPrefix(c.Addr, ":") && !strings.Contains(c.Addr, ":") {
 		c.Addr = ":" + c.Addr
+	}
+	if c.DataDir == "" {
+		c.DataDir = "./data"
 	}
 	abs, err := filepath.Abs(c.DataDir)
 	if err == nil {
@@ -32,8 +37,31 @@ func FromEnv() Config {
 	return c
 }
 
+func publicURL() string {
+	if v := env("SYNCIDIAN_PUBLIC_URL", ""); v != "" {
+		return strings.TrimRight(v, "/")
+	}
+	if v := env("RAILWAY_PUBLIC_DOMAIN", ""); v != "" {
+		v = strings.TrimRight(v, "/")
+		if strings.HasPrefix(v, "http://") || strings.HasPrefix(v, "https://") {
+			return v
+		}
+		return "https://" + v
+	}
+	return "http://localhost:8080"
+}
+
+func firstEnv(keys ...string) string {
+	for _, key := range keys {
+		if v := strings.TrimSpace(os.Getenv(key)); v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
 func env(key, fallback string) string {
-	if v := strings.TrimSpace(os.Getenv(key)); v != "" {
+	if v := firstEnv(key); v != "" {
 		return v
 	}
 	return fallback

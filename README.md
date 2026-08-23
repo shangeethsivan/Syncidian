@@ -46,7 +46,17 @@ Open [http://localhost:8080](http://localhost:8080), create the first admin user
 go run ./cmd/syncidian serve
 ```
 
-Data is stored in `./data` by default (`SYNCIDIAN_DATA` to change it).
+Data is stored in `./data` by default (`SYNCIDIAN_DATA` to change it). Docker Compose persists it at `/data` via a named volume (not a Dockerfile `VOLUME`, which Railway and some builders reject).
+
+### Deploy on Railway
+
+1. New project → deploy this GitHub repo. Railway builds the `Dockerfile`.
+2. **Settings → Volumes → Add volume**, mount path **`/data`**.
+3. Generate a public domain. The server listens on Railway’s `PORT` and uses `RAILWAY_PUBLIC_DOMAIN` for the dashboard URL unless you set `SYNCIDIAN_PUBLIC_URL`.
+4. Optional variables: `SYNCIDIAN_BOOTSTRAP_USER`, `SYNCIDIAN_BOOTSTRAP_PASSWORD`.
+5. Open the public URL, create the admin user, then point the plugin at that URL.
+
+Health check: `GET /health`.
 
 ## 2. Install the Obsidian plugin (manual — required)
 
