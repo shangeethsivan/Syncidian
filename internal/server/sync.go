@@ -381,6 +381,9 @@ func (s *Server) handleListConflicts(w http.ResponseWriter, r *http.Request, u *
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	if items == nil {
+		items = []store.Conflict{}
+	}
 	writeJSON(w, http.StatusOK, items)
 }
 
