@@ -121,15 +121,15 @@
   <div id="auth" class="auth hidden">
     <div class="card">
       <div class="brand"><span class="dot"></span> Syncidian</div>
-      <h1 id="auth-title">Welcome</h1>
-      <p class="muted" id="auth-sub">Sign in to manage your account.</p>
+      <h1 id="auth-title">Sign in</h1>
+      <p class="muted" id="auth-sub">Authenticate to continue. GitHub backup is configured after you sign in, and only for your own account.</p>
       <div id="flash"></div>
       <label>Username</label>
       <input id="username" autocomplete="username" />
       <label>Password</label>
       <input id="password" type="password" autocomplete="current-password" />
       <div style="height:16px"></div>
-      <button class="btn" id="auth-btn" type="button">Continue</button>
+      <button class="btn" id="auth-btn" type="button">Sign in</button>
       <p class="muted" style="margin-top:16px;font-size:13px">Need the full path? Open <b>Help</b> at the bottom of the screen for the server and plugin walkthrough.</p>
     </div>
   </div>
@@ -154,7 +154,7 @@
       <div class="help-head">
         <div>
           <h1 id="help-title">Setup walkthrough</h1>
-          <p class="muted" style="margin:0">Admins manage users. Each user connects one GitHub repository after they sign in.</p>
+          <p class="muted" style="margin:0">Authenticate first. Then each user can connect their own GitHub repository.</p>
         </div>
         <button class="ghost" id="help-close" type="button">Close</button>
       </div>
@@ -227,9 +227,9 @@ docker compose up --build -d</pre>
     `,
   },
   {
-    title: "2. Create the first admin",
+    title: "2. Authenticate",
     html: () => `
-      <p>The first account is an admin. Admins manage users only — they do not connect a GitHub repository and never see another person’s vault, tokens, or GitHub credentials.</p>
+      <p>The landing page always asks you to authenticate. GitHub is never configured before sign-in. The first account is an admin. Admins manage users only — they do not connect a GitHub repository and never see another person’s vault, tokens, or GitHub credentials.</p>
       <ol>
         <li>Choose a username.</li>
         <li>Choose a password of at least 8 characters.</li>
@@ -399,10 +399,12 @@ function showAuth() {
   $("auth").classList.remove("hidden");
   $("auth-title").textContent = needsSetup ? "Create the first admin" : "Sign in";
   $("auth-sub").textContent = needsSetup
-    ? "Choose a username and a password of at least 8 characters. Admins manage users and do not connect GitHub."
-    : "Admins manage users. Regular users connect one GitHub repository after sign-in.";
+    ? "The landing page always starts with authentication. Choose a username and a password of at least 8 characters. GitHub backup happens after login, per user. Admins manage users and do not connect GitHub."
+    : "Sign in to continue. Each user configures their own GitHub repository after login. Admins manage users without connecting a repo.";
   $("auth-btn").textContent = needsSetup ? "Create admin" : "Sign in";
   $("auth-btn").disabled = false;
+  $("username").disabled = false;
+  $("password").disabled = false;
 }
 
 function showApp() {

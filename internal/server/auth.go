@@ -119,6 +119,7 @@ func (s *Server) handleListUsers(w http.ResponseWriter, r *http.Request, u *stor
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	// Admins may manage accounts but never receive vault, token, activity, or GitHub fields.
 	out := make([]any, 0, len(users))
 	for i := range users {
 		out = append(out, adminUserSummary(&users[i]))

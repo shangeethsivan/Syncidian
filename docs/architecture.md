@@ -2,7 +2,9 @@
 
 This document describes the **current MVP** as implemented in this repository. GitHub renders the Mermaid diagrams below — open this file on GitHub to visualize them.
 
-The plugin is the client. The Go server is the coordination layer. A per-user vault on disk plus SQLite metadata is the working copy. GitHub is the optional durable source of truth. MCP is the AI bridge.
+The plugin is the client. The Go server is the coordination layer. A per-user vault on disk plus SQLite metadata is the working copy. GitHub is an **optional, per-user** durable source of truth — configured only after login, never on the landing page. MCP is the AI bridge.
+
+When you change this architecture, update the Mermaid diagrams in this file and in `README.md`. See [`AGENT.md`](../AGENT.md).
 
 ---
 
@@ -34,7 +36,7 @@ flowchart TB
     Vault[("Vault files<br/>data/vaults/{userId}")]
   end
 
-  GH["Private GitHub repo<br/>optional source of truth"]
+  GH["Per-user private GitHub repo<br/>optional · after login"]
 
   Win -->|"HTTPS + WebSocket"| API
   Mac --> API
@@ -80,21 +82,21 @@ flowchart LR
 
 ```mermaid
 flowchart TB
-  subgraph public [Unauthenticated]
+  subgraph public [Unauthenticated — landing page]
     H["GET /health · /ready"]
     S1["GET/POST /api/v1/setup"]
     L["POST /api/v1/auth/login"]
+    UI["GET /  → dashboard asks to authenticate"]
   end
 
-  subgraph session [Dashboard session cookie]
+  subgraph session [Dashboard session cookie — after login]
     Me["GET /api/v1/me · /stats"]
-    Users["GET/POST /api/v1/users"]
+    Users["GET/POST /api/v1/users<br/>admin: public fields only"]
     Tokens["GET/POST /api/v1/tokens"]
     Dev["devices · heartbeat"]
-    GH["GET/POST /api/v1/github"]
+    GH["GET/POST /api/v1/github<br/>this user_id only"]
     MCPCfg["GET/POST /api/v1/mcp"]
     Act["GET /api/v1/activity"]
-    UI["GET /  → dashboard"]
   end
 
   subgraph plugin [Bearer sk_sync_ token]
@@ -112,7 +114,33 @@ flowchart TB
   session --- plugin
 ```
 
-Both the dashboard cookie (`syncidian_session`) and the plugin/MCP Bearer token go through the same `authenticate()` path. Tokens are stored as SHA-256 hashes; the raw `sk_sync_…` value is shown once.
+Both the dashboard cookie (`syncidian_session`) and the plugin/MCP Bearer token go through the same `authenticate()` path. Tokens are stored as SHA-256 hashes; the raw `sk_sync_…` value is shown once. `GET/POST /api/v1/github` is never public — unauthenticated callers receive 401.
+
+---
+
+## 3b. App workflow
+
+This is the user-facing path the dashboard implements. Keep it in sync with `internal/web/static/index.html`.
+
+```mermaid
+flowchart TD
+  Open["GET /"] --> Land["Landing page: Sign in or create first admin"]
+  Land --> Auth{"Authenticated?"}
+  Auth -->|no| Form["Username + password only<br/>no GitHub fields"]
+  Form --> Setup["POST /api/v1/setup or /auth/login"]
+  Setup --> Auth
+  Auth -->|yes| Dash["Dashboard"]
+
+  Dash --> Admin{"is_admin?"}
+  Admin -->|yes| Manage["Users page: create accounts"]
+  Manage --> Public["List returns username, role, created_at"]
+  Admin -->|yes| Skip["GitHub not required"]
+
+  Admin -->|no| Own["Own vault, devices, tokens, activity"]
+  Own --> GH{"User wants backup?"}
+  GH -->|yes| One["POST /api/v1/github<br/>one repo for this user_id"]
+  GH -->|no| SyncOnly["Device sync still works"]
+```
 
 ---
 
@@ -243,11 +271,13 @@ flowchart TD
 ```mermaid
 flowchart LR
   subgraph dashboard [Dashboard]
-    Setup["First-boot setup<br/>create admin"] --> Login["POST /api/v1/auth/login"]
-    Login --> Cookie["HttpOnly cookie<br/>syncidian_session"]
+    Land["Landing page always authenticates"] --> Setup["First-boot: create admin"]
+    Land --> Login["Later visits: POST /api/v1/auth/login"]
+    Setup --> Cookie["HttpOnly cookie<br/>syncidian_session"]
+    Login --> Cookie
     Cookie --> Split{"Role"}
-    Split -->|"admin"| UsersOnly["Users page only"]
-    Split -->|"user"| VaultUI["GitHub · tokens · devices"]
+    Split -->|"admin"| UsersOnly["Users page only<br/>no GitHub"]
+    Split -->|"user"| VaultUI["Optional GitHub page<br/>one repo per user"]
   end
 
   subgraph pluginAuth [Plugin and MCP]
@@ -260,6 +290,8 @@ flowchart LR
   Header --> Authed
   Authed --> User["store.User"]
 ```
+
+GitHub is not part of login. Admins can stop after the cookie and manage users.
 
 ---
 
@@ -373,6 +405,8 @@ flowchart TB
 
 A regular user only sees their own devices, tokens, vault, conflicts, activity, and one GitHub repository. Admins manage accounts and cannot call vault, token, device, activity, or GitHub APIs. The WebSocket hub broadcasts per `userID`.
 
+Admins can create users and list `adminUserSummary` fields (`username`, `is_admin`, `created_at`). They do **not** receive another user's GitHub PAT, repository, vault bytes, tokens, or activity. Admin login does not require `github_config`.
+
 ---
 
 ## 12. Deployment
@@ -409,3 +443,4 @@ One container. No extra services for the basic install. Railway mounts a volume 
 | Persistence | [`internal/store/store.go`](../internal/store/store.go) |
 | Dashboard UI | [`internal/web/static/index.html`](../internal/web/static/index.html) |
 | Obsidian plugin | [`plugin/main.ts`](../plugin/main.ts) |
+| Keep diagrams current | [`AGENT.md`](../AGENT.md) |

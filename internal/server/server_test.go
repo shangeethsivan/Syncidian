@@ -189,7 +189,8 @@ func TestDashboardServed(t *testing.T) {
 		t.Fatal("unguarded conflicts.length would throw when API returns null")
 	}
 	for _, needle := range []string{
-		`id="auth-btn" type="button"`,
+		`id="auth-btn" type="button">Sign in</button>`,
+		`Authenticate to continue`,
 		`id="help-fab"`,
 		`id="help-overlay"`,
 		`id="help-panel"`,
@@ -198,21 +199,39 @@ func TestDashboardServed(t *testing.T) {
 		`scripts/install-plugin.sh`,
 		`Settings → Syncidian`,
 		`Connect your GitHub repository`,
-		`admins manage users`,
+		`The landing page always asks you to authenticate`,
 		`one GitHub repository`,
 	} {
 		if !bytes.Contains(b, []byte(needle)) {
 			t.Fatalf("dashboard missing required markup %q", needle)
 		}
 	}
-	if bytes.Contains(b, []byte(`id="auth-btn" type="button" disabled`)) {
-		t.Fatal("login must not be disabled behind a server-wide GitHub popup")
+	for _, forbidden := range []string{
+		`id="gh-setup-modal"`,
+		`Configure GitHub first`,
+		`id="auth-btn" type="button" disabled`,
+		`syncidian_pending_github`,
+		`required before you can create an admin or sign in`,
+	} {
+		if bytes.Contains(b, []byte(forbidden)) {
+			t.Fatalf("dashboard still gates login behind GitHub setup: %q", forbidden)
+		}
 	}
-	if bytes.Contains(b, []byte("Configure GitHub first")) {
-		t.Fatal("GitHub must not be required before admin or user login")
+}
+
+func TestGitHubRequiresAuth(t *testing.T) {
+	hs, done := newTestServer(t)
+	defer done()
+
+	res, m := doJSON(t, http.MethodGet, hs.URL+"/api/v1/github", nil, nil, "")
+	if res.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("unauthenticated GET /github should be 401, got %d %v", res.StatusCode, m)
 	}
-	if bytes.Contains(b, []byte(`id="gh-setup-modal"`)) {
-		t.Fatal("server-wide GitHub setup modal should be removed")
+	res, m = doJSON(t, http.MethodPost, hs.URL+"/api/v1/github", map[string]any{
+		"repo": "ada/vault", "token": "ghp_test",
+	}, nil, "")
+	if res.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("unauthenticated POST /github should be 401, got %d %v", res.StatusCode, m)
 	}
 }
 
