@@ -165,15 +165,190 @@ func TestDashboardServed(t *testing.T) {
 		t.Fatal("unguarded conflicts.length would throw when API returns null")
 	}
 	for _, needle := range []string{
-		`id="gh-setup-modal"`,
-		`id="gh-setup-repo"`,
-		`id="gh-setup-token"`,
-		`id="gh-setup-save"`,
-		`Configure GitHub repository`,
-		`id="auth-btn" type="button" disabled`,
+		`id="auth-btn" type="button">Sign in</button>`,
+		`Authenticate to continue`,
+		`id="help-fab"`,
+		`id="help-overlay"`,
+		`The landing page always asks you to authenticate`,
+		`GitHub backup is <b>per user</b>`,
+		`Admins only see usernames and roles`,
 	} {
 		if !bytes.Contains(b, []byte(needle)) {
-			t.Fatalf("login page missing required GitHub setup popup markup %q", needle)
+			t.Fatalf("dashboard missing auth-first / help markup %q", needle)
+		}
+	}
+	for _, forbidden := range []string{
+		`id="gh-setup-modal"`,
+		`Configure GitHub first`,
+		`id="auth-btn" type="button" disabled`,
+		`syncidian_pending_github`,
+		`required before you can create an admin or sign in`,
+	} {
+		if bytes.Contains(b, []byte(forbidden)) {
+			t.Fatalf("dashboard still gates login behind GitHub setup: %q", forbidden)
+		}
+	}
+}
+
+func TestGitHubRequiresAuth(t *testing.T) {
+	hs, done := newTestServer(t)
+	defer done()
+
+	res, m := doJSON(t, http.MethodGet, hs.URL+"/api/v1/github", nil, nil, "")
+	if res.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("unauthenticated GET /github should be 401, got %d %v", res.StatusCode, m)
+	}
+	res, m = doJSON(t, http.MethodPost, hs.URL+"/api/v1/github", map[string]any{
+		"repo": "ada/vault", "token": "ghp_test",
+	}, nil, "")
+	if res.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("unauthenticated POST /github should be 401, got %d %v", res.StatusCode, m)
+	}
+}
+
+func TestAdminCannotSeeOtherUserPrivateData(t *testing.T) {
+	dir := t.TempDir()
+	st, err := store.Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	srv := New(config.Config{Addr: ":0", DataDir: dir, PublicURL: "http://localhost"}, st, nil)
+	hs := httptest.NewServer(srv.Handler())
+	defer hs.Close()
+
+	res, m := doJSON(t, http.MethodPost, hs.URL+"/api/v1/setup", map[string]string{
+		"username": "admin", "password": "password1",
+	}, nil, "")
+	if res.StatusCode != http.StatusCreated {
+		t.Fatalf("setup %d %v", res.StatusCode, m)
+	}
+	adminCookies := res.Cookies()
+
+	res, m = doJSON(t, http.MethodPost, hs.URL+"/api/v1/users", map[string]any{
+		"username": "bob", "password": "password1", "admin": false,
+	}, adminCookies, "")
+	if res.StatusCode != http.StatusCreated {
+		t.Fatalf("create user %d %v", res.StatusCode, m)
+	}
+	bobID, _ := m["id"].(string)
+	if bobID == "" {
+		t.Fatalf("expected user id: %v", m)
+	}
+
+	res, m = doJSON(t, http.MethodPost, hs.URL+"/api/v1/auth/login", map[string]string{
+		"username": "bob", "password": "password1",
+	}, nil, "")
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("bob login %d %v", res.StatusCode, m)
+	}
+	bobCookies := res.Cookies()
+
+	if err := st.SetGitHub(store.GitHubConfig{
+		UserID: bobID,
+		Token:  "ghp_bob_secret",
+		Repo:   "bob/private-vault",
+		Branch: "main",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	_, err = st.CreateToken(bobID, "obsidian", "sk_sync_bobsecret", "sk_sync_bobs…")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = st.AddActivity(store.Activity{UserID: bobID, Action: "note.edit", Path: "Secret.md", Detail: "private note"})
+
+	res, m = doJSON(t, http.MethodGet, hs.URL+"/api/v1/github", nil, adminCookies, "")
+	if res.StatusCode != 200 {
+		t.Fatalf("admin github %d %v", res.StatusCode, m)
+	}
+	if m["configured"] != false {
+		t.Fatalf("admin must not see bob's GitHub config: %v", m)
+	}
+	raw, _ := json.Marshal(m)
+	if strings.Contains(string(raw), "bob/private-vault") || strings.Contains(string(raw), "ghp_bob_secret") {
+		t.Fatalf("admin github response leaked user repo or token: %s", raw)
+	}
+
+	res, m = doJSON(t, http.MethodGet, hs.URL+"/api/v1/github", nil, bobCookies, "")
+	if m["configured"] != true || m["repo"] != "bob/private-vault" {
+		t.Fatalf("bob should see his own repo: %v", m)
+	}
+	if _, ok := m["token"]; ok {
+		t.Fatalf("github GET must never return the raw token: %v", m)
+	}
+
+	req, err := http.NewRequest(http.MethodGet, hs.URL+"/api/v1/tokens", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range adminCookies {
+		req.AddCookie(c)
+	}
+	res, err = http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tokenRaw, _ := io.ReadAll(res.Body)
+	res.Body.Close()
+	if strings.Contains(string(tokenRaw), "sk_sync_bobsecret") || strings.Contains(string(tokenRaw), "obsidian") {
+		t.Fatalf("admin tokens leaked bob's token: %s", tokenRaw)
+	}
+
+	req, err = http.NewRequest(http.MethodGet, hs.URL+"/api/v1/activity", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range adminCookies {
+		req.AddCookie(c)
+	}
+	res, err = http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	actRaw, _ := io.ReadAll(res.Body)
+	res.Body.Close()
+	if strings.Contains(string(actRaw), "Secret.md") || strings.Contains(string(actRaw), "note.edit") {
+		t.Fatalf("admin activity leaked bob's events: %s", actRaw)
+	}
+
+	req, err = http.NewRequest(http.MethodGet, hs.URL+"/api/v1/users", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range adminCookies {
+		req.AddCookie(c)
+	}
+	res, err = http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	usersRaw, _ := io.ReadAll(res.Body)
+	res.Body.Close()
+	if res.StatusCode != 200 {
+		t.Fatalf("users %d %s", res.StatusCode, usersRaw)
+	}
+	for _, secret := range []string{"ghp_bob_secret", "bob/private-vault", "sk_sync_bobsecret", "Secret.md", "password_hash"} {
+		if strings.Contains(string(usersRaw), secret) {
+			t.Fatalf("admin user list leaked private field %q: %s", secret, usersRaw)
+		}
+	}
+	var users []map[string]any
+	if err := json.Unmarshal(usersRaw, &users); err != nil {
+		t.Fatalf("users decode: %s", usersRaw)
+	}
+	if len(users) != 2 {
+		t.Fatalf("expected admin + bob, got %s", usersRaw)
+	}
+	for _, u := range users {
+		if _, ok := u["password_hash"]; ok {
+			t.Fatalf("user list must not include password_hash: %v", u)
+		}
+		if _, ok := u["token"]; ok {
+			t.Fatalf("user list must not include tokens: %v", u)
+		}
+		if _, ok := u["repo"]; ok {
+			t.Fatalf("user list must not include github repo: %v", u)
 		}
 	}
 }

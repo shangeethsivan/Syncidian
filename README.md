@@ -6,7 +6,7 @@ Syncidian is an open-source, self-hostable **Obsidian synchronization and AI bri
 
 It runs as an Obsidian plugin on your devices and connects to a lightweight Syncidian server that coordinates synchronization between them.
 
-The server manages GitHub integration centrally, while GitHub acts as the durable, versioned **source of truth** for your vault.
+Each signed-in user can connect **one private GitHub repository**. GitHub is the durable, versioned **source of truth** for that user's vault. The landing page always asks you to authenticate first — repository setup happens after login, not before.
 
 Syncidian also includes a built-in **MCP server**, allowing compatible AI tools and agents to securely interact with your Obsidian knowledge base.
 
@@ -38,7 +38,7 @@ cd Syncidian
 docker compose up --build -d
 ```
 
-Open [http://localhost:8080](http://localhost:8080), create the first admin user, then go to **Tokens** and create an access token (`sk_sync_…`). Copy it once — it is not shown again.
+Open [http://localhost:8080](http://localhost:8080). The landing page always asks you to authenticate (create the first admin, or sign in). A **Help** button at the bottom of the screen walks through the rest. After login, a regular user can connect **their** GitHub repository (optional). Admins manage users and do not need repo sync. Then go to **Tokens** and create an access token (`sk_sync_…`). Copy it once — it is not shown again.
 
 **Without Docker (Go 1.22+):**
 
@@ -93,9 +93,9 @@ Then in Obsidian:
 
 Repeat the plugin copy + token on each device (Windows, Mac, Android, iOS). Create one token per person; the same user can register many devices.
 
-## 3. Optional: GitHub backup
+## 3. Optional: GitHub backup (after login, per user)
 
-In the dashboard → **GitHub**, paste a GitHub personal access token with `repo` scope and `owner/name`. The plugin never needs GitHub credentials. Until GitHub is connected, devices still sync through the server.
+Sign in first. Then open dashboard → **GitHub** and paste a GitHub personal access token with `repo` scope and `owner/name`. That repository is bound to **your user only** — one repo per account. Admins do not need this step and cannot see another user's repo, token, or vault. The plugin never needs GitHub credentials. Until GitHub is connected, devices still sync through the server.
 
 ## 4. Optional: MCP / AI
 
@@ -161,12 +161,42 @@ flowchart TB
   And["Obsidian Android"] <--> Server
   iOS["Obsidian iOS"] <--> Server
 
-  Server["Syncidian server<br/>Sync + Git + MCP + Auth + Dashboard"] --> GH["Private GitHub repo<br/>source of truth"]
+  Server["Syncidian server<br/>Sync + Git + MCP + Auth + Dashboard"] --> GH["Per-user private GitHub repo<br/>optional source of truth"]
 ```
 
 Eventually, Syncidian should be able to detect a conflict, have a small LLM resolve it automatically, validate the result, commit it to GitHub, and propagate the resolution to every device.
 
 > **Let AI handle the boring conflicts. Let humans handle the important ones.**
+
+---
+
+# 🗺️ App workflow
+
+The dashboard flow is **authenticate first**. GitHub is never a gate on the landing page.
+
+```mermaid
+flowchart TD
+  Open["Open dashboard URL"] --> Land["Landing page always asks to authenticate"]
+  Land --> First{"Any users yet?"}
+  First -->|no| Admin["Create first admin"]
+  First -->|yes| Login["Sign in"]
+  Admin --> Role{"Who signed in?"}
+  Login --> Role
+
+  Role -->|admin| AdminHome["Admin dashboard"]
+  AdminHome --> Users["Create / list users<br/>username and role only"]
+  AdminHome --> Own["Optional: admin's own vault, tokens, GitHub"]
+  Users --> Note["Admin never sees another user's<br/>vault, tokens, activity, or GitHub PAT"]
+
+  Role -->|user| UserHome["User dashboard"]
+  UserHome --> GH["Optional: connect one GitHub repo<br/>owned by this user"]
+  UserHome --> Tok["Create sk_sync_ token"]
+  Tok --> Plug["Sideload Obsidian plugin"]
+  Plug --> Sync["Devices sync through the server"]
+  GH --> Backup["Server commits/pushes that user's vault"]
+```
+
+When this workflow changes, update this diagram, [`docs/architecture.md`](docs/architecture.md), and follow [`AGENT.md`](AGENT.md).
 
 ---
 
@@ -188,7 +218,7 @@ flowchart TB
     Dash[Web dashboard]
   end
 
-  SyncSrv --> GitHub["GitHub<br/>source of truth"]
+  SyncSrv --> GitHub["Per-user GitHub repo<br/>after login"]
   SyncSrv -.->|"planned"| LLM["Small LLM<br/>conflict resolver"]
 ```
 
@@ -307,31 +337,27 @@ No separate services should be required for the basic deployment.
 
 # 🐙 Configure GitHub
 
-GitHub configuration happens **on the Syncidian server**.
+GitHub configuration happens **after login**, on the signed-in user's account.
 
-The Obsidian plugin does not need direct GitHub credentials.
+The landing page never asks for a repository. The Obsidian plugin does not need GitHub credentials.
 
-The server administrator configures:
+Rules:
 
-* GitHub authentication
-* Private repository
-* Repository mapping
-* Git configuration
-* Backup settings
+* **Authenticate first.** Create the first admin or sign in.
+* **One repository per user.** `github_config` is keyed by `user_id`.
+* **Admin does not need repo sync.** Admins can only manage users (username + role). They do not see vaults, tokens, activity, or GitHub PATs.
+* **Optional backup.** Devices still sync through the server if a user has not connected GitHub.
 
-Example:
-
-```text
-Syncidian Server
-       │
-       ▼
-GitHub Authentication
-       │
-       ▼
-Private Repository
+```mermaid
+flowchart LR
+  User["Signed-in user"] --> Dash["Dashboard → GitHub"]
+  Dash --> PAT["User's GitHub PAT + owner/name"]
+  PAT --> Map["Store github_config for that user_id"]
+  Map --> Git["Server git commit / push"]
+  Git --> Repo["That user's private repo"]
 ```
 
-This keeps GitHub credentials and Git operations centralized.
+This keeps GitHub credentials on the server and scoped to the account that entered them.
 
 ---
 
@@ -864,13 +890,13 @@ Syncidian is designed around several principles.
 
 Client-to-server communication should use encrypted channels.
 
-### GitHub credentials stay on the server
+### GitHub credentials stay on the server, per user
 
-Obsidian clients never need direct GitHub credentials.
+Obsidian clients never need direct GitHub credentials. Each user stores at most one PAT and repository. Those values are never returned to admins.
 
 ### User isolation
 
-Multiple users can safely share a Syncidian server.
+Multiple users can safely share a Syncidian server. Admin APIs list public account fields only (`id`, `username`, `is_admin`, `created_at`). Vault files, tokens, activity, devices, MCP permissions, and GitHub config are always loaded by the authenticated `user_id`.
 
 ### Least privilege
 
@@ -1052,10 +1078,11 @@ The self-hosted version will remain free and open source.
 
 ## 🐙 GitHub
 
-* [x] Server-side GitHub configuration
+* [x] Per-user GitHub configuration (after login)
 * [x] GitHub authentication
 * [x] Private repository support
-* [x] User-to-repository mapping
+* [x] User-to-repository mapping (one repo per user)
+* [x] Admin user management without repo sync or private-data access
 * [x] Automatic commits
 * [x] Pull latest changes
 * [ ] Restore from history
