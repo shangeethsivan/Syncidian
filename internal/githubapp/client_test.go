@@ -54,11 +54,23 @@ func TestNewManifestRequestsWriteAccess(t *testing.T) {
 	if m.DefaultPermissions["metadata"] != "read" {
 		t.Fatalf("metadata permission: %#v", m.DefaultPermissions)
 	}
+	if m.DefaultPermissions["email_addresses"] != "read" {
+		t.Fatalf("email_addresses permission: %#v", m.DefaultPermissions)
+	}
 	if m.RedirectURL != "https://sync.example.com/api/v1/github/app/callback" {
 		t.Fatalf("redirect %s", m.RedirectURL)
 	}
+	if m.CallbackURLs[0] != "https://sync.example.com/api/v1/auth/github/callback" {
+		t.Fatalf("oauth callback %v", m.CallbackURLs)
+	}
 	if m.SetupURL != "https://sync.example.com/api/v1/github/app/setup" {
 		t.Fatalf("setup %s", m.SetupURL)
+	}
+	if m.HookAttributes["url"] != "https://sync.example.com/api/v1/github/app/webhook" {
+		t.Fatalf("webhook %v", m.HookAttributes)
+	}
+	if !m.RequestOAuthOnInstall {
+		t.Fatal("expected OAuth during install")
 	}
 	if m.Public {
 		t.Fatal("app should not be public")

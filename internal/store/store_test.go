@@ -79,3 +79,37 @@ func TestOneGitHubRepoPerUser(t *testing.T) {
 		}
 	}
 }
+
+func TestGitHubIdentityAndInstanceApp(t *testing.T) {
+	st, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	u, err := st.CreateGitHubUser("octocat", "octocat@example.com", 4242)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if u.GitHubID != 4242 || u.Email != "octocat@example.com" || u.PasswordHash != "" {
+		t.Fatalf("github user: %+v", u)
+	}
+	got, err := st.GetUserByGitHubID(4242)
+	if err != nil || got == nil || got.ID != u.ID {
+		t.Fatalf("lookup by github id: %+v %v", got, err)
+	}
+	byEmail, err := st.GetUserByEmail("octocat@example.com")
+	if err != nil || byEmail == nil || byEmail.ID != u.ID {
+		t.Fatalf("lookup by email: %+v %v", byEmail, err)
+	}
+
+	if err := st.SetInstanceGitHubApp(GitHubApp{
+		AppID: 7, Slug: "syncidian", PEM: "pem", ClientID: "iv1", ClientSecret: "sec",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	app, err := st.GetInstanceGitHubApp()
+	if err != nil || app == nil || !app.Configured() || app.Slug != "syncidian" {
+		t.Fatalf("instance app: %+v %v", app, err)
+	}
+}

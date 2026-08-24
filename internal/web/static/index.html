@@ -4,23 +4,45 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Syncidian</title>
+  <script>
+    (function () {
+      var t = localStorage.getItem("syncidian-theme");
+      if (!t) t = matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+      document.documentElement.dataset.theme = t;
+    })();
+  </script>
   <style>
-    :root {
-      --bg: #0b0f14;
-      --bg2: #101720;
-      --card: #151d27;
-      --line: #243040;
-      --text: #e8eef4;
-      --muted: #8b9bb0;
-      --accent: #3ee0a4;
-      --accent2: #2bbf88;
+    :root, :root[data-theme="light"] {
+      --bg: #fbfbfd;
+      --bg2: #ffffff;
+      --card: #ffffff;
+      --line: rgba(0,0,0,.1);
+      --text: #1d1d1f;
+      --muted: #6e6e73;
+      --accent: #1d1d1f;
+      --accent-fg: #f5f5f7;
+      --danger: #c41e3a;
+      --warn: #b25000;
+      --blue: #0066cc;
+      --ok: #248a3d;
+    }
+    :root[data-theme="dark"] {
+      --bg: #000000;
+      --bg2: #1d1d1f;
+      --card: #1d1d1f;
+      --line: rgba(255,255,255,.12);
+      --text: #f5f5f7;
+      --muted: #a1a1a6;
+      --accent: #f5f5f7;
+      --accent-fg: #1d1d1f;
       --danger: #ff6b7a;
       --warn: #ffc857;
       --blue: #6cb6ff;
+      --ok: #3ee0a4;
     }
     * { box-sizing: border-box; }
-    html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text); font: 15px/1.45 ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif; }
-    a { color: var(--accent); }
+    html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text); font: 17px/1.47 ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif; }
+    a { color: var(--text); }
     button, input, select, textarea { font: inherit; }
     .wrap { max-width: 1080px; margin: 0 auto; padding: 24px; }
     header.app {
@@ -28,17 +50,17 @@
       padding: 16px 24px; border-bottom: 1px solid var(--line); background: var(--bg2);
       position: sticky; top: 0; z-index: 5;
     }
-    .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; letter-spacing: .02em; }
-    .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 12px var(--accent); }
+    .brand { display: flex; align-items: center; gap: 10px; font-weight: 600; letter-spacing: -.02em; color: inherit; text-decoration: none; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text); }
     nav { display: flex; gap: 6px; flex-wrap: wrap; }
     nav button, .ghost {
-      background: transparent; color: var(--muted); border: 1px solid transparent; padding: 8px 12px; border-radius: 8px; cursor: pointer;
+      background: transparent; color: var(--muted); border: 1px solid transparent; padding: 8px 12px; border-radius: 980px; cursor: pointer; text-decoration: none;
     }
     nav button.active, nav button:hover, .ghost:hover { color: var(--text); background: var(--card); border-color: var(--line); }
     .btn {
-      background: var(--accent); color: #042015; border: 0; padding: 10px 16px; border-radius: 10px; font-weight: 700; cursor: pointer;
+      background: var(--accent); color: var(--accent-fg); border: 0; padding: 12px 22px; border-radius: 980px; font-weight: 600; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; justify-content: center;
     }
-    .btn.secondary { background: var(--card); color: var(--text); border: 1px solid var(--line); }
+    .btn.secondary { background: transparent; color: var(--text); border: 1px solid var(--line); }
     .btn.danger { background: #3a1520; color: var(--danger); border: 1px solid #5a2230; }
     .btn:disabled { opacity: .5; cursor: not-allowed; }
     .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 20px; margin: 16px 0; }
@@ -56,17 +78,17 @@
     th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
     th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
     .pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 8px; border-radius: 999px; font-size: 12px; }
-    .ok { background: #123528; color: var(--accent); }
-    .off { background: #1b2230; color: var(--muted); }
-    .warn { background: #33280f; color: var(--warn); }
-    .err { background: #3a1520; color: var(--danger); }
+    .ok { background: color-mix(in srgb, var(--ok) 18%, transparent); color: var(--ok); }
+    .off { background: var(--bg); color: var(--muted); }
+    .warn { background: color-mix(in srgb, var(--warn) 18%, transparent); color: var(--warn); }
+    .err { background: color-mix(in srgb, var(--danger) 16%, transparent); color: var(--danger); }
     .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
     .hidden { display: none !important; }
     .auth { min-height: 100vh; display: grid; place-items: center; padding: 24px; }
     .auth .card { width: min(440px, 100%); }
     .flash { padding: 10px 12px; border-radius: 10px; margin: 10px 0; }
-    .flash.err { background: #3a1520; color: var(--danger); }
-    .flash.ok { background: #123528; color: var(--accent); }
+    .flash.err { background: color-mix(in srgb, var(--danger) 12%, transparent); color: var(--danger); }
+    .flash.ok { background: color-mix(in srgb, var(--ok) 12%, transparent); color: var(--ok); }
     .token { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--bg); padding: 12px; border-radius: 10px; word-break: break-all; }
     pre { white-space: pre-wrap; background: var(--bg); padding: 12px; border-radius: 10px; overflow: auto; }
     .check { display: flex; gap: 8px; align-items: center; margin: 8px 0; }
@@ -134,14 +156,108 @@
     }
     #app { padding-bottom: 72px; }
     #auth { padding-bottom: 88px; }
+    .site-head {
+      display: flex; align-items: center; justify-content: space-between; gap: 16px;
+      padding: 22px 40px; position: sticky; top: 0; background: color-mix(in srgb, var(--bg) 86%, transparent);
+      backdrop-filter: saturate(180%) blur(20px); z-index: 8;
+    }
+    .hero { min-height: 82vh; display: grid; place-items: center; text-align: center; padding: 48px 24px 80px; }
+    .hero h1 {
+      font-size: clamp(48px, 9vw, 96px); font-weight: 600; letter-spacing: -.045em; line-height: .98; margin: 0 0 18px;
+    }
+    .eyebrow { text-transform: uppercase; letter-spacing: .16em; font-size: 12px; color: var(--muted); margin: 0 0 18px; }
+    .lede { max-width: 34em; margin: 0 auto 36px; color: var(--muted); font-size: 21px; }
+    .hero-actions, .cta-actions { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+    .band { max-width: 820px; margin: 0 auto; padding: 72px 24px; }
+    .band h2 { font-size: clamp(32px, 5vw, 48px); letter-spacing: -.035em; font-weight: 600; margin: 0 0 16px; }
+    .band p { color: var(--muted); font-size: 20px; max-width: 36em; }
+    .arch { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 36px; }
+    .arch div { padding: 28px 24px; border: 1px solid var(--line); border-radius: 28px; text-align: left; background: var(--card); }
+    .arch b { display: block; font-size: 15px; margin-bottom: 8px; }
+    .arch span { color: var(--muted); font-size: 15px; }
+    .email-box { max-width: 420px; margin: 28px auto 0; text-align: left; }
+    .site-foot { padding: 48px 24px 80px; text-align: center; color: var(--muted); font-size: 13px; }
+    .landing-flash { max-width: 36em; margin: 0 auto; }
+    .landing-flash:not(:empty) { margin-bottom: 28px; }
+    @media (max-width: 800px) {
+      .site-head { padding: 16px; }
+      .arch { grid-template-columns: 1fr; }
+      .hero-actions { flex-direction: column; align-items: center; }
+    }
   </style>
 </head>
 <body>
+  <div id="landing" class="hidden">
+    <header class="site-head">
+      <a class="brand" href="/"><span class="dot"></span> Syncidian</a>
+      <div class="row">
+        <button class="ghost theme-toggle" type="button">Theme</button>
+        <a class="ghost" href="/api/v1/auth/github/start">Log in</a>
+        <a class="ghost" href="/admin">Admin</a>
+      </div>
+    </header>
+    <section class="hero">
+      <div>
+        <p class="eyebrow">Obsidian, privately synced</p>
+        <h1>Your vault.<br>On your GitHub.</h1>
+        <p class="lede">Syncidian keeps notes moving across your devices, then backs them up to one repository you own. No personal access tokens. No extra cloud.</p>
+        <div id="landing-flash" class="landing-flash"></div>
+        <div class="hero-actions">
+          <a class="btn" href="/api/v1/auth/github/start">Start a journey with Syncidian</a>
+          <a class="btn secondary" href="/api/v1/auth/github/start?next=install">Connect to your GitHub repository</a>
+        </div>
+      </div>
+    </section>
+    <section class="band">
+      <h2>What it is</h2>
+      <p>A small self-hosted sync layer for Obsidian. Devices talk to Syncidian. Syncidian talks to GitHub. Your notes stay yours.</p>
+    </section>
+    <section class="band">
+      <h2>What it solves</h2>
+      <p>Obsidian is local. Life is not. Syncidian gives every device a live copy, then a durable backup on the main branch of one GitHub repository.</p>
+    </section>
+    <section class="band">
+      <h2>How it works</h2>
+      <div class="arch">
+        <div><b>1. Sign in</b><span>GitHub, or email if you prefer.</span></div>
+        <div><b>2. Connect one repo</b><span>Install the GitHub App with read and write access.</span></div>
+        <div><b>3. Sync</b><span>The plugin talks to this server. The server commits to main.</span></div>
+      </div>
+    </section>
+    <section class="band" id="start">
+      <h2>Begin</h2>
+      <p>Sign up using GitHub. That is the whole start.</p>
+      <div class="cta-actions">
+        <a class="btn" id="gh-signup" href="/api/v1/auth/github/start?next=install">Sign up using GitHub</a>
+        <button class="btn secondary" id="show-email" type="button">Sign up with email</button>
+      </div>
+      <form id="email-form" class="email-box hidden">
+        <div id="email-flash"></div>
+        <label>Username</label>
+        <input id="su-user" autocomplete="username" />
+        <label>Email</label>
+        <input id="su-email" type="email" autocomplete="email" />
+        <label>Password</label>
+        <input id="su-pass" type="password" autocomplete="new-password" />
+        <div class="row" style="margin-top:16px">
+          <button class="btn" id="su-btn" type="button">Create account</button>
+          <button class="btn secondary" id="su-login" type="button">I already have an email account</button>
+        </div>
+      </form>
+    </section>
+    <footer class="site-foot">
+      <p>Syncidian. Your notes. Your GitHub.</p>
+    </footer>
+  </div>
+
   <div id="auth" class="auth hidden">
     <div class="card">
-      <div class="brand"><span class="dot"></span> Syncidian</div>
-      <h1 id="auth-title">Sign in</h1>
-      <p class="muted" id="auth-sub">Authenticate to continue. GitHub backup is configured after you sign in, and only for your own account.</p>
+      <div class="row" style="justify-content:space-between">
+        <div class="brand"><span class="dot"></span> Syncidian</div>
+        <button class="ghost theme-toggle" type="button">Theme</button>
+      </div>
+      <h1 id="auth-title">Admin</h1>
+      <p class="muted" id="auth-sub">Operators sign in here. Vault users sign in with GitHub from the public site.</p>
       <div id="flash"></div>
       <label>Username</label>
       <input id="username" autocomplete="username" />
@@ -159,6 +275,7 @@
       <nav id="nav"></nav>
       <div class="row">
         <span class="muted" id="who"></span>
+        <button class="ghost theme-toggle" type="button">Theme</button>
         <button class="ghost" id="logout" type="button">Log out</button>
       </div>
     </header>
@@ -173,7 +290,7 @@
       <div class="help-head">
         <div>
           <h1 id="help-title">Setup walkthrough</h1>
-          <p class="muted" style="margin:0">Authenticate first. Then each user can connect their own GitHub repository.</p>
+          <p class="muted" style="margin:0">GitHub for vault users. Admin stays at /admin.</p>
         </div>
         <button class="ghost" id="help-close" type="button">Close</button>
       </div>
@@ -193,6 +310,30 @@ const $ = (id) => document.getElementById(id);
 let me = null;
 let needsSetup = false;
 let page = "overview";
+let publicInfo = null;
+
+function isAdminPath() {
+  return location.pathname.replace(/\/+$/, "") === "/admin";
+}
+function applyTheme(next) {
+  const theme = next || localStorage.getItem("syncidian-theme") || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+  document.documentElement.dataset.theme = theme;
+  localStorage.setItem("syncidian-theme", theme);
+  document.querySelectorAll(".theme-toggle").forEach((b) => {
+    b.textContent = theme === "dark" ? "Light" : "Dark";
+  });
+}
+function toggleTheme() {
+  applyTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark");
+}
+function fillGitHubURLs(st) {
+  const urls = st && st.github_app && st.github_app.urls ? st.github_app.urls : null;
+  if (!urls) return;
+  const set = (id, v) => { const el = $(id); if (el) el.textContent = v; };
+  set("adm-callback", urls.callback);
+  set("adm-setup", urls.setup);
+  set("adm-webhook", urls.webhook);
+}
 
 async function api(path, opts = {}) {
   const res = await fetch(path, {
@@ -234,7 +375,7 @@ const HELP_STEPS = [
   {
     title: "1. Start the Syncidian server",
     html: () => `
-      <p>Deploy the server first. GitHub is not configured on the server itself.</p>
+      <p>The public site is a one-page story. Vault users sign in with GitHub. Operators use <code>/admin</code>.</p>
       <h2>Docker</h2>
       <pre>git clone https://github.com/shangeethsivan/Syncidian.git
 cd Syncidian
@@ -248,8 +389,9 @@ docker compose up --build -d</pre>
   {
     title: "2. Authenticate",
     html: () => `
-      <p>The landing page always asks you to authenticate. GitHub is never configured before sign-in. The first account is an admin. Admins manage users only — they do not connect a GitHub repository and never see another person’s vault, tokens, or GitHub credentials.</p>
+      <p>The first account is an admin, created at <code>/admin</code>. Admins manage users only — they do not connect a GitHub repository and never see another person’s vault, tokens, or GitHub credentials. Vault users sign in with GitHub from the public site, or with email.</p>
       <ol>
+        <li>Open <code>/admin</code>.</li>
         <li>Choose a username.</li>
         <li>Choose a password of at least 8 characters.</li>
         <li>Click <b>Create admin</b>.</li>
@@ -259,11 +401,10 @@ docker compose up --build -d</pre>
   {
     title: "3. Create a regular user",
     html: () => `
-      <p>On the <b>Users</b> page, create the person who will sync Obsidian. Each account is isolated.</p>
+      <p>Most people sign up with GitHub on the public site. Admins can still create an email account on the <b>Users</b> page. Each account is isolated.</p>
       <ol>
-        <li>Enter a username and password.</li>
-        <li>Leave <b>Admin</b> unchecked for vault users.</li>
-        <li>That person signs in with those credentials.</li>
+        <li>On the public site, click <b>Sign up using GitHub</b>.</li>
+        <li>Or enter a username and password here, and leave <b>Admin</b> unchecked for vault users.</li>
       </ol>
       <p class="muted">Admins manage users. They should not see any private info of users.</p>
     `,
@@ -271,13 +412,11 @@ docker compose up --build -d</pre>
   {
     title: "4. Connect your GitHub repository",
     html: () => `
-      <p>GitHub backup is <b>per user</b>, not per server. One user can set up one GitHub repository. Connect with a GitHub App — no personal access token and no deploy key. We currently only support one single branch (<code>main</code>), to keep things simple.</p>
+      <p>GitHub backup is <b>per user</b>. One user can set up one GitHub repository on <code>main</code>. Sign in with GitHub, then install the GitHub App with Contents <b>read and write</b>.</p>
       <ol>
-        <li>Sign in as that user (not as admin).</li>
-        <li>Open the <b>GitHub</b> page (Connect to GitHub).</li>
-        <li>Click <b>Connect with GitHub</b>.</li>
-        <li>Create the GitHub App, then click <b>Install</b> on one repository. That grants Contents <b>read and write</b>.</li>
-        <li>If you installed on more than one repository, pick the one vault to use. Saving again replaces that same repository — you still have only one.</li>
+        <li>On the public site, click <b>Sign up using GitHub</b> or <b>Connect to your GitHub repository</b>.</li>
+        <li>Authorize Syncidian, then click <b>Install</b> on one repository.</li>
+        <li>If more than one repository was granted, pick the one vault to use.</li>
       </ol>
       <p>The Obsidian plugin never sees GitHub credentials.</p>
     `,
@@ -402,30 +541,55 @@ function paintNav() {
 }
 
 async function boot() {
+  applyTheme();
+  document.querySelectorAll(".theme-toggle").forEach((b) => { b.onclick = toggleTheme; });
   const q = new URLSearchParams(location.search);
   if (q.get("github")) {
-    page = "github";
     window.__githubQuery = { flag: q.get("github"), message: q.get("message") || "" };
+    if (!isAdminPath() && (q.get("github") === "connected" || q.get("github") === "select")) {
+      page = "github";
+    }
     history.replaceState({}, "", location.pathname || "/");
   }
   const st = await api("/api/v1/setup");
+  publicInfo = st;
   needsSetup = st.needs_setup;
+  fillGitHubURLs(st);
   try {
     const m = await api("/api/v1/me");
     me = m.user;
     showApp();
   } catch {
-    showAuth();
+    if (isAdminPath()) showAuth();
+    else showLanding();
+  }
+}
+
+function hideAll() {
+  $("landing").classList.add("hidden");
+  $("auth").classList.add("hidden");
+  $("app").classList.add("hidden");
+}
+
+function showLanding() {
+  hideAll();
+  $("help-fab").classList.add("hidden");
+  $("landing").classList.remove("hidden");
+  const q = window.__githubQuery;
+  if (q && q.flag === "error") {
+    const box = $("landing-flash");
+    if (box) flash(box, q.message || "GitHub sign-in failed.");
   }
 }
 
 function showAuth() {
-  $("app").classList.add("hidden");
+  hideAll();
+  $("help-fab").classList.remove("hidden");
   $("auth").classList.remove("hidden");
-  $("auth-title").textContent = needsSetup ? "Create the first admin" : "Sign in";
+  $("auth-title").textContent = needsSetup ? "Create the first admin" : "Admin sign in";
   $("auth-sub").textContent = needsSetup
-    ? "The landing page always starts with authentication. Choose a username and a password of at least 8 characters. GitHub backup happens after login, per user. Admins manage users and do not connect GitHub."
-    : "Sign in to continue. Each user configures their own GitHub repository after login. Admins manage users without connecting a repo.";
+    ? "This is /admin. Choose a username and a password of at least 8 characters. Vault users sign in with GitHub on the public site."
+    : "Operators only. Vault users sign in with GitHub from the public site.";
   $("auth-btn").textContent = needsSetup ? "Create admin" : "Sign in";
   $("auth-btn").disabled = false;
   $("username").disabled = false;
@@ -433,7 +597,8 @@ function showAuth() {
 }
 
 function showApp() {
-  $("auth").classList.add("hidden");
+  hideAll();
+  $("help-fab").classList.remove("hidden");
   $("app").classList.remove("hidden");
   $("who").textContent = isAdmin() ? me.username + " · admin" : me.username;
   paintNav();
@@ -460,7 +625,26 @@ $("logout").onclick = async () => {
   me = null;
   needsSetup = false;
   page = "overview";
-  showAuth();
+  if (isAdminPath()) location.href = "/admin";
+  else location.href = "/";
+};
+
+$("show-email").onclick = () => $("email-form").classList.remove("hidden");
+$("su-btn").onclick = async () => {
+  try {
+    await api("/api/v1/auth/signup", { method: "POST", body: JSON.stringify({
+      username: $("su-user").value, email: $("su-email").value, password: $("su-pass").value
+    })});
+    location.href = "/";
+  } catch (e) { flash($("email-flash"), e.message); }
+};
+$("su-login").onclick = async () => {
+  try {
+    await api("/api/v1/auth/login", { method: "POST", body: JSON.stringify({
+      username: $("su-user").value, password: $("su-pass").value
+    })});
+    location.href = "/";
+  } catch (e) { flash($("email-flash"), e.message); }
 };
 
 async function render() {
@@ -496,18 +680,58 @@ async function adminOverview(main) {
     <div class="card">
       <h2>What you can do</h2>
       <ul>
-        <li>Create regular users on the <b>Users</b> page.</li>
-        <li>Each user signs in and connects <b>one GitHub repository</b> of their own.</li>
-        <li>You never configure repo sync for the server, and you never open another user’s notes.</li>
+        <li>Create regular users on the <b>Users</b> page, or let them sign up with GitHub.</li>
+        <li>Register the instance GitHub App using the URLs below.</li>
+        <li>You never open another user’s notes.</li>
       </ul>
       <div class="row">
         <button class="btn" id="go-users" type="button">Manage users</button>
         <button class="btn secondary" id="go-help" type="button">Open setup Help</button>
       </div>
     </div>
+    <div class="card">
+      <h2>GitHub App URLs</h2>
+      <p class="muted">Paste these into the GitHub App form. GitHub requires a webhook URL so it can ping the app after you create it. Syncidian answers that ping with 200 even if you do not subscribe to extra events. Callback is the sign-in redirect. Setup is where GitHub sends people after they install the app.</p>
+      <p>${publicInfo && publicInfo.github_app && publicInfo.github_app.configured
+        ? `<span class="pill ok">Registered</span> ${esc((publicInfo.github_app.slug || "GitHub App"))}`
+        : `<span class="pill warn">Not registered</span> Create the GitHub App so people can sign in with GitHub.`}</p>
+      <p><b>Callback URL</b> (User authorization callback / redirect URI)<br><code id="adm-callback">/api/v1/auth/github/callback</code></p>
+      <p><b>Setup URL</b> (post-installation redirect)<br><code id="adm-setup">/api/v1/github/app/setup</code></p>
+      <p><b>Webhook URL</b><br><code id="adm-webhook">/api/v1/github/app/webhook</code></p>
+      <div class="row" style="margin-top:12px">
+        <button class="btn" id="gh-app-register" type="button">Create GitHub App</button>
+      </div>
+      <div id="adm-gh-flash"></div>
+    </div>
   `;
   $("go-users").onclick = () => { page = "users"; paintNav(); render(); };
   $("go-help").onclick = () => openHelp(2);
+  const urls = publicInfo && publicInfo.github_app && publicInfo.github_app.urls;
+  if (urls) {
+    $("adm-callback").textContent = urls.callback;
+    $("adm-setup").textContent = urls.setup;
+    $("adm-webhook").textContent = urls.webhook;
+  }
+  const q = window.__githubQuery;
+  if (q && q.flag === "app-ready") {
+    window.__githubQuery = null;
+    flash($("adm-gh-flash"), "GitHub App registered. People can now sign in with GitHub.", "ok");
+  }
+  $("gh-app-register").onclick = async () => {
+    try {
+      const data = await api("/api/v1/github/app/register/start", { method: "POST", body: "{}" });
+      const form = document.createElement("form");
+      form.method = "post";
+      form.action = data.github_url;
+      const input = document.createElement("input");
+      input.type = "hidden";
+      input.name = "manifest";
+      input.value = JSON.stringify(data.manifest);
+      form.appendChild(input);
+      document.body.appendChild(form);
+      form.submit();
+    } catch (e) { flash($("adm-gh-flash"), e.message); }
+  };
 }
 
 async function overview(main) {
@@ -635,12 +859,18 @@ async function github(main) {
       ${gh.configured ? "" : `
       <div class="howto">
         <h2>Connect with GitHub</h2>
-        <p>This creates a private GitHub App for your account with Contents <b>read and write</b>. You do not paste a personal access token, and SSH deploy keys are not used.</p>
+        ${gh.instance_app ? `
+        <p>Install the Syncidian GitHub App with Contents <b>read and write</b>. Pick one repository. You do not paste a personal access token, and SSH deploy keys are not used.</p>
         <ol>
           <li>Click <b>Connect with GitHub</b>.</li>
-          <li>Click <b>Create GitHub App</b> on GitHub. Permissions already request write access.</li>
           <li>Click <b>Install</b> and allow access to one repository (or several, then pick below).</li>
-        </ol>
+        </ol>` : `
+        <p>This creates a GitHub App for this instance with Contents <b>read and write</b>. You do not paste a personal access token, and SSH deploy keys are not used. If an administrator already registered the app at <code>/admin</code>, you only need to install it.</p>
+        <ol>
+          <li>Click <b>Connect with GitHub</b>.</li>
+          <li>Click <b>Create GitHub App</b> on GitHub if prompted. Permissions already request write access.</li>
+          <li>Click <b>Install</b> and allow access to one repository (or several, then pick below).</li>
+        </ol>`}
       </div>
       <div class="row" style="margin-top:12px">
         <button class="btn" id="gh-connect-app" type="button">${esc(connectLabel)}</button>
@@ -771,11 +1001,10 @@ async function activity(main) {
 }
 
 boot().catch((e) => {
-  $("auth").classList.add("hidden");
-  $("app").classList.add("hidden");
+  hideAll();
   const wrap = document.createElement("div");
   wrap.className = "wrap";
-  wrap.innerHTML = `<div class="flash err">${esc(e.message)}</div><p class="muted">Open Help at the bottom of the screen for the setup walkthrough.</p>`;
+  wrap.innerHTML = `<div class="flash err">${esc(e.message)}</div><p class="muted">Open /admin if this is a new instance.</p>`;
   document.body.insertBefore(wrap, $("help-fab"));
 });
 </script>

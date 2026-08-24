@@ -15,28 +15,79 @@ import (
 
 const githubStateCookie = "syncidian_github_state"
 
-func (s *Server) githubBrowserAuthed(fn func(http.ResponseWriter, *http.Request, *store.User)) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		user, err := s.authenticate(r)
-		if err != nil || user == nil {
-			s.dashboardRedirect(w, r, url.Values{
-				"github":  {"error"},
-				"message": {"Sign in first, then connect GitHub."},
-			})
-			return
-		}
-		if user.IsAdmin {
-			s.dashboardRedirect(w, r, url.Values{
-				"github":  {"error"},
-				"message": {"Admins manage users and cannot connect GitHub."},
-			})
-			return
-		}
-		fn(w, r, user)
+func githubErr(r *http.Request) string {
+	if msg := r.URL.Query().Get("error_description"); msg != "" {
+		return msg
 	}
+	return r.URL.Query().Get("error")
+}
+
+func (s *Server) adminAuthed(fn func(http.ResponseWriter, *http.Request, *store.User)) http.HandlerFunc {
+	return s.authed(func(w http.ResponseWriter, r *http.Request, u *store.User) {
+		if !u.IsAdmin {
+			writeError(w, http.StatusForbidden, "admin required")
+			return
+		}
+		fn(w, r, u)
+	})
+}
+
+func (s *Server) handleGitHubAppRegisterStart(w http.ResponseWriter, r *http.Request, u *store.User) {
+	state, err := randomHex(16)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "could not start GitHub App registration")
+		return
+	}
+	s.setGitHubStateCookie(w, r, state)
+	base := s.requestBase(r)
+	manifest := githubapp.NewManifest(base, "Syncidian")
+	writeJSON(w, http.StatusOK, map[string]any{
+		"github_url": "https://github.com/settings/apps/new?state=" + url.QueryEscape(state),
+		"manifest":   manifest,
+		"urls":       githubapp.AppURLs(base),
+		"branch":     GitHubBranch,
+	})
+}
+
+func (s *Server) handleGitHubAppRegisterSave(w http.ResponseWriter, r *http.Request, u *store.User) {
+	var req struct {
+		AppID        int64  `json:"app_id"`
+		Slug         string `json:"slug"`
+		PEM          string `json:"pem"`
+		ClientID     string `json:"client_id"`
+		ClientSecret string `json:"client_secret"`
+	}
+	if err := readJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid json")
+		return
+	}
+	req.Slug = strings.TrimSpace(req.Slug)
+	req.PEM = strings.TrimSpace(req.PEM)
+	req.ClientID = strings.TrimSpace(req.ClientID)
+	req.ClientSecret = strings.TrimSpace(req.ClientSecret)
+	if req.AppID == 0 || req.PEM == "" || req.ClientID == "" || req.ClientSecret == "" {
+		writeError(w, http.StatusBadRequest, "app_id, pem, client_id, and client_secret are required")
+		return
+	}
+	if err := s.Store.SetInstanceGitHubApp(store.GitHubApp{
+		AppID: req.AppID, Slug: req.Slug, PEM: req.PEM, ClientID: req.ClientID, ClientSecret: req.ClientSecret,
+	}); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "slug": req.Slug})
 }
 
 func (s *Server) handleGitHubAppStart(w http.ResponseWriter, r *http.Request, u *store.User) {
+	if inst := s.instanceGitHubApp(); inst.Configured() && inst.Slug != "" {
+		writeJSON(w, http.StatusOK, map[string]any{
+			"github_url": "https://github.com/apps/" + inst.Slug + "/installations/new",
+			"existing":   true,
+			"branch":     GitHubBranch,
+			"urls":       githubapp.AppURLs(s.requestBase(r)),
+		})
+		return
+	}
 	if cfg, _ := s.Store.GetGitHub(u.ID); cfg.HasApp() && cfg.AppSlug != "" {
 		writeJSON(w, http.StatusOK, map[string]any{
 			"github_url": "https://github.com/apps/" + cfg.AppSlug + "/installations/new",
@@ -61,24 +112,24 @@ func (s *Server) handleGitHubAppStart(w http.ResponseWriter, r *http.Request, u 
 		"github_url": "https://github.com/settings/apps/new?state=" + url.QueryEscape(state),
 		"manifest":   manifest,
 		"branch":     GitHubBranch,
+		"urls":       githubapp.AppURLs(base),
 	})
 }
 
-func (s *Server) handleGitHubAppCallback(w http.ResponseWriter, r *http.Request, u *store.User) {
-	if msg := r.URL.Query().Get("error_description"); msg == "" {
-		msg = r.URL.Query().Get("error")
-		if msg != "" {
-			s.dashboardRedirect(w, r, url.Values{"github": {"error"}, "message": {msg}})
-			return
-		}
-	} else {
+func (s *Server) handleGitHubAppCallback(w http.ResponseWriter, r *http.Request) {
+	user, _ := s.authenticate(r)
+	if user == nil {
+		s.dashboardRedirect(w, r, url.Values{"github": {"error"}, "message": {"Sign in first."}})
+		return
+	}
+	if msg := githubErr(r); msg != "" {
 		s.dashboardRedirect(w, r, url.Values{"github": {"error"}, "message": {msg}})
 		return
 	}
 	if !s.validGitHubState(r, r.URL.Query().Get("state")) {
 		s.dashboardRedirect(w, r, url.Values{
 			"github":  {"error"},
-			"message": {"GitHub App setup expired. Click Connect with GitHub again."},
+			"message": {"GitHub App setup expired. Try again."},
 		})
 		return
 	}
@@ -87,45 +138,72 @@ func (s *Server) handleGitHubAppCallback(w http.ResponseWriter, r *http.Request,
 		s.dashboardRedirect(w, r, url.Values{"github": {"error"}, "message": {err.Error()}})
 		return
 	}
+	if user.IsAdmin {
+		if err := s.Store.SetInstanceGitHubApp(store.GitHubApp{
+			AppID: creds.ID, Slug: creds.Slug, PEM: creds.PEM, ClientID: creds.ClientID, ClientSecret: creds.ClientSecret,
+		}); err != nil {
+			s.dashboardRedirect(w, r, url.Values{"github": {"error"}, "message": {err.Error()}})
+			return
+		}
+		http.Redirect(w, r, s.requestBase(r)+"/admin?github=app-ready", http.StatusFound)
+		return
+	}
 	cfg := &store.GitHubConfig{
-		UserID:       u.ID,
-		Branch:       GitHubBranch,
-		AppID:        creds.ID,
-		AppSlug:      creds.Slug,
-		AppPEM:       creds.PEM,
-		ClientID:     creds.ClientID,
-		ClientSecret: creds.ClientSecret,
+		UserID: user.ID, Branch: GitHubBranch, AppID: creds.ID, AppSlug: creds.Slug,
+		AppPEM: creds.PEM, ClientID: creds.ClientID, ClientSecret: creds.ClientSecret,
 	}
 	if err := s.Store.SetGitHub(*cfg); err != nil {
 		s.dashboardRedirect(w, r, url.Values{"github": {"error"}, "message": {err.Error()}})
 		return
 	}
-	_ = s.Store.AddActivity(store.Activity{UserID: u.ID, Action: "github.app", Detail: creds.Slug})
 	http.Redirect(w, r, "https://github.com/apps/"+url.PathEscape(creds.Slug)+"/installations/new", http.StatusFound)
 }
 
-func (s *Server) handleGitHubAppSetup(w http.ResponseWriter, r *http.Request, u *store.User) {
+func (s *Server) handleGitHubAppSetup(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Query().Get("setup_action") == "request" {
-		s.dashboardRedirect(w, r, url.Values{
-			"github":  {"error"},
-			"message": {"The GitHub App installation was not approved."},
-		})
+		s.dashboardRedirect(w, r, url.Values{"github": {"error"}, "message": {"The GitHub App installation was not approved."}})
 		return
 	}
 	installationID, err := strconv.ParseInt(r.URL.Query().Get("installation_id"), 10, 64)
 	if err != nil || installationID == 0 {
-		s.dashboardRedirect(w, r, url.Values{
-			"github":  {"error"},
-			"message": {"GitHub did not return an installation. Click Install on one repository."},
-		})
+		s.dashboardRedirect(w, r, url.Values{"github": {"error"}, "message": {"GitHub did not return an installation."}})
 		return
 	}
-	cfg, err := s.Store.GetGitHub(u.ID)
-	if err != nil || !cfg.HasApp() {
-		s.dashboardRedirect(w, r, url.Values{
-			"github":  {"error"},
-			"message": {"Start from Connect with GitHub so Syncidian can create the app first."},
+	user, _ := s.authenticate(r)
+	if user == nil {
+		http.SetCookie(w, &http.Cookie{
+			Name:     "syncidian_pending_install",
+			Value:    strconv.FormatInt(installationID, 10),
+			Path:     "/",
+			HttpOnly: true,
+			SameSite: http.SameSiteLaxMode,
+			Secure:   r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https"),
+			MaxAge:   600,
 		})
+		http.Redirect(w, r, s.requestBase(r)+"/api/v1/auth/github/start?next=setup", http.StatusFound)
+		return
+	}
+	if user.IsAdmin {
+		http.Redirect(w, r, s.requestBase(r)+"/admin", http.StatusFound)
+		return
+	}
+	s.finishInstallation(w, r, user, installationID)
+}
+
+func (s *Server) finishInstallation(w http.ResponseWriter, r *http.Request, u *store.User, installationID int64) {
+	cfg, _ := s.Store.GetGitHub(u.ID)
+	if cfg == nil {
+		cfg = &store.GitHubConfig{UserID: u.ID, Branch: GitHubBranch}
+	}
+	if inst := s.instanceGitHubApp(); inst.Configured() {
+		cfg.AppID = inst.AppID
+		cfg.AppSlug = inst.Slug
+		cfg.AppPEM = inst.PEM
+		cfg.ClientID = inst.ClientID
+		cfg.ClientSecret = inst.ClientSecret
+	}
+	if !cfg.HasApp() {
+		s.dashboardRedirect(w, r, url.Values{"github": {"error"}, "message": {"GitHub App credentials are missing."}})
 		return
 	}
 	cfg.InstallationID = installationID
@@ -139,10 +217,7 @@ func (s *Server) handleGitHubAppSetup(w http.ResponseWriter, r *http.Request, u 
 		return
 	}
 	if len(repos) == 0 {
-		s.dashboardRedirect(w, r, url.Values{
-			"github":  {"error"},
-			"message": {"Install the GitHub App on at least one repository, and allow write access."},
-		})
+		s.dashboardRedirect(w, r, url.Values{"github": {"error"}, "message": {"Install the GitHub App on at least one repository, and allow write access."}})
 		return
 	}
 	if len(repos) == 1 {
@@ -161,6 +236,17 @@ func (s *Server) handleGitHubAppSetup(w http.ResponseWriter, r *http.Request, u 
 func (s *Server) handleGitHubAppWebhook(w http.ResponseWriter, r *http.Request) {
 	_, _ = io.Copy(io.Discard, io.LimitReader(r.Body, 1<<20))
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+func (s *Server) handleGitHubAppURLs(w http.ResponseWriter, r *http.Request) {
+	app := s.instanceGitHubApp()
+	writeJSON(w, http.StatusOK, map[string]any{
+		"urls":       githubapp.AppURLs(s.requestBase(r)),
+		"configured": app.Configured(),
+		"slug":       app.Slug,
+		"branch":     GitHubBranch,
+		"note":       "GitHub requires a webhook URL so it can ping the app. Syncidian accepts that ping even if you do not subscribe to extra events.",
+	})
 }
 
 func (s *Server) requestBase(r *http.Request) string {

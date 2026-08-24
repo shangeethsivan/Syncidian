@@ -51,26 +51,48 @@ type Repo struct {
 
 func NewManifest(base, name string) Manifest {
 	base = strings.TrimRight(base, "/")
+	urls := AppURLs(base)
 	return Manifest{
 		Name: name,
-		URL:  base,
+		URL:  urls.Homepage,
 		HookAttributes: map[string]any{
-			"url":    base + "/api/v1/github/app/webhook",
-			"active": false,
+			"url":    urls.Webhook,
+			"active": true,
 		},
-		RedirectURL: base + "/api/v1/github/app/callback",
+		RedirectURL: urls.ManifestCallback,
 		CallbackURLs: []string{
-			base + "/api/v1/github/app/callback",
+			urls.Callback,
 		},
-		SetupURL:      base + "/api/v1/github/app/setup",
-		Description:   "Backup this Syncidian vault. Contents: read and write. Single branch: main.",
+		SetupURL:      urls.Setup,
+		Description:   "Syncidian vault backup. Contents: read and write. Single branch: main.",
 		Public:        false,
-		DefaultEvents: []string{},
+		DefaultEvents: []string{"push"},
 		DefaultPermissions: map[string]string{
-			"contents": "write",
-			"metadata": "read",
+			"contents":        "write",
+			"metadata":        "read",
+			"email_addresses": "read",
 		},
-		RequestOAuthOnInstall: false,
+		RequestOAuthOnInstall: true,
+	}
+}
+
+// URLs are the GitHub App endpoints this Syncidian instance exposes.
+type URLs struct {
+	Homepage         string `json:"homepage"`
+	Callback         string `json:"callback"`
+	Setup            string `json:"setup"`
+	Webhook          string `json:"webhook"`
+	ManifestCallback string `json:"manifest_callback"`
+}
+
+func AppURLs(base string) URLs {
+	base = strings.TrimRight(base, "/")
+	return URLs{
+		Homepage:         base,
+		Callback:         base + "/api/v1/auth/github/callback",
+		Setup:            base + "/api/v1/github/app/setup",
+		Webhook:          base + "/api/v1/github/app/webhook",
+		ManifestCallback: base + "/api/v1/github/app/callback",
 	}
 }
 

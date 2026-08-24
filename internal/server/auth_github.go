@@ -1,0 +1,165 @@
+package server
+
+import (
+	"net/http"
+	"net/url"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/shangeethsivan/Syncidian/internal/githubapp"
+	"github.com/shangeethsivan/Syncidian/internal/store"
+)
+
+func (s *Server) instanceGitHubApp() *store.GitHubApp {
+	if s.Cfg.GitHubAppID != 0 && s.Cfg.GitHubAppPEM != "" && s.Cfg.GitHubClientID != "" {
+		return &store.GitHubApp{
+			AppID:        s.Cfg.GitHubAppID,
+			Slug:         s.Cfg.GitHubAppSlug,
+			PEM:          s.Cfg.GitHubAppPEM,
+			ClientID:     s.Cfg.GitHubClientID,
+			ClientSecret: s.Cfg.GitHubClientSecret,
+		}
+	}
+	a, _ := s.Store.GetInstanceGitHubApp()
+	if a == nil {
+		return &store.GitHubApp{}
+	}
+	return a
+}
+
+func (s *Server) handleGitHubAuthStart(w http.ResponseWriter, r *http.Request) {
+	n, _ := s.Store.UserCount()
+	if n == 0 {
+		http.Redirect(w, r, s.requestBase(r)+"/admin", http.StatusFound)
+		return
+	}
+	app := s.instanceGitHubApp()
+	if !app.Configured() {
+		s.dashboardRedirect(w, r, url.Values{
+			"github":  {"error"},
+			"message": {"This instance has no GitHub App yet. An admin must register it at /admin."},
+		})
+		return
+	}
+	state, err := randomHex(16)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "could not start GitHub login")
+		return
+	}
+	s.setGitHubStateCookie(w, r, state)
+	next := strings.TrimSpace(r.URL.Query().Get("next"))
+	if next == "" {
+		next = "app"
+	}
+	http.SetCookie(w, &http.Cookie{
+		Name:     "syncidian_github_next",
+		Value:    next,
+		Path:     "/",
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+		Secure:   r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https"),
+		MaxAge:   600,
+	})
+	urls := githubapp.AppURLs(s.requestBase(r))
+	q := url.Values{
+		"client_id":    {app.ClientID},
+		"redirect_uri": {urls.Callback},
+		"state":        {state},
+		"allow_signup": {"true"},
+	}
+	http.Redirect(w, r, "https://github.com/login/oauth/authorize?"+q.Encode(), http.StatusFound)
+}
+
+func (s *Server) handleGitHubAuthCallback(w http.ResponseWriter, r *http.Request) {
+	if msg := githubErr(r); msg != "" {
+		s.dashboardRedirect(w, r, url.Values{"github": {"error"}, "message": {msg}})
+		return
+	}
+	if !s.validGitHubState(r, r.URL.Query().Get("state")) {
+		s.dashboardRedirect(w, r, url.Values{
+			"github":  {"error"},
+			"message": {"GitHub sign-in expired. Try again."},
+		})
+		return
+	}
+	app := s.instanceGitHubApp()
+	if !app.Configured() {
+		s.dashboardRedirect(w, r, url.Values{"github": {"error"}, "message": {"GitHub App is not registered."}})
+		return
+	}
+	urls := githubapp.AppURLs(s.requestBase(r))
+	token, err := githubapp.ExchangeOAuth(app.ClientID, app.ClientSecret, r.URL.Query().Get("code"), urls.Callback)
+	if err != nil {
+		s.dashboardRedirect(w, r, url.Values{"github": {"error"}, "message": {err.Error()}})
+		return
+	}
+	ghUser, err := githubapp.GetUser(token)
+	if err != nil {
+		s.dashboardRedirect(w, r, url.Values{"github": {"error"}, "message": {err.Error()}})
+		return
+	}
+	u, err := s.upsertGitHubUser(ghUser)
+	if err != nil {
+		s.dashboardRedirect(w, r, url.Values{"github": {"error"}, "message": {err.Error()}})
+		return
+	}
+	if u.IsAdmin {
+		s.dashboardRedirect(w, r, url.Values{"github": {"error"}, "message": {"Admins sign in at /admin."}})
+		return
+	}
+	sess, err := s.Store.CreateSession(u.ID, 30*24*time.Hour)
+	if err != nil {
+		s.dashboardRedirect(w, r, url.Values{"github": {"error"}, "message": {err.Error()}})
+		return
+	}
+	setSessionCookie(w, sess.ID, r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https"))
+	next := "app"
+	if c, err := r.Cookie("syncidian_github_next"); err == nil && c.Value != "" {
+		next = c.Value
+	}
+	if c, err := r.Cookie("syncidian_pending_install"); err == nil && c.Value != "" {
+		if id, e := strconv.ParseInt(c.Value, 10, 64); e == nil && id != 0 {
+			s.finishInstallation(w, r, u, id)
+			return
+		}
+	}
+	if next == "install" || next == "setup" {
+		if app.Slug != "" {
+			http.Redirect(w, r, "https://github.com/apps/"+url.PathEscape(app.Slug)+"/installations/new", http.StatusFound)
+			return
+		}
+	}
+	s.dashboardRedirect(w, r, url.Values{"github": {"connected"}})
+}
+
+func (s *Server) upsertGitHubUser(gh *githubapp.User) (*store.User, error) {
+	if existing, _ := s.Store.GetUserByGitHubID(gh.ID); existing != nil {
+		_ = s.Store.SetUserGitHub(existing.ID, gh.ID, gh.Email)
+		existing.Email = gh.Email
+		return existing, nil
+	}
+	if gh.Email != "" {
+		if existing, _ := s.Store.GetUserByEmail(gh.Email); existing != nil && !existing.IsAdmin {
+			_ = s.Store.SetUserGitHub(existing.ID, gh.ID, gh.Email)
+			existing.GitHubID = gh.ID
+			return existing, nil
+		}
+	}
+	n, err := s.Store.UserCount()
+	if err != nil {
+		return nil, err
+	}
+	if n == 0 {
+		return nil, errAdminRequired()
+	}
+	return s.Store.CreateGitHubUser(gh.Login, gh.Email, gh.ID)
+}
+
+func errAdminRequired() error {
+	return errString("Create the first admin at /admin before signing in with GitHub.")
+}
+
+type errString string
+
+func (e errString) Error() string { return string(e) }

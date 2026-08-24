@@ -22,8 +22,15 @@ func (s *Server) handleGetGitHub(w http.ResponseWriter, r *http.Request, u *stor
 		return
 	}
 	out := map[string]any{
-		"configured": false,
-		"branch":     GitHubBranch,
+		"configured":   false,
+		"branch":       GitHubBranch,
+		"instance_app": false,
+	}
+	if inst := s.instanceGitHubApp(); inst.Configured() {
+		out["instance_app"] = true
+		if inst.Slug != "" {
+			out["install_url"] = "https://github.com/apps/" + inst.Slug + "/installations/new"
+		}
 	}
 	if cfg == nil {
 		writeJSON(w, http.StatusOK, out)
@@ -36,7 +43,7 @@ func (s *Server) handleGetGitHub(w http.ResponseWriter, r *http.Request, u *stor
 	out["last_push"] = cfg.LastPush
 	out["last_pull"] = cfg.LastPull
 	out["last_error"] = cfg.LastError
-	if cfg.AppSlug != "" {
+	if _, ok := out["install_url"]; !ok && cfg.AppSlug != "" {
 		out["install_url"] = "https://github.com/apps/" + cfg.AppSlug + "/installations/new"
 	}
 	if cfg.Configured() {
@@ -151,6 +158,16 @@ func (s *Server) reindexVault(userID string) error {
 }
 
 func (s *Server) gitAccessToken(cfg *store.GitHubConfig) (string, error) {
+	if cfg == nil {
+		return "", fmt.Errorf("GitHub App is not connected")
+	}
+	if inst := s.instanceGitHubApp(); inst.Configured() && cfg.AppPEM == "" {
+		cfg.AppID = inst.AppID
+		cfg.AppPEM = inst.PEM
+		cfg.AppSlug = inst.Slug
+		cfg.ClientID = inst.ClientID
+		cfg.ClientSecret = inst.ClientSecret
+	}
 	if !cfg.HasApp() || cfg.InstallationID == 0 {
 		return "", fmt.Errorf("GitHub App is not connected")
 	}

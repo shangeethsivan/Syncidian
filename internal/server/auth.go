@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/shangeethsivan/Syncidian/internal/githubapp"
 	"github.com/shangeethsivan/Syncidian/internal/store"
 )
 
@@ -16,10 +17,24 @@ func (s *Server) handleSetupStatus(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
-		"needs_setup": n == 0,
-		"public_url":  s.Cfg.PublicURL,
-	})
+	app := s.instanceGitHubApp()
+	urls := githubapp.AppURLs(s.requestBase(r))
+	out := map[string]any{
+		"needs_setup":  n == 0,
+		"public_url":   s.Cfg.PublicURL,
+		"github_login": app.Configured(),
+		"github_app": map[string]any{
+			"configured": app.Configured(),
+			"slug":       "",
+			"urls":       urls,
+		},
+	}
+	if app.Configured() {
+		gh, _ := out["github_app"].(map[string]any)
+		gh["slug"] = app.Slug
+		out["github_app"] = gh
+	}
+	writeJSON(w, http.StatusOK, out)
 }
 
 func (s *Server) handleSetup(w http.ResponseWriter, r *http.Request) {
@@ -75,7 +90,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	u, err := s.Store.GetUserByUsername(strings.TrimSpace(req.Username))
-	if err != nil || u == nil || !checkPassword(u.PasswordHash, req.Password) {
+	if err != nil || u == nil || u.PasswordHash == "" || !checkPassword(u.PasswordHash, req.Password) {
 		writeError(w, http.StatusUnauthorized, "invalid credentials")
 		return
 	}
@@ -86,6 +101,61 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 	setSessionCookie(w, sess.ID, r.TLS != nil)
 	writeJSON(w, http.StatusOK, map[string]any{"user": publicUser(u)})
+}
+
+func (s *Server) handleSignup(w http.ResponseWriter, r *http.Request) {
+	n, err := s.Store.UserCount()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if n == 0 {
+		writeError(w, http.StatusBadRequest, "Create the first admin at /admin before signing up.")
+		return
+	}
+	var req struct {
+		Username string `json:"username"`
+		Email    string `json:"email"`
+		Password string `json:"password"`
+	}
+	if err := readJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid json")
+		return
+	}
+	req.Username = strings.TrimSpace(req.Username)
+	req.Email = strings.TrimSpace(strings.ToLower(req.Email))
+	if req.Username == "" || len(req.Password) < 8 {
+		writeError(w, http.StatusBadRequest, "username required and password must be at least 8 characters")
+		return
+	}
+	if req.Email != "" {
+		if existing, _ := s.Store.GetUserByEmail(req.Email); existing != nil {
+			writeError(w, http.StatusBadRequest, "email already in use")
+			return
+		}
+	}
+	hash, err := hashPassword(req.Password)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "could not hash password")
+		return
+	}
+	u, err := s.Store.CreateUser(req.Username, hash, false)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if req.Email != "" {
+		_ = s.Store.SetUserGitHub(u.ID, 0, req.Email)
+		u.Email = req.Email
+	}
+	sess, err := s.Store.CreateSession(u.ID, 30*24*time.Hour)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	setSessionCookie(w, sess.ID, r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https"))
+	_ = s.Store.AddActivity(store.Activity{UserID: u.ID, Action: "signup", Detail: u.Username})
+	writeJSON(w, http.StatusCreated, map[string]any{"user": publicUser(u)})
 }
 
 func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request, _ *store.User) {

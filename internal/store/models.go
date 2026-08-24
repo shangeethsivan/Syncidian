@@ -7,6 +7,8 @@ type User struct {
 	Username     string
 	PasswordHash string
 	IsAdmin      bool
+	Email        string
+	GitHubID     int64
 	CreatedAt    time.Time
 }
 
@@ -99,6 +101,19 @@ func (c *GitHubConfig) HasApp() bool {
 
 func (c *GitHubConfig) Configured() bool {
 	return c.HasApp() && c.InstallationID != 0 && c.Repo != ""
+}
+
+type GitHubApp struct {
+	AppID        int64
+	Slug         string
+	PEM          string
+	ClientID     string
+	ClientSecret string
+	UpdatedAt    time.Time
+}
+
+func (a *GitHubApp) Configured() bool {
+	return a != nil && a.AppID != 0 && a.PEM != "" && a.ClientID != "" && a.ClientSecret != ""
 }
 
 type MCPPermissions struct {

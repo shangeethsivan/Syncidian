@@ -49,6 +49,8 @@ func (s *Store) migrate() error {
   username TEXT UNIQUE NOT NULL,
   password_hash TEXT NOT NULL,
   is_admin INTEGER NOT NULL DEFAULT 0,
+  email TEXT NOT NULL DEFAULT '',
+  github_id INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL
 )`,
 		`CREATE TABLE IF NOT EXISTS tokens (
@@ -128,6 +130,15 @@ func (s *Store) migrate() error {
   last_error TEXT NOT NULL DEFAULT '',
   updated_at TEXT NOT NULL
 )`,
+		`CREATE TABLE IF NOT EXISTS instance_github_app (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  app_id INTEGER NOT NULL,
+  slug TEXT NOT NULL,
+  pem TEXT NOT NULL,
+  client_id TEXT NOT NULL,
+  client_secret TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+)`,
 		`CREATE TABLE IF NOT EXISTS mcp_permissions (
   user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
   search INTEGER NOT NULL DEFAULT 1,
@@ -152,6 +163,8 @@ func (s *Store) migrate() error {
 		`ALTER TABLE github_config ADD COLUMN client_secret TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE github_config ADD COLUMN installation_id INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE github_config ADD COLUMN install_token_expires TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE users ADD COLUMN email TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE users ADD COLUMN github_id INTEGER NOT NULL DEFAULT 0`,
 	} {
 		if _, err := s.db.Exec(stmt); err != nil && !strings.Contains(strings.ToLower(err.Error()), "duplicate column") {
 			return fmt.Errorf("migrate: %w", err)
@@ -209,8 +222,8 @@ func (s *Store) CreateUser(username, passwordHash string, admin bool) (*User, er
 		return nil, fmt.Errorf("username is required")
 	}
 	_, err := s.db.Exec(
-		`INSERT INTO users (id, username, password_hash, is_admin, created_at) VALUES (?, ?, ?, ?, ?)`,
-		u.ID, u.Username, u.PasswordHash, boolToInt(admin), now(),
+		`INSERT INTO users (id, username, password_hash, is_admin, email, github_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		u.ID, u.Username, u.PasswordHash, boolToInt(admin), u.Email, u.GitHubID, now(),
 	)
 	if err != nil {
 		if strings.Contains(strings.ToLower(err.Error()), "unique") {
@@ -225,16 +238,90 @@ func (s *Store) CreateUser(username, passwordHash string, admin bool) (*User, er
 	return u, nil
 }
 
+func (s *Store) CreateGitHubUser(login, email string, githubID int64) (*User, error) {
+	login = strings.TrimSpace(login)
+	email = strings.TrimSpace(email)
+	if login == "" || githubID == 0 {
+		return nil, fmt.Errorf("github identity is required")
+	}
+	username := login
+	if existing, _ := s.GetUserByUsername(username); existing != nil {
+		username = fmt.Sprintf("%s-%d", login, githubID%100000)
+	}
+	u, err := s.CreateUser(username, "", false)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.SetUserGitHub(u.ID, githubID, email); err != nil {
+		return nil, err
+	}
+	u.GitHubID = githubID
+	u.Email = email
+	return u, nil
+}
+
+func (s *Store) SetUserGitHub(userID string, githubID int64, email string) error {
+	email = strings.TrimSpace(strings.ToLower(email))
+	_, err := s.db.Exec(`UPDATE users SET github_id = ?, email = CASE WHEN ? != '' THEN ? ELSE email END WHERE id = ?`,
+		githubID, email, email, userID)
+	return err
+}
+
+func (s *Store) GetInstanceGitHubApp() (*GitHubApp, error) {
+	a := &GitHubApp{}
+	var updated string
+	err := s.db.QueryRow(`SELECT app_id, slug, pem, client_id, client_secret, updated_at FROM instance_github_app WHERE id = 1`).
+		Scan(&a.AppID, &a.Slug, &a.PEM, &a.ClientID, &a.ClientSecret, &updated)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	a.UpdatedAt = parseTime(updated)
+	return a, nil
+}
+
+func (s *Store) SetInstanceGitHubApp(a GitHubApp) error {
+	_, err := s.db.Exec(`
+INSERT INTO instance_github_app (id, app_id, slug, pem, client_id, client_secret, updated_at)
+VALUES (1, ?, ?, ?, ?, ?, ?)
+ON CONFLICT(id) DO UPDATE SET
+  app_id = excluded.app_id,
+  slug = excluded.slug,
+  pem = excluded.pem,
+  client_id = excluded.client_id,
+  client_secret = excluded.client_secret,
+  updated_at = excluded.updated_at
+`, a.AppID, a.Slug, a.PEM, a.ClientID, a.ClientSecret, now())
+	return err
+}
+
 func (s *Store) GetUser(id string) (*User, error) {
-	return s.scanUser(s.db.QueryRow(`SELECT id, username, password_hash, is_admin, created_at FROM users WHERE id = ?`, id))
+	return s.scanUser(s.db.QueryRow(`SELECT id, username, password_hash, is_admin, email, github_id, created_at FROM users WHERE id = ?`, id))
 }
 
 func (s *Store) GetUserByUsername(username string) (*User, error) {
-	return s.scanUser(s.db.QueryRow(`SELECT id, username, password_hash, is_admin, created_at FROM users WHERE username = ?`, username))
+	return s.scanUser(s.db.QueryRow(`SELECT id, username, password_hash, is_admin, email, github_id, created_at FROM users WHERE username = ?`, username))
+}
+
+func (s *Store) GetUserByGitHubID(githubID int64) (*User, error) {
+	if githubID == 0 {
+		return nil, nil
+	}
+	return s.scanUser(s.db.QueryRow(`SELECT id, username, password_hash, is_admin, email, github_id, created_at FROM users WHERE github_id = ?`, githubID))
+}
+
+func (s *Store) GetUserByEmail(email string) (*User, error) {
+	email = strings.TrimSpace(strings.ToLower(email))
+	if email == "" {
+		return nil, nil
+	}
+	return s.scanUser(s.db.QueryRow(`SELECT id, username, password_hash, is_admin, email, github_id, created_at FROM users WHERE lower(email) = ?`, email))
 }
 
 func (s *Store) ListUsers() ([]User, error) {
-	rows, err := s.db.Query(`SELECT id, username, password_hash, is_admin, created_at FROM users ORDER BY created_at`)
+	rows, err := s.db.Query(`SELECT id, username, password_hash, is_admin, email, github_id, created_at FROM users ORDER BY created_at`)
 	if err != nil {
 		return nil, err
 	}
@@ -276,7 +363,7 @@ func (s *Store) scanUser(row *sql.Row) (*User, error) {
 	u := &User{}
 	var admin int
 	var created string
-	err := row.Scan(&u.ID, &u.Username, &u.PasswordHash, &admin, &created)
+	err := row.Scan(&u.ID, &u.Username, &u.PasswordHash, &admin, &u.Email, &u.GitHubID, &created)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -296,7 +383,7 @@ func scanUserRow(row rowScanner) (*User, error) {
 	u := &User{}
 	var admin int
 	var created string
-	if err := row.Scan(&u.ID, &u.Username, &u.PasswordHash, &admin, &created); err != nil {
+	if err := row.Scan(&u.ID, &u.Username, &u.PasswordHash, &admin, &u.Email, &u.GitHubID, &created); err != nil {
 		return nil, err
 	}
 	u.IsAdmin = admin == 1

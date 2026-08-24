@@ -58,7 +58,10 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/setup", s.handleSetupStatus)
 	mux.HandleFunc("POST /api/v1/setup", s.handleSetup)
 	mux.HandleFunc("POST /api/v1/auth/login", s.handleLogin)
+	mux.HandleFunc("POST /api/v1/auth/signup", s.handleSignup)
 	mux.HandleFunc("POST /api/v1/auth/logout", s.authed(s.handleLogout))
+	mux.HandleFunc("GET /api/v1/auth/github/start", s.handleGitHubAuthStart)
+	mux.HandleFunc("GET /api/v1/auth/github/callback", s.handleGitHubAuthCallback)
 	mux.HandleFunc("GET /api/v1/me", s.authed(s.handleMe))
 	mux.HandleFunc("GET /api/v1/stats", s.vaultAuthed(s.handleStats))
 
@@ -88,9 +91,13 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("DELETE /api/v1/github", s.vaultAuthed(s.handleDeleteGitHub))
 	mux.HandleFunc("POST /api/v1/github/sync", s.vaultAuthed(s.handleGitHubSyncNow))
 	mux.HandleFunc("POST /api/v1/github/app/start", s.vaultAuthed(s.handleGitHubAppStart))
-	mux.HandleFunc("GET /api/v1/github/app/callback", s.githubBrowserAuthed(s.handleGitHubAppCallback))
-	mux.HandleFunc("GET /api/v1/github/app/setup", s.githubBrowserAuthed(s.handleGitHubAppSetup))
+	mux.HandleFunc("POST /api/v1/github/app/register/start", s.adminAuthed(s.handleGitHubAppRegisterStart))
+	mux.HandleFunc("POST /api/v1/github/app/register", s.adminAuthed(s.handleGitHubAppRegisterSave))
+	mux.HandleFunc("GET /api/v1/github/app/callback", s.handleGitHubAppCallback)
+	mux.HandleFunc("GET /api/v1/github/app/setup", s.handleGitHubAppSetup)
 	mux.HandleFunc("POST /api/v1/github/app/webhook", s.handleGitHubAppWebhook)
+	mux.HandleFunc("GET /api/v1/github/app/webhook", s.handleGitHubAppWebhook)
+	mux.HandleFunc("GET /api/v1/github/app/urls", s.handleGitHubAppURLs)
 
 	mux.HandleFunc("GET /api/v1/mcp", s.vaultAuthed(s.handleGetMCP))
 	mux.HandleFunc("POST /api/v1/mcp", s.vaultAuthed(s.handleSetMCP))
@@ -106,9 +113,12 @@ func (s *Server) Handler() http.Handler {
 	} else {
 		fileServer := http.FileServer(http.FS(static))
 		mux.Handle("GET /assets/", fileServer)
-		mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
+		serveIndex := func(w http.ResponseWriter, r *http.Request) {
 			http.ServeFileFS(w, r, static, "index.html")
-		})
+		}
+		mux.HandleFunc("GET /{$}", serveIndex)
+		mux.HandleFunc("GET /admin", serveIndex)
+		mux.HandleFunc("GET /admin/{$}", serveIndex)
 		mux.HandleFunc("GET /favicon.ico", func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusNoContent)
 		})
