@@ -201,6 +201,10 @@ func TestDashboardServed(t *testing.T) {
 		`Connect your GitHub repository`,
 		`The landing page always asks you to authenticate`,
 		`one GitHub repository`,
+		`Connect with GitHub`,
+		`id="gh-connect-app"`,
+		`only support one single branch`,
+		`Connect to GitHub`,
 	} {
 		if !bytes.Contains(b, []byte(needle)) {
 			t.Fatalf("dashboard missing required markup %q", needle)
@@ -212,6 +216,9 @@ func TestDashboardServed(t *testing.T) {
 		`id="auth-btn" type="button" disabled`,
 		`syncidian_pending_github`,
 		`required before you can create an admin or sign in`,
+		`id="gh-branch"`,
+		`id="gh-token"`,
+		`Personal access token (repo scope)`,
 	} {
 		if bytes.Contains(b, []byte(forbidden)) {
 			t.Fatalf("dashboard still gates login behind GitHub setup: %q", forbidden)
@@ -261,6 +268,11 @@ func TestAdminDoesNotNeedGitHubAndCannotSeePrivateUserData(t *testing.T) {
 	}, adminCookies, "")
 	if res.StatusCode != http.StatusForbidden {
 		t.Fatalf("admin POST github: want 403, got %d %v", res.StatusCode, m)
+	}
+
+	res, m = doJSON(t, http.MethodPost, hs.URL+"/api/v1/github/app/start", map[string]any{}, adminCookies, "")
+	if res.StatusCode != http.StatusForbidden {
+		t.Fatalf("admin POST github app start: want 403, got %d %v", res.StatusCode, m)
 	}
 
 	bobCookies := createAndLoginUser(t, hs, adminCookies, "bob")
@@ -320,19 +332,25 @@ func TestGitHubIsPerUserNotPerServer(t *testing.T) {
 	if res.StatusCode != 200 || m["configured"] != false {
 		t.Fatalf("bob should start unconfigured: %d %v", res.StatusCode, m)
 	}
+	if m["branch"] != "main" {
+		t.Fatalf("unconfigured github should lock branch to main, got %v", m)
+	}
 
 	res, m = doJSON(t, http.MethodPost, hs.URL+"/api/v1/github", map[string]any{
 		"repo": "not-a-repo", "token": "ghp_test",
 	}, bob, "")
 	if res.StatusCode != http.StatusBadRequest {
-		t.Fatalf("expected invalid repo to fail, got %d %v", res.StatusCode, m)
+		t.Fatalf("expected PAT to be rejected, got %d %v", res.StatusCode, m)
+	}
+	if errMsg, _ := m["error"].(string); !strings.Contains(errMsg, "Personal access tokens are not supported") {
+		t.Fatalf("expected PAT rejection message, got %v", m)
 	}
 
 	res, m = doJSON(t, http.MethodPost, hs.URL+"/api/v1/github", map[string]any{
-		"repo": "bob/vault", "token": "",
+		"repo": "bob/vault",
 	}, bob, "")
 	if res.StatusCode != http.StatusBadRequest {
-		t.Fatalf("expected missing token to fail, got %d %v", res.StatusCode, m)
+		t.Fatalf("expected missing GitHub App to fail, got %d %v", res.StatusCode, m)
 	}
 
 	res, m = doJSON(t, http.MethodGet, hs.URL+"/api/v1/github", nil, cara, "")
@@ -395,5 +413,57 @@ func TestVaultIsolation(t *testing.T) {
 	}
 	if !strings.Contains(path, u.ID) {
 		t.Fatal(path)
+	}
+}
+
+func TestGitHubAppStartManifest(t *testing.T) {
+	hs, done := newTestServer(t)
+	defer done()
+
+	res, m := doJSON(t, http.MethodPost, hs.URL+"/api/v1/github/app/start", map[string]any{}, nil, "")
+	if res.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("unauthenticated app start: want 401, got %d %v", res.StatusCode, m)
+	}
+
+	adminCookies := setupAdmin(t, hs)
+	bob := createAndLoginUser(t, hs, adminCookies, "bob")
+	res, m = doJSON(t, http.MethodPost, hs.URL+"/api/v1/github/app/start", map[string]any{}, bob, "")
+	if res.StatusCode != 200 {
+		t.Fatalf("app start: %d %v", res.StatusCode, m)
+	}
+	if m["branch"] != "main" {
+		t.Fatalf("app start should lock to main, got %v", m)
+	}
+	githubURL, _ := m["github_url"].(string)
+	if !strings.Contains(githubURL, "https://github.com/settings/apps/new?state=") {
+		t.Fatalf("github_url: %v", m)
+	}
+	manifest, _ := m["manifest"].(map[string]any)
+	if manifest == nil {
+		t.Fatalf("missing manifest: %v", m)
+	}
+	perms, _ := manifest["default_permissions"].(map[string]any)
+	if perms["contents"] != "write" || perms["metadata"] != "read" {
+		t.Fatalf("permissions: %v", perms)
+	}
+	if redirect, _ := manifest["redirect_url"].(string); !strings.Contains(redirect, "/api/v1/github/app/callback") {
+		t.Fatalf("redirect_url: %v", manifest)
+	}
+	if setup, _ := manifest["setup_url"].(string); !strings.Contains(setup, "/api/v1/github/app/setup") {
+		t.Fatalf("setup_url: %v", manifest)
+	}
+	gotCookie := false
+	for _, c := range res.Cookies() {
+		if c.Name == "syncidian_github_state" && c.Value != "" {
+			gotCookie = true
+		}
+	}
+	if !gotCookie {
+		t.Fatal("expected GitHub state cookie")
+	}
+
+	res, m = doJSON(t, http.MethodPost, hs.URL+"/api/v1/github/app/webhook", map[string]any{"zen": "ok"}, nil, "")
+	if res.StatusCode != 200 {
+		t.Fatalf("webhook should be public: %d %v", res.StatusCode, m)
 	}
 }

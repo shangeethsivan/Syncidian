@@ -113,9 +113,16 @@ func (s *Store) migrate() error {
 )`,
 		`CREATE TABLE IF NOT EXISTS github_config (
   user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
-  token TEXT NOT NULL,
-  repo TEXT NOT NULL,
+  token TEXT NOT NULL DEFAULT '',
+  repo TEXT NOT NULL DEFAULT '',
   branch TEXT NOT NULL DEFAULT 'main',
+  app_id INTEGER NOT NULL DEFAULT 0,
+  app_slug TEXT NOT NULL DEFAULT '',
+  app_pem TEXT NOT NULL DEFAULT '',
+  client_id TEXT NOT NULL DEFAULT '',
+  client_secret TEXT NOT NULL DEFAULT '',
+  installation_id INTEGER NOT NULL DEFAULT 0,
+  install_token_expires TEXT NOT NULL DEFAULT '',
   last_push TEXT,
   last_pull TEXT,
   last_error TEXT NOT NULL DEFAULT '',
@@ -134,6 +141,19 @@ func (s *Store) migrate() error {
 	}
 	for _, stmt := range stmts {
 		if _, err := s.db.Exec(stmt); err != nil {
+			return fmt.Errorf("migrate: %w", err)
+		}
+	}
+	for _, stmt := range []string{
+		`ALTER TABLE github_config ADD COLUMN app_id INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE github_config ADD COLUMN app_slug TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE github_config ADD COLUMN app_pem TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE github_config ADD COLUMN client_id TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE github_config ADD COLUMN client_secret TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE github_config ADD COLUMN installation_id INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE github_config ADD COLUMN install_token_expires TEXT NOT NULL DEFAULT ''`,
+	} {
+		if _, err := s.db.Exec(stmt); err != nil && !strings.Contains(strings.ToLower(err.Error()), "duplicate column") {
 			return fmt.Errorf("migrate: %w", err)
 		}
 	}
@@ -629,37 +649,68 @@ func (s *Store) ListActivity(userID string, limit int) ([]Activity, error) {
 }
 
 func (s *Store) SetGitHub(cfg GitHubConfig) error {
+	cfg.Branch = "main"
+	expires := ""
+	if !cfg.InstallTokenExpires.IsZero() {
+		expires = cfg.InstallTokenExpires.UTC().Format(time.RFC3339)
+	}
 	_, err := s.db.Exec(`
-INSERT INTO github_config (user_id, token, repo, branch, last_push, last_pull, last_error, updated_at)
-VALUES (?, ?, ?, ?, NULL, NULL, '', ?)
+INSERT INTO github_config (
+  user_id, token, repo, branch, app_id, app_slug, app_pem, client_id, client_secret,
+  installation_id, install_token_expires, last_push, last_pull, last_error, updated_at
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, '', ?)
 ON CONFLICT(user_id) DO UPDATE SET
   token = excluded.token,
   repo = excluded.repo,
   branch = excluded.branch,
+  app_id = excluded.app_id,
+  app_slug = excluded.app_slug,
+  app_pem = excluded.app_pem,
+  client_id = excluded.client_id,
+  client_secret = excluded.client_secret,
+  installation_id = excluded.installation_id,
+  install_token_expires = excluded.install_token_expires,
   last_error = '',
   updated_at = excluded.updated_at
-`, cfg.UserID, cfg.Token, cfg.Repo, cfg.Branch, now())
+`, cfg.UserID, cfg.Token, cfg.Repo, cfg.Branch, cfg.AppID, cfg.AppSlug, cfg.AppPEM, cfg.ClientID, cfg.ClientSecret,
+		cfg.InstallationID, expires, now())
 	return err
 }
 
 func (s *Store) GetGitHub(userID string) (*GitHubConfig, error) {
 	c := &GitHubConfig{}
 	var lastPush, lastPull sql.NullString
-	var updated string
+	var updated, expires string
 	err := s.db.QueryRow(
-		`SELECT user_id, token, repo, branch, last_push, last_pull, last_error, updated_at FROM github_config WHERE user_id = ?`,
+		`SELECT user_id, token, repo, branch, app_id, app_slug, app_pem, client_id, client_secret,
+		        installation_id, install_token_expires, last_push, last_pull, last_error, updated_at
+		 FROM github_config WHERE user_id = ?`,
 		userID,
-	).Scan(&c.UserID, &c.Token, &c.Repo, &c.Branch, &lastPush, &lastPull, &c.LastError, &updated)
+	).Scan(&c.UserID, &c.Token, &c.Repo, &c.Branch, &c.AppID, &c.AppSlug, &c.AppPEM, &c.ClientID, &c.ClientSecret,
+		&c.InstallationID, &expires, &lastPush, &lastPull, &c.LastError, &updated)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, err
 	}
+	c.InstallTokenExpires = parseTime(expires)
 	c.LastPush = parseTimePtr(lastPush)
 	c.LastPull = parseTimePtr(lastPull)
 	c.UpdatedAt = parseTime(updated)
 	return c, nil
+}
+
+func (s *Store) UpdateGitHubInstallToken(userID, token string, expires time.Time) error {
+	exp := ""
+	if !expires.IsZero() {
+		exp = expires.UTC().Format(time.RFC3339)
+	}
+	_, err := s.db.Exec(
+		`UPDATE github_config SET token = ?, install_token_expires = ?, updated_at = ? WHERE user_id = ?`,
+		token, exp, now(), userID,
+	)
+	return err
 }
 
 func (s *Store) DeleteGitHub(userID string) error {

@@ -76,14 +76,29 @@ type Activity struct {
 }
 
 type GitHubConfig struct {
-	UserID    string
-	Token     string
-	Repo      string
-	Branch    string
-	LastPush  *time.Time
-	LastPull  *time.Time
-	LastError string
-	UpdatedAt time.Time
+	UserID              string
+	Token               string // cached GitHub App installation token, never a user PAT
+	Repo                string
+	Branch              string
+	AppID               int64
+	AppSlug             string
+	AppPEM              string
+	ClientID            string
+	ClientSecret        string
+	InstallationID      int64
+	InstallTokenExpires time.Time
+	LastPush            *time.Time
+	LastPull            *time.Time
+	LastError           string
+	UpdatedAt           time.Time
+}
+
+func (c *GitHubConfig) HasApp() bool {
+	return c != nil && c.AppID != 0 && c.AppPEM != ""
+}
+
+func (c *GitHubConfig) Configured() bool {
+	return c.HasApp() && c.InstallationID != 0 && c.Repo != ""
 }
 
 type MCPPermissions struct {

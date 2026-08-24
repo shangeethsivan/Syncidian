@@ -41,6 +41,7 @@ Document and implement these unless a later change explicitly replaces them — 
 3. **Admin login does not need repo sync.** Admins manage users. Vault/GitHub/token/device/activity/MCP routes use `vaultAuthed` and return 403 for admins.
 4. **Admin user list is public fields only:** `username`, `is_admin`, `created_at` (no `id`, vault, tokens, or GitHub).
 5. Device sync works without GitHub. GitHub is optional durable backup.
+6. **GitHub App only, main branch only.** Backup is authorized by installing a GitHub App with Contents read and write. Personal access tokens and deploy keys are not supported. Syncidian always uses `main`.
 
 ## How to update diagrams
 

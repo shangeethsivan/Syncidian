@@ -95,7 +95,7 @@ Repeat the plugin copy + token on each device (Windows, Mac, Android, iOS). Crea
 
 ## 3. Optional: GitHub backup (after login, per user)
 
-Sign in first as a regular user (not admin). Then open dashboard → **GitHub** and paste a personal access token with `repo` scope and `owner/name`. That repository is bound to **your user only** — one repo per account. Admins do not need this step and cannot see another user's repo, token, or vault. The plugin never needs GitHub credentials. Until that user connects GitHub, their devices still sync through the server.
+Sign in first as a regular user (not admin). Then open dashboard → **GitHub** and click **Connect with GitHub**. That creates a GitHub App for your account with Contents read and write, then you install it on one repository. Syncidian always uses the **main** branch — other branches are not supported. Personal access tokens and deploy keys are not used. That repository is bound to **your user only** — one repo per account. Admins do not need this step and cannot see another user's repo or GitHub App credentials. The plugin never needs GitHub credentials. Until that user connects GitHub, their devices still sync through the server.
 
 ## 4. Optional: MCP / AI
 
@@ -186,7 +186,7 @@ flowchart TD
   Role -->|admin| AdminHome["Admin dashboard"]
   AdminHome --> Users["Create / list users<br/>username and role only"]
   AdminHome --> Own["Optional: admin's own vault, tokens, GitHub"]
-  Users --> Note["Admin never sees another user's<br/>vault, tokens, activity, or GitHub PAT"]
+  Users --> Note["Admin never sees another user's<br/>vault, tokens, activity, or GitHub App"]
 
   Role -->|user| UserHome["User dashboard"]
   UserHome --> GH["Optional: connect one GitHub repo<br/>owned by this user"]
@@ -345,15 +345,18 @@ Rules:
 
 * **Authenticate first.** Create the first admin or sign in.
 * **One repository per user.** `github_config` is keyed by `user_id`.
-* **Admin does not need repo sync.** Admins only manage users (username + role). They do not see vaults, tokens, activity, or GitHub PATs.
+* **GitHub App only.** Connect with GitHub, install on a repository, Contents read and write. No personal access tokens and no deploy keys.
+* **Main branch only.** Syncidian always uses `main`.
+* **Admin does not need repo sync.** Admins only manage users (username + role). They do not see vaults, tokens, activity, or GitHub App credentials.
 * **Optional backup.** Devices still sync through the server if a user has not connected GitHub.
 
 ```mermaid
 flowchart LR
   User["Signed-in user"] --> Dash["Dashboard → GitHub"]
-  Dash --> PAT["User's GitHub PAT + owner/name"]
-  PAT --> Map["Store github_config for that user_id"]
-  Map --> Git["Server git commit / push"]
+  Dash --> App["Connect with GitHub App"]
+  App --> Install["Install on one repo · Contents read/write"]
+  Install --> Map["Store installation_id + repo for that user_id"]
+  Map --> Git["Server git commit / push on main"]
   Git --> Repo["That user's private repo"]
 ```
 
@@ -899,7 +902,7 @@ Client-to-server communication should use encrypted channels.
 
 ### GitHub credentials stay on the server, per user
 
-Obsidian clients never need direct GitHub credentials. Each user stores at most one PAT and repository. Those values are never returned to admins.
+Obsidian clients never need direct GitHub credentials. Each user connects at most one GitHub App installation and repository. Those values are never returned to admins.
 
 ### User isolation
 

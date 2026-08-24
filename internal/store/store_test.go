@@ -49,12 +49,21 @@ func TestOneGitHubRepoPerUser(t *testing.T) {
 	if err := st.SetGitHub(GitHubConfig{UserID: bob.ID, Token: "tok-a", Repo: "bob/first", Branch: "main"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := st.SetGitHub(GitHubConfig{UserID: bob.ID, Token: "tok-b", Repo: "bob/second", Branch: "main"}); err != nil {
+	if err := st.SetGitHub(GitHubConfig{
+		UserID: bob.ID, Token: "ghs_cached", Repo: "bob/second", Branch: "develop",
+		AppID: 42, AppSlug: "syncidian-bob", AppPEM: "pem", InstallationID: 99,
+	}); err != nil {
 		t.Fatal(err)
 	}
 	got, err := st.GetGitHub(bob.ID)
-	if err != nil || got == nil || got.Repo != "bob/second" || got.Token != "tok-b" {
+	if err != nil || got == nil || got.Repo != "bob/second" || got.AppID != 42 || got.InstallationID != 99 {
 		t.Fatalf("bob should have one replaced repo: %+v %v", got, err)
+	}
+	if got.Branch != "main" {
+		t.Fatalf("store should default branch to main, got %q", got.Branch)
+	}
+	if !got.Configured() {
+		t.Fatalf("app install should count as configured: %+v", got)
 	}
 	if other, err := st.GetGitHub(ada.ID); err != nil || other != nil {
 		t.Fatalf("admin must not inherit a repo: %+v %v", other, err)

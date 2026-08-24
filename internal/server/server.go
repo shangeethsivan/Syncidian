@@ -87,6 +87,10 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/v1/github", s.vaultAuthed(s.handleSetGitHub))
 	mux.HandleFunc("DELETE /api/v1/github", s.vaultAuthed(s.handleDeleteGitHub))
 	mux.HandleFunc("POST /api/v1/github/sync", s.vaultAuthed(s.handleGitHubSyncNow))
+	mux.HandleFunc("POST /api/v1/github/app/start", s.vaultAuthed(s.handleGitHubAppStart))
+	mux.HandleFunc("GET /api/v1/github/app/callback", s.githubBrowserAuthed(s.handleGitHubAppCallback))
+	mux.HandleFunc("GET /api/v1/github/app/setup", s.githubBrowserAuthed(s.handleGitHubAppSetup))
+	mux.HandleFunc("POST /api/v1/github/app/webhook", s.handleGitHubAppWebhook)
 
 	mux.HandleFunc("GET /api/v1/mcp", s.vaultAuthed(s.handleGetMCP))
 	mux.HandleFunc("POST /api/v1/mcp", s.vaultAuthed(s.handleSetMCP))

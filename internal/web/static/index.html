@@ -71,6 +71,25 @@
     pre { white-space: pre-wrap; background: var(--bg); padding: 12px; border-radius: 10px; overflow: auto; }
     .check { display: flex; gap: 8px; align-items: center; margin: 8px 0; }
     .check input { width: auto; }
+    .locked-field {
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px;
+    }
+    .howto {
+      background: var(--bg2); border: 1px solid var(--line); border-radius: 12px;
+      padding: 14px 16px; margin: 14px 0 4px;
+    }
+    .howto h2 { margin: 0 0 8px; }
+    .howto ol, .howto ul { margin: 8px 0 0; padding-left: 20px; }
+    .howto li { margin: 6px 0; }
+    .allow-box {
+      background: #123528; border: 1px solid #245c3e; border-radius: 12px;
+      padding: 12px 14px; margin: 14px 0;
+    }
+    .allow-box .check { margin: 0; align-items: flex-start; }
+    .allow-box .check span { color: var(--text); }
+    .repo-pick { display: flex; flex-direction: column; gap: 8px; margin: 12px 0; }
+    .repo-pick button { text-align: left; width: 100%; }
     .help-fab {
       position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%);
       z-index: 50; display: inline-flex; align-items: center; gap: 8px;
@@ -252,13 +271,13 @@ docker compose up --build -d</pre>
   {
     title: "4. Connect your GitHub repository",
     html: () => `
-      <p>GitHub backup is <b>per user</b>, not per server. One user can set up one GitHub repository.</p>
+      <p>GitHub backup is <b>per user</b>, not per server. One user can set up one GitHub repository. Connect with a GitHub App — no personal access token and no deploy key. We currently only support one single branch (<code>main</code>), to keep things simple.</p>
       <ol>
         <li>Sign in as that user (not as admin).</li>
-        <li>Open the <b>GitHub</b> page.</li>
-        <li>Create a GitHub personal access token with the <code>repo</code> scope.</li>
-        <li>Enter the repository as <code>owner/name</code>, for example <code>you/obsidian-vault</code>.</li>
-        <li>Save. Saving again replaces that same repository — you still have only one.</li>
+        <li>Open the <b>GitHub</b> page (Connect to GitHub).</li>
+        <li>Click <b>Connect with GitHub</b>.</li>
+        <li>Create the GitHub App, then click <b>Install</b> on one repository. That grants Contents <b>read and write</b>.</li>
+        <li>If you installed on more than one repository, pick the one vault to use. Saving again replaces that same repository — you still have only one.</li>
       </ol>
       <p>The Obsidian plugin never sees GitHub credentials.</p>
     `,
@@ -383,6 +402,12 @@ function paintNav() {
 }
 
 async function boot() {
+  const q = new URLSearchParams(location.search);
+  if (q.get("github")) {
+    page = "github";
+    window.__githubQuery = { flag: q.get("github"), message: q.get("message") || "" };
+    history.replaceState({}, "", location.pathname || "/");
+  }
   const st = await api("/api/v1/setup");
   needsSetup = st.needs_setup;
   try {
@@ -505,7 +530,7 @@ async function overview(main) {
     </div>
     <div class="card">
       <h2>Your GitHub repository</h2>
-      <p>${gh.configured ? `<span class="pill ok">Connected</span> ${esc(gh.repo)} (${esc(gh.branch)})` : `<span class="pill warn">Not configured</span> Connect your GitHub repository on the GitHub page. One user can set up one repository.`}</p>
+      <p>${gh.configured ? `<span class="pill ok">Connected</span> ${esc(gh.repo)} on <code>main</code>` : `<span class="pill warn">Not configured</span> Connect your GitHub repository on the GitHub page. One user can set up one repository on the <code>main</code> branch.`}</p>
       ${gh.last_error ? `<p class="flash err">${esc(gh.last_error)}</p>` : ""}
       ${gh.configured ? "" : `<button class="btn" id="go-github" type="button">Connect GitHub</button>`}
     </div>
@@ -591,36 +616,76 @@ async function tokens(main) {
 
 async function github(main) {
   const gh = await api("/api/v1/github");
+  const repos = asList(gh.repos);
+  const q = window.__githubQuery;
+  window.__githubQuery = null;
+  let connectLabel = "Connect with GitHub";
+  if (gh.has_app && !gh.configured) connectLabel = "Continue GitHub setup";
   main.innerHTML = `
-    <h1>GitHub</h1>
-    <p class="muted">Connect your GitHub repository here. One user can set up one GitHub repository. This is not a server-wide setting — admins manage users and never see this page.</p>
+    <h1>Connect to GitHub</h1>
+    <p class="muted">Authorize Syncidian as a GitHub App, then pick one repository. We currently only support one single branch (<code>main</code>), to keep things simple. Admins never see this page.</p>
     <div class="card">
-      <p>${gh.configured ? `<span class="pill ok">Connected</span> ${esc(gh.repo)}` : `<span class="pill warn">Not configured</span>`}</p>
+      <p>${gh.configured ? `<span class="pill ok">Connected</span> ${esc(gh.repo)} on <code>main</code>` : `<span class="pill warn">Not configured</span>`}</p>
       ${gh.last_error ? `<div class="flash err">${esc(gh.last_error)}</div>` : ""}
-      <label>Repository (owner/name)</label>
-      <input id="gh-repo" placeholder="you/obsidian-vault" value="${esc(gh.repo || "")}" />
       <label>Branch</label>
-      <input id="gh-branch" value="${esc(gh.branch || "main")}" />
-      <label>Personal access token (repo scope)</label>
-      <input id="gh-token" type="password" placeholder="${gh.token_set ? "••••••••  (leave blank to keep)" : "ghp_…"}" />
-      <div class="check"><input id="gh-create" type="checkbox" /> <span>Create a private repository if it does not exist</span></div>
-      <div class="row" style="margin-top:12px">
-        <button class="btn" id="gh-save" type="button">Save</button>
-        ${gh.configured ? `<button class="btn secondary" id="gh-sync" type="button">Pull from GitHub now</button>
-        <button class="btn danger" id="gh-del" type="button">Disconnect</button>` : ""}
+      <div class="locked-field">
+        <span><code>main</code> <span class="pill ok">locked</span></span>
       </div>
+      <p class="muted">Syncidian always uses <code>main</code>. Other branches are not available.</p>
+      ${gh.configured ? "" : `
+      <div class="howto">
+        <h2>Connect with GitHub</h2>
+        <p>This creates a private GitHub App for your account with Contents <b>read and write</b>. You do not paste a personal access token, and SSH deploy keys are not used.</p>
+        <ol>
+          <li>Click <b>Connect with GitHub</b>.</li>
+          <li>Click <b>Create GitHub App</b> on GitHub. Permissions already request write access.</li>
+          <li>Click <b>Install</b> and allow access to one repository (or several, then pick below).</li>
+        </ol>
+      </div>
+      <div class="row" style="margin-top:12px">
+        <button class="btn" id="gh-connect-app" type="button">${esc(connectLabel)}</button>
+      </div>`}
+      ${gh.needs_repo && repos.length ? `
+      <div class="howto">
+        <h2>Select a repository</h2>
+        <p>The app is installed. Choose the one repository Syncidian should use.</p>
+        <div class="repo-pick">${repos.map((name) => `<button class="btn secondary" data-repo="${esc(name)}" type="button">${esc(name)}</button>`).join("")}</div>
+      </div>` : ""}
+      ${gh.configured ? `<div class="row" style="margin-top:12px">
+        <button class="btn secondary" id="gh-sync" type="button">Pull from GitHub now</button>
+        <button class="btn danger" id="gh-del" type="button">Disconnect</button>
+      </div>` : ""}
       <div id="gh-flash"></div>
     </div>`;
-  $("gh-save").onclick = async () => {
+  const connect = $("gh-connect-app");
+  if (connect) connect.onclick = async () => {
     try {
-      const out = await api("/api/v1/github", { method: "POST", body: JSON.stringify({
-        repo: $("gh-repo").value, branch: $("gh-branch").value, token: $("gh-token").value,
-        create_repo: $("gh-create").checked
-      })});
-      flash($("gh-flash"), out.git_error ? ("Saved, but push failed: " + out.git_error) : "GitHub connected. This account now has one repository.", out.git_error ? "err" : "ok");
-      setTimeout(() => github(main), 400);
+      const data = await api("/api/v1/github/app/start", { method: "POST", body: "{}" });
+      if (data.manifest) {
+        const form = document.createElement("form");
+        form.method = "post";
+        form.action = data.github_url;
+        const input = document.createElement("input");
+        input.type = "hidden";
+        input.name = "manifest";
+        input.value = JSON.stringify(data.manifest);
+        form.appendChild(input);
+        document.body.appendChild(form);
+        form.submit();
+        return;
+      }
+      if (data.github_url) location.href = data.github_url;
     } catch (e) { flash($("gh-flash"), e.message); }
   };
+  main.querySelectorAll("[data-repo]").forEach((b) => {
+    b.onclick = async () => {
+      try {
+        const out = await api("/api/v1/github", { method: "POST", body: JSON.stringify({ repo: b.dataset.repo }) });
+        flash($("gh-flash"), out.git_error ? ("Saved, but push failed: " + out.git_error) : "GitHub connected. This account now has one repository.", out.git_error ? "err" : "ok");
+        setTimeout(() => github(main), 400);
+      } catch (e) { flash($("gh-flash"), e.message); }
+    };
+  });
   const sync = $("gh-sync");
   if (sync) sync.onclick = async () => {
     try { await api("/api/v1/github/sync", { method: "POST", body: "{}" }); flash($("gh-flash"), "Pulled from GitHub.", "ok"); }
@@ -631,6 +696,9 @@ async function github(main) {
     await api("/api/v1/github", { method: "DELETE" });
     github(main);
   };
+  if (q && q.flag === "connected") flash($("gh-flash"), "GitHub connected. This account now has one repository on main.", "ok");
+  if (q && q.flag === "select") flash($("gh-flash"), "GitHub App installed. Select the one repository to use.", "ok");
+  if (q && q.flag === "error") flash($("gh-flash"), q.message || "GitHub App setup failed.");
 }
 
 async function mcp(main) {

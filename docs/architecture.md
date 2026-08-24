@@ -56,7 +56,7 @@ flowchart TB
   MCP --> SQLite
   Sync --> Git
   Git --> Vault
-  Git -->|"PAT stays on the server"| GH
+  Git -->|"GitHub App installation token"| GH
 ```
 
 ---
@@ -70,6 +70,7 @@ flowchart LR
   SRV --> ST["internal/store<br/>SQLite + vault dirs"]
   SRV --> ENG["internal/syncengine<br/>PlanSync · ClassifyPush"]
   SRV --> GIT["internal/gitx"]
+  SRV --> GHA["internal/githubapp"]
   SRV --> MCP["internal/mcp"]
   SRV --> WEB["internal/web<br/>embed index.html"]
 ```
@@ -94,7 +95,7 @@ flowchart TB
     Users["GET/POST /api/v1/users<br/>admin: public fields only"]
     Tokens["GET/POST /api/v1/tokens"]
     Dev["devices · heartbeat"]
-    GH["GET/POST /api/v1/github<br/>this user_id only"]
+    GH["GET/POST /api/v1/github<br/>POST /api/v1/github/app/start"]
     MCPCfg["GET/POST /api/v1/mcp"]
     Act["GET /api/v1/activity"]
   end
@@ -138,7 +139,7 @@ flowchart TD
 
   Admin -->|no| Own["Own vault, devices, tokens, activity"]
   Own --> GH{"User wants backup?"}
-  GH -->|yes| One["POST /api/v1/github<br/>one repo for this user_id"]
+  GH -->|yes| One["Connect with GitHub App<br/>one repo for this user_id · main only"]
   GH -->|no| SyncOnly["Device sync still works"]
 ```
 
@@ -372,7 +373,8 @@ erDiagram
   }
   github_config {
     text user_id PK
-    text token
+    int app_id
+    int installation_id
     text repo
     text branch
   }
@@ -405,7 +407,7 @@ flowchart TB
 
 A regular user only sees their own devices, tokens, vault, conflicts, activity, and one GitHub repository. Admins manage accounts and cannot call vault, token, device, activity, or GitHub APIs. The WebSocket hub broadcasts per `userID`.
 
-Admins can create users and list `adminUserSummary` fields (`username`, `is_admin`, `created_at`). They do **not** receive another user's GitHub PAT, repository, vault bytes, tokens, or activity. Admin login does not require `github_config`.
+Admins can create users and list `adminUserSummary` fields (`username`, `is_admin`, `created_at`). They do **not** receive another user's GitHub App credentials, repository, vault bytes, tokens, or activity. Admin login does not require `github_config`.
 
 ---
 
@@ -437,7 +439,7 @@ One container. No extra services for the basic install. Railway mounts a volume 
 | HTTP routes + auth | [`internal/server/server.go`](../internal/server/server.go) |
 | Plan / push / devices | [`internal/server/sync.go`](../internal/server/sync.go) |
 | Sync decisions | [`internal/syncengine/plan.go`](../internal/syncengine/plan.go) |
-| GitHub backup | [`internal/server/github.go`](../internal/server/github.go), [`internal/gitx/repo.go`](../internal/gitx/repo.go) |
+| GitHub backup | [`internal/server/github.go`](../internal/server/github.go), [`internal/server/github_app.go`](../internal/server/github_app.go), [`internal/githubapp`](../internal/githubapp), [`internal/gitx/repo.go`](../internal/gitx/repo.go) |
 | MCP tools | [`internal/mcp/mcp.go`](../internal/mcp/mcp.go) |
 | Live updates | [`internal/server/ws.go`](../internal/server/ws.go) |
 | Persistence | [`internal/store/store.go`](../internal/store/store.go) |
