@@ -211,6 +211,8 @@ func TestDashboardServed(t *testing.T) {
 		`id="gh-connect-app"`,
 		`only support one single branch`,
 		`Connect to GitHub`,
+		`Register the GitHub App`,
+		`docs/github-app.md`,
 	} {
 		if !bytes.Contains(b, []byte(needle)) {
 			t.Fatalf("dashboard missing required markup %q", needle)

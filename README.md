@@ -38,7 +38,7 @@ cd Syncidian
 docker compose up --build -d
 ```
 
-Open [http://localhost:8080](http://localhost:8080). The public page explains Syncidian and lets people **Sign up using GitHub**. Operators open [`/admin`](http://localhost:8080/admin) to create the first admin and register the GitHub App. A **Help** button on `/admin` and the signed-in dashboard walks through the rest. After GitHub sign-in, a regular user connects **one GitHub repository**, then creates an access token (`sk_sync_…`). Copy the token once — it is not shown again.
+Open [http://localhost:8080](http://localhost:8080). The public page explains Syncidian and lets people **Sign up using GitHub**. Operators open [`/admin`](http://localhost:8080/admin) to create the first admin and register the GitHub App. Follow [Set up the GitHub App](docs/github-app.md) if you are self-hosting. A **Help** button on `/admin` and the signed-in dashboard walks through the rest. After GitHub sign-in, a regular user connects **one GitHub repository**, then creates an access token (`sk_sync_…`). Copy the token once — it is not shown again.
 
 **Without Docker (Go 1.22+):**
 
@@ -54,7 +54,7 @@ Data is stored in `./data` by default (`SYNCIDIAN_DATA` to change it). Docker Co
 2. **Settings → Volumes → Add volume**, mount path **`/data`**.
 3. Generate a public domain. The server listens on Railway’s `PORT` and uses `RAILWAY_PUBLIC_DOMAIN` for the dashboard URL unless you set `SYNCIDIAN_PUBLIC_URL`.
 4. Optional variables: `SYNCIDIAN_BOOTSTRAP_USER`, `SYNCIDIAN_BOOTSTRAP_PASSWORD`.
-5. Open the public URL. Create the admin at `/admin`, register the GitHub App (callback, setup, and webhook URLs are listed there), then let people sign in with GitHub from the public site. Point the plugin at that URL with that user's token.
+5. Open the public URL. Create the admin at `/admin`, then register the GitHub App ([walkthrough](docs/github-app.md)). Let people sign in with GitHub from the public site. Point the plugin at that URL with that user's token.
 
 Health check: `GET /health`.
 
@@ -95,7 +95,9 @@ Repeat the plugin copy + token on each device (Windows, Mac, Android, iOS). Crea
 
 ## 3. Optional: GitHub backup (per user)
 
-Create the instance GitHub App at `/admin` (or set `SYNCIDIAN_GITHUB_APP_*`). Then people click **Sign up using GitHub** or **Connect to your GitHub repository** on the public site. After identity, they install the app on **one** repository. Syncidian always uses the **main** branch — other branches are not supported. Personal access tokens and deploy keys are not used. That repository is bound to **that user only**. Admins do not connect a vault repo and cannot see another user's repo or GitHub App credentials. The plugin never needs GitHub credentials. Until that user connects GitHub, their devices still sync through the server.
+Create **one GitHub App for this instance** before people sign in with GitHub. Step-by-step: [Set up the GitHub App](docs/github-app.md).
+
+Short version: open `/admin` → **Create GitHub App**, or set `SYNCIDIAN_GITHUB_APP_*`. Then people click **Sign up using GitHub** or **Connect to your GitHub repository** on the public site. After identity, they install the app on **one** repository. Syncidian always uses the **main** branch — other branches are not supported. Personal access tokens and deploy keys are not used. That repository is bound to **that user only**. Admins do not connect a vault repo and cannot see another user's repo or GitHub App credentials. The plugin never needs GitHub credentials. Until that user connects GitHub, their devices still sync through the server.
 
 ## 4. Optional: MCP / AI
 
@@ -342,7 +344,32 @@ No separate services should be required for the basic deployment.
 
 GitHub identity lives on the public site. GitHub **backup** is still **per user**, not a shared vault.
 
+**Self-hosting?** Use the full walkthrough: **[Set up the GitHub App](docs/github-app.md)**. That page is the operator README for creating the app, filling GitHub’s callback / setup / webhook URLs, and wiring credentials.
+
 The public landing never asks for a repository name. It sends people through GitHub OAuth, then the GitHub App setup URL. The Obsidian plugin does not need GitHub credentials. Admin login at `/admin` registers the instance App and does not connect a vault repo.
+
+## Create the GitHub App
+
+You need one App **per Syncidian instance**, not per vault user.
+
+### From the dashboard (recommended)
+
+1. Deploy Syncidian so `{base}` is the URL you will keep (`https://syncidian.example.com` or `http://localhost:8080`).
+2. Open `{base}/admin` and create the first admin.
+3. Click **Create GitHub App**. GitHub opens with permissions and URLs already filled in.
+4. Click **Create GitHub App** on GitHub. You return to `/admin` with the app **Registered**.
+
+### By hand
+
+1. [New GitHub App](https://github.com/settings/apps/new).
+2. Paste the three URLs below (also listed on `/admin` and `GET /api/v1/github/app/urls`).
+3. Repository permissions: **Contents** read and write, **Metadata** read. Account permissions: **Email addresses** read.
+4. Enable **Request user authorization (OAuth) during installation**.
+5. If other GitHub users on this instance must install the app on their own accounts, allow installation on **Any account**.
+6. Copy App ID, slug, Client ID, a new client secret, and a generated private key (`.pem`).
+7. Set `SYNCIDIAN_GITHUB_APP_ID`, `SYNCIDIAN_GITHUB_APP_SLUG`, `SYNCIDIAN_GITHUB_CLIENT_ID`, `SYNCIDIAN_GITHUB_CLIENT_SECRET`, and `SYNCIDIAN_GITHUB_APP_PRIVATE_KEY`, then restart. Put literal `\n` in the PEM env value for newlines.
+
+Then each vault user signs in from `/` and installs the app on one repository (`main` only). Details, localhost notes, and a failure checklist are in [docs/github-app.md](docs/github-app.md).
 
 ## GitHub App URLs
 
@@ -356,7 +383,7 @@ Replace `{base}` with your public URL, for example `https://syncidian.example.co
 | **Setup URL** | `{base}/api/v1/github/app/setup` | GitHub sends people here after they **install** the app. Syncidian binds that installation to their account. |
 | **Webhook URL** | `{base}/api/v1/github/app/webhook` | GitHub requires a webhook URL so it can **ping** the app when you create or update it. Syncidian answers that ping with HTTP 200 even if you do not subscribe to extra events. |
 
-Optional env vars if you prefer not to use the in-dashboard manifest flow: `SYNCIDIAN_GITHUB_APP_ID`, `SYNCIDIAN_GITHUB_APP_SLUG`, `SYNCIDIAN_GITHUB_CLIENT_ID`, `SYNCIDIAN_GITHUB_CLIENT_SECRET`, `SYNCIDIAN_GITHUB_APP_PRIVATE_KEY`.
+Optional env vars if you prefer not to use the in-dashboard manifest flow: `SYNCIDIAN_GITHUB_APP_ID`, `SYNCIDIAN_GITHUB_APP_SLUG`, `SYNCIDIAN_GITHUB_CLIENT_ID`, `SYNCIDIAN_GITHUB_CLIENT_SECRET`, `SYNCIDIAN_GITHUB_APP_PRIVATE_KEY`. See [docs/github-app.md](docs/github-app.md) for exact GitHub UI fields and Docker examples.
 
 Rules:
 
@@ -1064,6 +1091,8 @@ This could be:
 * Cloud VM
 * Docker host
 * Local infrastructure
+
+GitHub sign-in and backup need a GitHub App for this instance. Operators follow [Set up the GitHub App](docs/github-app.md) after `/admin` first-boot.
 
 ---
 

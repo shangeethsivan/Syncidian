@@ -12,7 +12,7 @@ If you change any of the following, **update the docs in the same change**:
 * HTTP routes, data model, sync plan, MCP, or deployment topology
 * Multi-user isolation or token/session behavior
 
-Do not ship a behavioral change that leaves `README.md` or `docs/architecture.md` describing the old flow.
+Do not ship a behavioral change that leaves `README.md`, `docs/github-app.md`, or `docs/architecture.md` describing the old flow.
 
 ## Diagrams you must keep in sync
 
@@ -56,4 +56,4 @@ When you change auth, GitHub scoping, or admin privacy, extend `internal/server/
 
 ## Help walkthrough
 
-The dashboard **Help** button must describe the same workflow as the diagrams: public landing with GitHub sign-in, optional email, admin at `/admin`, then optional per-user GitHub, admin without repo sync.
+The dashboard **Help** button must describe the same workflow as the diagrams: public landing with GitHub sign-in, optional email, admin at `/admin`, register the instance GitHub App (`docs/github-app.md`), then optional per-user GitHub, admin without repo sync.

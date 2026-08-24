@@ -8,6 +8,8 @@ import (
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/pem"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -74,5 +76,31 @@ func TestNewManifestRequestsWriteAccess(t *testing.T) {
 	}
 	if m.Public {
 		t.Fatal("app should not be public")
+	}
+}
+
+func TestSelfHostGitHubAppGuideListsURLs(t *testing.T) {
+	doc, err := os.ReadFile(filepath.Join("..", "..", "docs", "github-app.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	readme, err := os.ReadFile(filepath.Join("..", "..", "README.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{
+		"/api/v1/auth/github/callback",
+		"/api/v1/github/app/setup",
+		"/api/v1/github/app/webhook",
+	} {
+		if !strings.Contains(string(doc), path) {
+			t.Fatalf("docs/github-app.md missing %s", path)
+		}
+		if !strings.Contains(string(readme), path) {
+			t.Fatalf("README.md missing %s", path)
+		}
+	}
+	if !strings.Contains(string(readme), "docs/github-app.md") {
+		t.Fatal("README.md should link to docs/github-app.md")
 	}
 }
