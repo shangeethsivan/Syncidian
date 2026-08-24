@@ -7,6 +7,8 @@ type User struct {
 	Username     string
 	PasswordHash string
 	IsAdmin      bool
+	Email        string
+	GitHubID     int64
 	CreatedAt    time.Time
 }
 
@@ -76,14 +78,42 @@ type Activity struct {
 }
 
 type GitHubConfig struct {
-	UserID    string
-	Token     string
-	Repo      string
-	Branch    string
-	LastPush  *time.Time
-	LastPull  *time.Time
-	LastError string
-	UpdatedAt time.Time
+	UserID              string
+	Token               string // cached GitHub App installation token, never a user PAT
+	Repo                string
+	Branch              string
+	AppID               int64
+	AppSlug             string
+	AppPEM              string
+	ClientID            string
+	ClientSecret        string
+	InstallationID      int64
+	InstallTokenExpires time.Time
+	LastPush            *time.Time
+	LastPull            *time.Time
+	LastError           string
+	UpdatedAt           time.Time
+}
+
+func (c *GitHubConfig) HasApp() bool {
+	return c != nil && c.AppID != 0 && c.AppPEM != ""
+}
+
+func (c *GitHubConfig) Configured() bool {
+	return c.HasApp() && c.InstallationID != 0 && c.Repo != ""
+}
+
+type GitHubApp struct {
+	AppID        int64
+	Slug         string
+	PEM          string
+	ClientID     string
+	ClientSecret string
+	UpdatedAt    time.Time
+}
+
+func (a *GitHubApp) Configured() bool {
+	return a != nil && a.AppID != 0 && a.PEM != "" && a.ClientID != "" && a.ClientSecret != ""
 }
 
 type MCPPermissions struct {

@@ -189,8 +189,15 @@ func TestDashboardServed(t *testing.T) {
 		t.Fatal("unguarded conflicts.length would throw when API returns null")
 	}
 	for _, needle := range []string{
-		`id="auth-btn" type="button">Sign in</button>`,
-		`Authenticate to continue`,
+		`id="landing"`,
+		`Start a journey with Syncidian`,
+		`Connect to your GitHub repository`,
+		`Sign up using GitHub`,
+		`id="auth-btn" type="button">Sign in</button`,
+		`href="/admin"`,
+		`/api/v1/auth/github/callback`,
+		`/api/v1/github/app/setup`,
+		`/api/v1/github/app/webhook`,
 		`id="help-fab"`,
 		`id="help-overlay"`,
 		`id="help-panel"`,
@@ -199,8 +206,13 @@ func TestDashboardServed(t *testing.T) {
 		`scripts/install-plugin.sh`,
 		`Settings → Syncidian`,
 		`Connect your GitHub repository`,
-		`The landing page always asks you to authenticate`,
 		`one GitHub repository`,
+		`Connect with GitHub`,
+		`id="gh-connect-app"`,
+		`only support one single branch`,
+		`Connect to GitHub`,
+		`Register the GitHub App`,
+		`docs/github-app.md`,
 	} {
 		if !bytes.Contains(b, []byte(needle)) {
 			t.Fatalf("dashboard missing required markup %q", needle)
@@ -212,6 +224,9 @@ func TestDashboardServed(t *testing.T) {
 		`id="auth-btn" type="button" disabled`,
 		`syncidian_pending_github`,
 		`required before you can create an admin or sign in`,
+		`id="gh-branch"`,
+		`id="gh-token"`,
+		`Personal access token (repo scope)`,
 	} {
 		if bytes.Contains(b, []byte(forbidden)) {
 			t.Fatalf("dashboard still gates login behind GitHub setup: %q", forbidden)
@@ -261,6 +276,11 @@ func TestAdminDoesNotNeedGitHubAndCannotSeePrivateUserData(t *testing.T) {
 	}, adminCookies, "")
 	if res.StatusCode != http.StatusForbidden {
 		t.Fatalf("admin POST github: want 403, got %d %v", res.StatusCode, m)
+	}
+
+	res, m = doJSON(t, http.MethodPost, hs.URL+"/api/v1/github/app/start", map[string]any{}, adminCookies, "")
+	if res.StatusCode != http.StatusForbidden {
+		t.Fatalf("admin POST github app start: want 403, got %d %v", res.StatusCode, m)
 	}
 
 	bobCookies := createAndLoginUser(t, hs, adminCookies, "bob")
@@ -320,19 +340,25 @@ func TestGitHubIsPerUserNotPerServer(t *testing.T) {
 	if res.StatusCode != 200 || m["configured"] != false {
 		t.Fatalf("bob should start unconfigured: %d %v", res.StatusCode, m)
 	}
+	if m["branch"] != "main" {
+		t.Fatalf("unconfigured github should lock branch to main, got %v", m)
+	}
 
 	res, m = doJSON(t, http.MethodPost, hs.URL+"/api/v1/github", map[string]any{
 		"repo": "not-a-repo", "token": "ghp_test",
 	}, bob, "")
 	if res.StatusCode != http.StatusBadRequest {
-		t.Fatalf("expected invalid repo to fail, got %d %v", res.StatusCode, m)
+		t.Fatalf("expected PAT to be rejected, got %d %v", res.StatusCode, m)
+	}
+	if errMsg, _ := m["error"].(string); !strings.Contains(errMsg, "Personal access tokens are not supported") {
+		t.Fatalf("expected PAT rejection message, got %v", m)
 	}
 
 	res, m = doJSON(t, http.MethodPost, hs.URL+"/api/v1/github", map[string]any{
-		"repo": "bob/vault", "token": "",
+		"repo": "bob/vault",
 	}, bob, "")
 	if res.StatusCode != http.StatusBadRequest {
-		t.Fatalf("expected missing token to fail, got %d %v", res.StatusCode, m)
+		t.Fatalf("expected missing GitHub App to fail, got %d %v", res.StatusCode, m)
 	}
 
 	res, m = doJSON(t, http.MethodGet, hs.URL+"/api/v1/github", nil, cara, "")
@@ -395,5 +421,244 @@ func TestVaultIsolation(t *testing.T) {
 	}
 	if !strings.Contains(path, u.ID) {
 		t.Fatal(path)
+	}
+}
+
+func TestGitHubAppStartManifest(t *testing.T) {
+	hs, done := newTestServer(t)
+	defer done()
+
+	res, m := doJSON(t, http.MethodPost, hs.URL+"/api/v1/github/app/start", map[string]any{}, nil, "")
+	if res.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("unauthenticated app start: want 401, got %d %v", res.StatusCode, m)
+	}
+
+	adminCookies := setupAdmin(t, hs)
+	bob := createAndLoginUser(t, hs, adminCookies, "bob")
+	res, m = doJSON(t, http.MethodPost, hs.URL+"/api/v1/github/app/start", map[string]any{}, bob, "")
+	if res.StatusCode != 200 {
+		t.Fatalf("app start: %d %v", res.StatusCode, m)
+	}
+	if m["branch"] != "main" {
+		t.Fatalf("app start should lock to main, got %v", m)
+	}
+	githubURL, _ := m["github_url"].(string)
+	if !strings.Contains(githubURL, "https://github.com/settings/apps/new?state=") {
+		t.Fatalf("github_url: %v", m)
+	}
+	manifest, _ := m["manifest"].(map[string]any)
+	if manifest == nil {
+		t.Fatalf("missing manifest: %v", m)
+	}
+	perms, _ := manifest["default_permissions"].(map[string]any)
+	if perms["contents"] != "write" || perms["metadata"] != "read" {
+		t.Fatalf("permissions: %v", perms)
+	}
+	if redirect, _ := manifest["redirect_url"].(string); !strings.Contains(redirect, "/api/v1/github/app/callback") {
+		t.Fatalf("redirect_url: %v", manifest)
+	}
+	if setup, _ := manifest["setup_url"].(string); !strings.Contains(setup, "/api/v1/github/app/setup") {
+		t.Fatalf("setup_url: %v", manifest)
+	}
+	gotCookie := false
+	for _, c := range res.Cookies() {
+		if c.Name == "syncidian_github_state" && c.Value != "" {
+			gotCookie = true
+		}
+	}
+	if !gotCookie {
+		t.Fatal("expected GitHub state cookie")
+	}
+
+	res, m = doJSON(t, http.MethodPost, hs.URL+"/api/v1/github/app/webhook", map[string]any{"zen": "ok"}, nil, "")
+	if res.StatusCode != 200 {
+		t.Fatalf("webhook should be public: %d %v", res.StatusCode, m)
+	}
+
+	getRes, err := http.Get(hs.URL + "/api/v1/github/app/webhook")
+	if err != nil {
+		t.Fatal(err)
+	}
+	getRes.Body.Close()
+	if getRes.StatusCode != 200 {
+		t.Fatalf("GET webhook should be public: %d", getRes.StatusCode)
+	}
+}
+
+func noFollowClient() *http.Client {
+	return &http.Client{
+		CheckRedirect: func(*http.Request, []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+}
+
+func TestPublicLandingAdminAndGitHubAppURLs(t *testing.T) {
+	hs, done := newTestServer(t)
+	defer done()
+
+	res, err := http.Get(hs.URL + "/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, _ := io.ReadAll(res.Body)
+	res.Body.Close()
+	if res.StatusCode != 200 || !bytes.Contains(body, []byte(`id="landing"`)) {
+		t.Fatalf("public landing: %d", res.StatusCode)
+	}
+
+	res, err = http.Get(hs.URL + "/admin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	adminBody, _ := io.ReadAll(res.Body)
+	res.Body.Close()
+	if res.StatusCode != 200 || !bytes.Contains(adminBody, []byte(`isAdminPath`)) {
+		t.Fatalf("admin page should serve the same SPA: %d", res.StatusCode)
+	}
+
+	res, m := doJSON(t, http.MethodGet, hs.URL+"/api/v1/github/app/urls", nil, nil, "")
+	if res.StatusCode != 200 {
+		t.Fatalf("urls: %d %v", res.StatusCode, m)
+	}
+	if m["configured"] != false {
+		t.Fatalf("expected unconfigured app: %v", m)
+	}
+	urls, _ := m["urls"].(map[string]any)
+	if urls == nil {
+		t.Fatalf("missing urls: %v", m)
+	}
+	for key, suffix := range map[string]string{
+		"callback":          "/api/v1/auth/github/callback",
+		"setup":             "/api/v1/github/app/setup",
+		"webhook":           "/api/v1/github/app/webhook",
+		"manifest_callback": "/api/v1/github/app/callback",
+	} {
+		got, _ := urls[key].(string)
+		if !strings.HasSuffix(got, suffix) {
+			t.Fatalf("%s: %q want suffix %s", key, got, suffix)
+		}
+	}
+
+	res, m = doJSON(t, http.MethodGet, hs.URL+"/api/v1/setup", nil, nil, "")
+	if res.StatusCode != 200 || m["needs_setup"] != true || m["github_login"] != false {
+		t.Fatalf("setup status: %v", m)
+	}
+	ghApp, _ := m["github_app"].(map[string]any)
+	if ghApp == nil {
+		t.Fatalf("setup missing github_app: %v", m)
+	}
+	setupURLs, _ := ghApp["urls"].(map[string]any)
+	if setupURLs["callback"] != urls["callback"] {
+		t.Fatalf("setup urls should match public urls: %v vs %v", setupURLs, urls)
+	}
+
+	res, m = doJSON(t, http.MethodPost, hs.URL+"/api/v1/auth/signup", map[string]any{
+		"username": "cara", "password": "password1", "email": "cara@example.com",
+	}, nil, "")
+	if res.StatusCode != http.StatusBadRequest {
+		t.Fatalf("signup before admin: want 400, got %d %v", res.StatusCode, m)
+	}
+
+	start, err := http.NewRequest(http.MethodGet, hs.URL+"/api/v1/auth/github/start", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	redir, err := noFollowClient().Do(start)
+	if err != nil {
+		t.Fatal(err)
+	}
+	redir.Body.Close()
+	if redir.StatusCode != http.StatusFound {
+		t.Fatalf("github start before setup: %d", redir.StatusCode)
+	}
+	loc := redir.Header.Get("Location")
+	if !strings.HasSuffix(loc, "/admin") {
+		t.Fatalf("github start before setup should send people to /admin, got %q", loc)
+	}
+
+	adminCookies := setupAdmin(t, hs)
+
+	res, m = doJSON(t, http.MethodPost, hs.URL+"/api/v1/auth/signup", map[string]any{
+		"username": "cara", "password": "password1", "email": "cara@example.com",
+	}, nil, "")
+	if res.StatusCode != http.StatusCreated {
+		t.Fatalf("email signup: %d %v", res.StatusCode, m)
+	}
+
+	res, m = doJSON(t, http.MethodPost, hs.URL+"/api/v1/auth/signup", map[string]any{
+		"username": "other", "password": "password1", "email": "cara@example.com",
+	}, nil, "")
+	if res.StatusCode != http.StatusBadRequest {
+		t.Fatalf("duplicate email: want 400, got %d %v", res.StatusCode, m)
+	}
+
+	start, err = http.NewRequest(http.MethodGet, hs.URL+"/api/v1/auth/github/start", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	redir, err = noFollowClient().Do(start)
+	if err != nil {
+		t.Fatal(err)
+	}
+	redir.Body.Close()
+	if redir.StatusCode != http.StatusFound {
+		t.Fatalf("github start without app: %d", redir.StatusCode)
+	}
+	loc = redir.Header.Get("Location")
+	if !strings.Contains(loc, "github=error") {
+		t.Fatalf("github start without instance app should error, got %q", loc)
+	}
+
+	res, m = doJSON(t, http.MethodPost, hs.URL+"/api/v1/github/app/register", map[string]any{
+		"app_id": 99, "slug": "syncidian-test", "pem": "-----BEGIN PRIVATE KEY-----\nMIIB\n-----END PRIVATE KEY-----",
+		"client_id": "Iv1.abc", "client_secret": "secret",
+	}, adminCookies, "")
+	if res.StatusCode != 200 {
+		t.Fatalf("register app: %d %v", res.StatusCode, m)
+	}
+
+	res, m = doJSON(t, http.MethodGet, hs.URL+"/api/v1/github/app/urls", nil, nil, "")
+	if m["configured"] != true || m["slug"] != "syncidian-test" {
+		t.Fatalf("urls after register: %v", m)
+	}
+
+	bob := createAndLoginUser(t, hs, adminCookies, "bob")
+	res, m = doJSON(t, http.MethodGet, hs.URL+"/api/v1/github", nil, bob, "")
+	if res.StatusCode != 200 || m["instance_app"] != true {
+		t.Fatalf("bob github status should see instance app: %d %v", res.StatusCode, m)
+	}
+	installURL, _ := m["install_url"].(string)
+	if !strings.Contains(installURL, "github.com/apps/syncidian-test/installations/new") {
+		t.Fatalf("install_url: %v", m)
+	}
+
+	res, m = doJSON(t, http.MethodPost, hs.URL+"/api/v1/github/app/start", map[string]any{}, bob, "")
+	if res.StatusCode != 200 {
+		t.Fatalf("app start with instance app: %d %v", res.StatusCode, m)
+	}
+	if m["existing"] != true {
+		t.Fatalf("expected existing instance app install URL: %v", m)
+	}
+	githubURL, _ := m["github_url"].(string)
+	if !strings.Contains(githubURL, "github.com/apps/syncidian-test/installations/new") {
+		t.Fatalf("github_url after instance app: %v", m)
+	}
+
+	start, err = http.NewRequest(http.MethodGet, hs.URL+"/api/v1/auth/github/start", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	redir, err = noFollowClient().Do(start)
+	if err != nil {
+		t.Fatal(err)
+	}
+	redir.Body.Close()
+	if redir.StatusCode != http.StatusFound {
+		t.Fatalf("github start with app: %d", redir.StatusCode)
+	}
+	loc = redir.Header.Get("Location")
+	if !strings.Contains(loc, "https://github.com/login/oauth/authorize") || !strings.Contains(loc, "client_id=Iv1.abc") {
+		t.Fatalf("expected GitHub OAuth redirect, got %q", loc)
 	}
 }

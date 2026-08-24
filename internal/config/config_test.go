@@ -73,3 +73,18 @@ func TestFromEnvExplicitValuesWin(t *testing.T) {
 		t.Fatalf("PublicURL=%q", c.PublicURL)
 	}
 }
+
+func TestFromEnvGitHubApp(t *testing.T) {
+	t.Setenv("SYNCIDIAN_GITHUB_APP_ID", "123")
+	t.Setenv("SYNCIDIAN_GITHUB_APP_SLUG", "syncidian")
+	t.Setenv("SYNCIDIAN_GITHUB_CLIENT_ID", "Iv1.x")
+	t.Setenv("SYNCIDIAN_GITHUB_CLIENT_SECRET", "s")
+	t.Setenv("SYNCIDIAN_GITHUB_APP_PRIVATE_KEY", "-----BEGIN KEY-----\\nABC\\n-----END KEY-----")
+	c := FromEnv()
+	if c.GitHubAppID != 123 || c.GitHubAppSlug != "syncidian" || c.GitHubClientID != "Iv1.x" {
+		t.Fatalf("github app env: %+v", c)
+	}
+	if !strings.Contains(c.GitHubAppPEM, "\n") {
+		t.Fatalf("PEM newlines should be unescaped: %q", c.GitHubAppPEM)
+	}
+}
