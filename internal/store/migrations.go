@@ -3,6 +3,7 @@ package store
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -14,6 +15,7 @@ type migration struct {
 
 var migrations = []migration{
 	{version: 1, name: "initial_schema", up: migration001InitialSchema},
+	{version: 2, name: "github_app", up: migration002GitHubApp},
 }
 
 func (s *Store) migrate() error {
@@ -25,6 +27,11 @@ func (s *Store) migrate() error {
 		return err
 	}
 	if current == 0 && s.hasLegacySchema() {
+		// Existing deployments from before schema_migrations: apply additive
+		// upgrades, then stamp so users and vaults are retained.
+		if err := s.applyLegacyUpgrades(); err != nil {
+			return err
+		}
 		return s.stampLegacySchema(latestMigrationVersion())
 	}
 	for _, m := range migrations {
@@ -120,8 +127,41 @@ func (s *Store) runMigration(m migration) error {
 	return tx.Commit()
 }
 
+func (s *Store) applyLegacyUpgrades() error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	if err := migration001InitialSchema(tx); err != nil {
+		return err
+	}
+	if err := migration002GitHubApp(tx); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+func execAll(tx *sql.Tx, stmts []string) error {
+	for _, stmt := range stmts {
+		if _, err := tx.Exec(stmt); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func execIgnoreDuplicateColumn(tx *sql.Tx, stmts []string) error {
+	for _, stmt := range stmts {
+		if _, err := tx.Exec(stmt); err != nil && !strings.Contains(strings.ToLower(err.Error()), "duplicate column") {
+			return err
+		}
+	}
+	return nil
+}
+
 func migration001InitialSchema(tx *sql.Tx) error {
-	stmts := []string{
+	return execAll(tx, []string{
 		`CREATE TABLE IF NOT EXISTS users (
   id TEXT PRIMARY KEY,
   username TEXT UNIQUE NOT NULL,
@@ -191,8 +231,8 @@ func migration001InitialSchema(tx *sql.Tx) error {
 )`,
 		`CREATE TABLE IF NOT EXISTS github_config (
   user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
-  token TEXT NOT NULL,
-  repo TEXT NOT NULL,
+  token TEXT NOT NULL DEFAULT '',
+  repo TEXT NOT NULL DEFAULT '',
   branch TEXT NOT NULL DEFAULT 'main',
   last_push TEXT,
   last_pull TEXT,
@@ -209,11 +249,32 @@ func migration001InitialSchema(tx *sql.Tx) error {
 		`CREATE INDEX IF NOT EXISTS idx_activity_user ON activity(user_id, created_at DESC)`,
 		`CREATE INDEX IF NOT EXISTS idx_devices_user ON devices(user_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_tokens_user ON tokens(user_id)`,
+	})
+}
+
+func migration002GitHubApp(tx *sql.Tx) error {
+	if err := execAll(tx, []string{
+		`CREATE TABLE IF NOT EXISTS instance_github_app (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  app_id INTEGER NOT NULL,
+  slug TEXT NOT NULL,
+  pem TEXT NOT NULL,
+  client_id TEXT NOT NULL,
+  client_secret TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+)`,
+	}); err != nil {
+		return err
 	}
-	for _, stmt := range stmts {
-		if _, err := tx.Exec(stmt); err != nil {
-			return err
-		}
-	}
-	return nil
+	return execIgnoreDuplicateColumn(tx, []string{
+		`ALTER TABLE github_config ADD COLUMN app_id INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE github_config ADD COLUMN app_slug TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE github_config ADD COLUMN app_pem TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE github_config ADD COLUMN client_id TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE github_config ADD COLUMN client_secret TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE github_config ADD COLUMN installation_id INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE github_config ADD COLUMN install_token_expires TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE users ADD COLUMN email TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE users ADD COLUMN github_id INTEGER NOT NULL DEFAULT 0`,
+	})
 }

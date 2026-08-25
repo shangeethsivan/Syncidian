@@ -134,4 +134,51 @@ func TestLegacyDatabaseGetsMigrationStamp(t *testing.T) {
 	if err != nil || u == nil || u.ID != "legacy-user-id" {
 		t.Fatalf("legacy user retained: %+v %v", u, err)
 	}
+
+	// GitHub App columns from migration 002 must exist on upgraded legacy DBs.
+	if err := st.SetInstanceGitHubApp(GitHubApp{
+		AppID: 1, Slug: "syncidian", PEM: "pem", ClientID: "cid", ClientSecret: "sec",
+	}); err != nil {
+		t.Fatalf("instance github app after legacy upgrade: %v", err)
+	}
+}
+
+func TestUpgradeFromV1AddsGitHubAppSchema(t *testing.T) {
+	dir := t.TempDir()
+	st1, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st1.CreateUser("ada", "hash", true); err != nil {
+		t.Fatal(err)
+	}
+	// Simulate a DB that only applied migration 1 (pre-GitHub-App).
+	if _, err := st1.db.Exec(`DELETE FROM schema_migrations WHERE version > 1`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st1.db.Exec(`DROP TABLE IF EXISTS instance_github_app`); err != nil {
+		t.Fatal(err)
+	}
+	if err := st1.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	st2, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st2.Close()
+	v, err := st2.SchemaVersion()
+	if err != nil || v != latestMigrationVersion() {
+		t.Fatalf("schema version after v1 upgrade = %d, want %d (%v)", v, latestMigrationVersion(), err)
+	}
+	if err := st2.SetInstanceGitHubApp(GitHubApp{
+		AppID: 42, Slug: "upgraded", PEM: "pem", ClientID: "cid", ClientSecret: "sec",
+	}); err != nil {
+		t.Fatalf("github app after v1→v2: %v", err)
+	}
+	u, err := st2.GetUserByUsername("ada")
+	if err != nil || u == nil {
+		t.Fatalf("user retained after v1→v2: %+v %v", u, err)
+	}
 }

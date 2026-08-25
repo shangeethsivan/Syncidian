@@ -12,7 +12,7 @@ If you change any of the following, **update the docs in the same change**:
 * HTTP routes, data model, sync plan, MCP, or deployment topology
 * Multi-user isolation or token/session behavior
 
-Do not ship a behavioral change that leaves `README.md` or `docs/architecture.md` describing the old flow.
+Do not ship a behavioral change that leaves `README.md`, `docs/github-app.md`, or `docs/architecture.md` describing the old flow.
 
 ## Diagrams you must keep in sync
 
@@ -20,7 +20,7 @@ GitHub-rendered Mermaid diagrams are part of the product docs. After an architec
 
 | Diagram | Location |
 | --- | --- |
-| App workflow (authenticate first → role → optional per-user GitHub) | `README.md` (`# 🗺️ App workflow`) and `docs/architecture.md` (section 3b) |
+| App workflow (public landing → GitHub or email → optional per-user repo) | `README.md` (`# 🗺️ App workflow`) and `docs/architecture.md` (section 3b) |
 | System overview | `README.md` (Vision + Architecture) and `docs/architecture.md` §1 |
 | HTTP surface (public vs session vs plugin) | `docs/architecture.md` §3 |
 | Plugin first sync / edit / conflicts | `docs/architecture.md` §4–7 |
@@ -36,11 +36,12 @@ If a diagram no longer matches the code, rewrite it. Do not leave comments like 
 
 Document and implement these unless a later change explicitly replaces them — and if you replace them, update this list too:
 
-1. **Landing page always authenticates.** Unauthenticated visitors see sign-in or first-admin setup only. No GitHub repository form before login.
-2. **GitHub is per user, after login.** One repository per `user_id`. `GET/POST /api/v1/github` requires `authenticate()`.
+1. **Public landing, admin at `/admin`.** Unauthenticated visitors see a one-page story with GitHub sign-in, optional email signup, and a link to `/admin`. Operators create the first admin and register the instance GitHub App at `/admin`. Repository install stays per user after identity.
+2. **GitHub is per user, after identity.** One repository per `user_id`. `GET/POST /api/v1/github` requires `authenticate()`.
 3. **Admin login does not need repo sync.** Admins manage users. Vault/GitHub/token/device/activity/MCP routes use `vaultAuthed` and return 403 for admins.
 4. **Admin user list is public fields only:** `username`, `is_admin`, `created_at` (no `id`, vault, tokens, or GitHub).
 5. Device sync works without GitHub. GitHub is optional durable backup.
+6. **GitHub App only, main branch only.** Backup is authorized by installing a GitHub App with Contents read and write. Personal access tokens and deploy keys are not supported. Syncidian always uses `main`. Sign-in uses the instance App callback, setup, and webhook URLs.
 
 ## How to update diagrams
 
@@ -55,4 +56,4 @@ When you change auth, GitHub scoping, or admin privacy, extend `internal/server/
 
 ## Help walkthrough
 
-The dashboard **Help** button at the bottom of the screen must describe the same workflow as the diagrams: authenticate first, then optional per-user GitHub, admin without repo sync.
+The dashboard **Help** button must describe the same workflow as the diagrams: public landing with GitHub sign-in, optional email, admin at `/admin`, register the instance GitHub App (`docs/github-app.md`), then optional per-user GitHub, admin without repo sync.

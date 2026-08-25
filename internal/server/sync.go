@@ -470,10 +470,15 @@ func (s *Server) commitAndMaybePush(userID, message string) (commit string, gitE
 		return "", err.Error()
 	}
 	cfg, _ := s.Store.GetGitHub(userID)
-	if cfg == nil || cfg.Token == "" || cfg.Repo == "" {
+	if !cfg.Configured() {
 		return hash, ""
 	}
-	if err := s.Git.Push(dir, cfg.Token, cfg.Branch); err != nil {
+	token, err := s.gitAccessToken(cfg)
+	if err != nil {
+		_ = s.Store.UpdateGitHubStatus(userID, false, false, err.Error())
+		return hash, err.Error()
+	}
+	if err := s.Git.Push(dir, token, GitHubBranch); err != nil {
 		_ = s.Store.UpdateGitHubStatus(userID, false, false, err.Error())
 		return hash, err.Error()
 	}

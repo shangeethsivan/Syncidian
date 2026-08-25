@@ -3,24 +3,37 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
 type Config struct {
-	Addr      string
-	DataDir   string
-	PublicURL string
-	GitName   string
-	GitEmail  string
+	Addr               string
+	DataDir            string
+	PublicURL          string
+	GitName            string
+	GitEmail           string
+	GitHubAppID        int64
+	GitHubAppSlug      string
+	GitHubClientID     string
+	GitHubClientSecret string
+	GitHubAppPEM       string
 }
 
 func FromEnv() Config {
 	c := Config{
-		Addr:      firstEnv("SYNCIDIAN_ADDR", "PORT"),
-		DataDir:   firstEnv("SYNCIDIAN_DATA", "RAILWAY_VOLUME_MOUNT_PATH"),
-		PublicURL: publicURL(),
-		GitName:   env("SYNCIDIAN_GIT_NAME", "Syncidian"),
-		GitEmail:  env("SYNCIDIAN_GIT_EMAIL", "syncidian@localhost"),
+		Addr:               firstEnv("SYNCIDIAN_ADDR", "PORT"),
+		DataDir:            firstEnv("SYNCIDIAN_DATA", "RAILWAY_VOLUME_MOUNT_PATH"),
+		PublicURL:          publicURL(),
+		GitName:            env("SYNCIDIAN_GIT_NAME", "Syncidian"),
+		GitEmail:           env("SYNCIDIAN_GIT_EMAIL", "syncidian@localhost"),
+		GitHubAppSlug:      env("SYNCIDIAN_GITHUB_APP_SLUG", ""),
+		GitHubClientID:     env("SYNCIDIAN_GITHUB_CLIENT_ID", ""),
+		GitHubClientSecret: env("SYNCIDIAN_GITHUB_CLIENT_SECRET", ""),
+		GitHubAppPEM:       strings.ReplaceAll(env("SYNCIDIAN_GITHUB_APP_PRIVATE_KEY", ""), `\n`, "\n"),
+	}
+	if id, err := strconv.ParseInt(env("SYNCIDIAN_GITHUB_APP_ID", "0"), 10, 64); err == nil {
+		c.GitHubAppID = id
 	}
 	if c.Addr == "" {
 		c.Addr = ":8080"

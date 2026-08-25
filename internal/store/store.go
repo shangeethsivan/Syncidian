@@ -92,8 +92,8 @@ func (s *Store) CreateUser(username, passwordHash string, admin bool) (*User, er
 		return nil, fmt.Errorf("username is required")
 	}
 	_, err := s.db.Exec(
-		`INSERT INTO users (id, username, password_hash, is_admin, created_at) VALUES (?, ?, ?, ?, ?)`,
-		u.ID, u.Username, u.PasswordHash, boolToInt(admin), now(),
+		`INSERT INTO users (id, username, password_hash, is_admin, email, github_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		u.ID, u.Username, u.PasswordHash, boolToInt(admin), u.Email, u.GitHubID, now(),
 	)
 	if err != nil {
 		if strings.Contains(strings.ToLower(err.Error()), "unique") {
@@ -108,16 +108,90 @@ func (s *Store) CreateUser(username, passwordHash string, admin bool) (*User, er
 	return u, nil
 }
 
+func (s *Store) CreateGitHubUser(login, email string, githubID int64) (*User, error) {
+	login = strings.TrimSpace(login)
+	email = strings.TrimSpace(email)
+	if login == "" || githubID == 0 {
+		return nil, fmt.Errorf("github identity is required")
+	}
+	username := login
+	if existing, _ := s.GetUserByUsername(username); existing != nil {
+		username = fmt.Sprintf("%s-%d", login, githubID%100000)
+	}
+	u, err := s.CreateUser(username, "", false)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.SetUserGitHub(u.ID, githubID, email); err != nil {
+		return nil, err
+	}
+	u.GitHubID = githubID
+	u.Email = email
+	return u, nil
+}
+
+func (s *Store) SetUserGitHub(userID string, githubID int64, email string) error {
+	email = strings.TrimSpace(strings.ToLower(email))
+	_, err := s.db.Exec(`UPDATE users SET github_id = ?, email = CASE WHEN ? != '' THEN ? ELSE email END WHERE id = ?`,
+		githubID, email, email, userID)
+	return err
+}
+
+func (s *Store) GetInstanceGitHubApp() (*GitHubApp, error) {
+	a := &GitHubApp{}
+	var updated string
+	err := s.db.QueryRow(`SELECT app_id, slug, pem, client_id, client_secret, updated_at FROM instance_github_app WHERE id = 1`).
+		Scan(&a.AppID, &a.Slug, &a.PEM, &a.ClientID, &a.ClientSecret, &updated)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	a.UpdatedAt = parseTime(updated)
+	return a, nil
+}
+
+func (s *Store) SetInstanceGitHubApp(a GitHubApp) error {
+	_, err := s.db.Exec(`
+INSERT INTO instance_github_app (id, app_id, slug, pem, client_id, client_secret, updated_at)
+VALUES (1, ?, ?, ?, ?, ?, ?)
+ON CONFLICT(id) DO UPDATE SET
+  app_id = excluded.app_id,
+  slug = excluded.slug,
+  pem = excluded.pem,
+  client_id = excluded.client_id,
+  client_secret = excluded.client_secret,
+  updated_at = excluded.updated_at
+`, a.AppID, a.Slug, a.PEM, a.ClientID, a.ClientSecret, now())
+	return err
+}
+
 func (s *Store) GetUser(id string) (*User, error) {
-	return s.scanUser(s.db.QueryRow(`SELECT id, username, password_hash, is_admin, created_at FROM users WHERE id = ?`, id))
+	return s.scanUser(s.db.QueryRow(`SELECT id, username, password_hash, is_admin, email, github_id, created_at FROM users WHERE id = ?`, id))
 }
 
 func (s *Store) GetUserByUsername(username string) (*User, error) {
-	return s.scanUser(s.db.QueryRow(`SELECT id, username, password_hash, is_admin, created_at FROM users WHERE username = ?`, username))
+	return s.scanUser(s.db.QueryRow(`SELECT id, username, password_hash, is_admin, email, github_id, created_at FROM users WHERE username = ?`, username))
+}
+
+func (s *Store) GetUserByGitHubID(githubID int64) (*User, error) {
+	if githubID == 0 {
+		return nil, nil
+	}
+	return s.scanUser(s.db.QueryRow(`SELECT id, username, password_hash, is_admin, email, github_id, created_at FROM users WHERE github_id = ?`, githubID))
+}
+
+func (s *Store) GetUserByEmail(email string) (*User, error) {
+	email = strings.TrimSpace(strings.ToLower(email))
+	if email == "" {
+		return nil, nil
+	}
+	return s.scanUser(s.db.QueryRow(`SELECT id, username, password_hash, is_admin, email, github_id, created_at FROM users WHERE lower(email) = ?`, email))
 }
 
 func (s *Store) ListUsers() ([]User, error) {
-	rows, err := s.db.Query(`SELECT id, username, password_hash, is_admin, created_at FROM users ORDER BY created_at`)
+	rows, err := s.db.Query(`SELECT id, username, password_hash, is_admin, email, github_id, created_at FROM users ORDER BY created_at`)
 	if err != nil {
 		return nil, err
 	}
@@ -159,7 +233,7 @@ func (s *Store) scanUser(row *sql.Row) (*User, error) {
 	u := &User{}
 	var admin int
 	var created string
-	err := row.Scan(&u.ID, &u.Username, &u.PasswordHash, &admin, &created)
+	err := row.Scan(&u.ID, &u.Username, &u.PasswordHash, &admin, &u.Email, &u.GitHubID, &created)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -179,7 +253,7 @@ func scanUserRow(row rowScanner) (*User, error) {
 	u := &User{}
 	var admin int
 	var created string
-	if err := row.Scan(&u.ID, &u.Username, &u.PasswordHash, &admin, &created); err != nil {
+	if err := row.Scan(&u.ID, &u.Username, &u.PasswordHash, &admin, &u.Email, &u.GitHubID, &created); err != nil {
 		return nil, err
 	}
 	u.IsAdmin = admin == 1
@@ -532,37 +606,68 @@ func (s *Store) ListActivity(userID string, limit int) ([]Activity, error) {
 }
 
 func (s *Store) SetGitHub(cfg GitHubConfig) error {
+	cfg.Branch = "main"
+	expires := ""
+	if !cfg.InstallTokenExpires.IsZero() {
+		expires = cfg.InstallTokenExpires.UTC().Format(time.RFC3339)
+	}
 	_, err := s.db.Exec(`
-INSERT INTO github_config (user_id, token, repo, branch, last_push, last_pull, last_error, updated_at)
-VALUES (?, ?, ?, ?, NULL, NULL, '', ?)
+INSERT INTO github_config (
+  user_id, token, repo, branch, app_id, app_slug, app_pem, client_id, client_secret,
+  installation_id, install_token_expires, last_push, last_pull, last_error, updated_at
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, '', ?)
 ON CONFLICT(user_id) DO UPDATE SET
   token = excluded.token,
   repo = excluded.repo,
   branch = excluded.branch,
+  app_id = excluded.app_id,
+  app_slug = excluded.app_slug,
+  app_pem = excluded.app_pem,
+  client_id = excluded.client_id,
+  client_secret = excluded.client_secret,
+  installation_id = excluded.installation_id,
+  install_token_expires = excluded.install_token_expires,
   last_error = '',
   updated_at = excluded.updated_at
-`, cfg.UserID, cfg.Token, cfg.Repo, cfg.Branch, now())
+`, cfg.UserID, cfg.Token, cfg.Repo, cfg.Branch, cfg.AppID, cfg.AppSlug, cfg.AppPEM, cfg.ClientID, cfg.ClientSecret,
+		cfg.InstallationID, expires, now())
 	return err
 }
 
 func (s *Store) GetGitHub(userID string) (*GitHubConfig, error) {
 	c := &GitHubConfig{}
 	var lastPush, lastPull sql.NullString
-	var updated string
+	var updated, expires string
 	err := s.db.QueryRow(
-		`SELECT user_id, token, repo, branch, last_push, last_pull, last_error, updated_at FROM github_config WHERE user_id = ?`,
+		`SELECT user_id, token, repo, branch, app_id, app_slug, app_pem, client_id, client_secret,
+		        installation_id, install_token_expires, last_push, last_pull, last_error, updated_at
+		 FROM github_config WHERE user_id = ?`,
 		userID,
-	).Scan(&c.UserID, &c.Token, &c.Repo, &c.Branch, &lastPush, &lastPull, &c.LastError, &updated)
+	).Scan(&c.UserID, &c.Token, &c.Repo, &c.Branch, &c.AppID, &c.AppSlug, &c.AppPEM, &c.ClientID, &c.ClientSecret,
+		&c.InstallationID, &expires, &lastPush, &lastPull, &c.LastError, &updated)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, err
 	}
+	c.InstallTokenExpires = parseTime(expires)
 	c.LastPush = parseTimePtr(lastPush)
 	c.LastPull = parseTimePtr(lastPull)
 	c.UpdatedAt = parseTime(updated)
 	return c, nil
+}
+
+func (s *Store) UpdateGitHubInstallToken(userID, token string, expires time.Time) error {
+	exp := ""
+	if !expires.IsZero() {
+		exp = expires.UTC().Format(time.RFC3339)
+	}
+	_, err := s.db.Exec(
+		`UPDATE github_config SET token = ?, install_token_expires = ?, updated_at = ? WHERE user_id = ?`,
+		token, exp, now(), userID,
+	)
+	return err
 }
 
 func (s *Store) DeleteGitHub(userID string) error {

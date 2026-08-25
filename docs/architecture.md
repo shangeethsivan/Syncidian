@@ -2,7 +2,7 @@
 
 This document describes the **current MVP** as implemented in this repository. GitHub renders the Mermaid diagrams below — open this file on GitHub to visualize them.
 
-The plugin is the client. The Go server is the coordination layer. A per-user vault on disk plus SQLite metadata is the working copy. GitHub is an **optional, per-user** durable source of truth — configured only after login, never on the landing page. MCP is the AI bridge.
+The plugin is the client. The Go server is the coordination layer. A per-user vault on disk plus SQLite metadata is the working copy. GitHub is an **optional, per-user** durable source of truth — people sign in with GitHub on the public landing, then install the App on one repository. Operators use `/admin`. MCP is the AI bridge.
 
 When you change this architecture, update the Mermaid diagrams in this file and in `README.md`. See [`AGENT.md`](../AGENT.md).
 
@@ -56,7 +56,7 @@ flowchart TB
   MCP --> SQLite
   Sync --> Git
   Git --> Vault
-  Git -->|"PAT stays on the server"| GH
+  Git -->|"GitHub App installation token"| GH
 ```
 
 ---
@@ -70,6 +70,7 @@ flowchart LR
   SRV --> ST["internal/store<br/>SQLite + vault dirs"]
   SRV --> ENG["internal/syncengine<br/>PlanSync · ClassifyPush"]
   SRV --> GIT["internal/gitx"]
+  SRV --> GHA["internal/githubapp"]
   SRV --> MCP["internal/mcp"]
   SRV --> WEB["internal/web<br/>embed index.html"]
 ```
@@ -82,11 +83,14 @@ flowchart LR
 
 ```mermaid
 flowchart TB
-  subgraph public [Unauthenticated — landing page]
+  subgraph public [Unauthenticated — public site]
     H["GET /health · /ready"]
+    UI["GET /  → one-page landing"]
+    AdminUI["GET /admin → admin sign-in / first setup"]
     S1["GET/POST /api/v1/setup"]
-    L["POST /api/v1/auth/login"]
-    UI["GET /  → dashboard asks to authenticate"]
+    L["POST /api/v1/auth/login · /auth/signup"]
+    GHO["GET /api/v1/auth/github/start · /callback"]
+    AppPub["GET /api/v1/github/app/setup · /callback<br/>GET/POST /api/v1/github/app/webhook · /urls"]
   end
 
   subgraph session [Dashboard session cookie — after login]
@@ -94,7 +98,8 @@ flowchart TB
     Users["GET/POST /api/v1/users<br/>admin: public fields only"]
     Tokens["GET/POST /api/v1/tokens"]
     Dev["devices · heartbeat"]
-    GH["GET/POST /api/v1/github<br/>this user_id only"]
+    GH["GET/POST /api/v1/github<br/>POST /api/v1/github/app/start"]
+    AppAdm["POST /api/v1/github/app/register<br/>admin: instance App"]
     MCPCfg["GET/POST /api/v1/mcp"]
     Act["GET /api/v1/activity"]
   end
@@ -114,7 +119,7 @@ flowchart TB
   session --- plugin
 ```
 
-Both the dashboard cookie (`syncidian_session`) and the plugin/MCP Bearer token go through the same `authenticate()` path. Tokens are stored as SHA-256 hashes; the raw `sk_sync_…` value is shown once. `GET/POST /api/v1/github` is never public — unauthenticated callers receive 401.
+Both the dashboard cookie (`syncidian_session`) and the plugin/MCP Bearer token go through the same `authenticate()` path. Tokens are stored as SHA-256 hashes; the raw `sk_sync_…` value is shown once. `GET/POST /api/v1/github` is never public — unauthenticated callers receive 401. GitHub App **callback**, **setup**, and **webhook** URLs are public so GitHub can redirect and ping.
 
 ---
 
@@ -124,22 +129,25 @@ This is the user-facing path the dashboard implements. Keep it in sync with `int
 
 ```mermaid
 flowchart TD
-  Open["GET /"] --> Land["Landing page: Sign in or create first admin"]
-  Land --> Auth{"Authenticated?"}
-  Auth -->|no| Form["Username + password only<br/>no GitHub fields"]
-  Form --> Setup["POST /api/v1/setup or /auth/login"]
-  Setup --> Auth
-  Auth -->|yes| Dash["Dashboard"]
+  Open["GET /"] --> Land["Landing: what Syncidian is"]
+  Land --> GH["Sign up / Log in / Connect with GitHub"]
+  Land --> Email["Optional email signup"]
+  Land --> AdminLink["GET /admin"]
 
-  Dash --> Admin{"is_admin?"}
-  Admin -->|yes| Manage["Users page: create accounts"]
-  Manage --> Public["List returns username, role, created_at"]
-  Admin -->|yes| Skip["GitHub not required"]
+  AdminLink --> Auth{"Authenticated admin?"}
+  Auth -->|no, empty DB| Form["Create first admin"]
+  Auth -->|no| Login["POST /api/v1/auth/login"]
+  Form --> Cookie["HttpOnly cookie"]
+  Login --> Cookie
+  Cookie --> Manage["Users + instance GitHub App URLs"]
 
-  Admin -->|no| Own["Own vault, devices, tokens, activity"]
-  Own --> GH{"User wants backup?"}
-  GH -->|yes| One["POST /api/v1/github<br/>one repo for this user_id"]
-  GH -->|no| SyncOnly["Device sync still works"]
+  GH --> OAuth["GET /api/v1/auth/github/callback"]
+  OAuth --> User["Regular user session"]
+  Email --> User
+  User --> Own["Own vault, devices, tokens, activity"]
+  Own --> Backup{"User wants backup?"}
+  Backup -->|yes| One["Install GitHub App<br/>one repo for this user_id · main only"]
+  Backup -->|no| SyncOnly["Device sync still works"]
 ```
 
 ---
@@ -270,18 +278,26 @@ flowchart TD
 
 ```mermaid
 flowchart LR
-  subgraph dashboard [Dashboard]
-    Land["Landing page always authenticates"] --> Setup["First-boot: create admin"]
-    Land --> Login["Later visits: POST /api/v1/auth/login"]
-    Setup --> Cookie["HttpOnly cookie<br/>syncidian_session"]
+  subgraph site [Public site]
+    Land["GET / landing"] --> GitHub["Sign in with GitHub"]
+    Land --> Email["POST /api/v1/auth/signup"]
+    GitHub --> Callback["GET /api/v1/auth/github/callback"]
+    Callback --> Cookie["HttpOnly cookie<br/>syncidian_session"]
+    Email --> Cookie
+  end
+
+  subgraph admin [Operators]
+    AdminUI["GET /admin"] --> Setup["First-boot: create admin"]
+    AdminUI --> Login["POST /api/v1/auth/login"]
+    Setup --> Cookie
     Login --> Cookie
     Cookie --> Split{"Role"}
-    Split -->|"admin"| UsersOnly["Users page only<br/>no GitHub"]
+    Split -->|"admin"| UsersOnly["Users + GitHub App URLs<br/>no vault"]
     Split -->|"user"| VaultUI["Optional GitHub page<br/>one repo per user"]
   end
 
   subgraph pluginAuth [Plugin and MCP]
-    Admin["Dashboard Tokens<br/>or CLI: syncidian token create"] --> Raw["sk_sync_… shown once"]
+    Tokens["Dashboard Tokens<br/>or CLI: syncidian token create"] --> Raw["sk_sync_… shown once"]
     Raw --> Hash["SHA-256 stored in tokens"]
     Raw --> Header["Authorization: Bearer"]
   end
@@ -291,7 +307,7 @@ flowchart LR
   Authed --> User["store.User"]
 ```
 
-GitHub is not part of login. Admins can stop after the cookie and manage users.
+GitHub OAuth is how vault users sign in. Admins sign in at `/admin` with username and password. The instance GitHub App needs a callback URL, a setup URL, and a webhook URL so GitHub can redirect and ping.
 
 ---
 
@@ -340,6 +356,8 @@ erDiagram
     text id PK
     text username
     text password_hash
+    text email
+    int github_id
     int is_admin
   }
   tokens {
@@ -372,13 +390,20 @@ erDiagram
   }
   github_config {
     text user_id PK
-    text token
+    int app_id
+    int installation_id
     text repo
     text branch
   }
+  instance_github_app {
+    int id PK
+    int app_id
+    text slug
+    text client_id
+  }
 ```
 
-Vault bytes live on disk at `data/vaults/<userId>/`. SQLite (`data/syncidian.db`) stores metadata, auth, devices, conflicts, activity, GitHub config, and MCP permissions.
+Vault bytes live on disk at `data/vaults/<userId>/`. SQLite (`data/syncidian.db`) stores metadata, auth, devices, conflicts, activity, GitHub config, the instance GitHub App, and MCP permissions.
 
 ---
 
@@ -405,7 +430,7 @@ flowchart TB
 
 A regular user only sees their own devices, tokens, vault, conflicts, activity, and one GitHub repository. Admins manage accounts and cannot call vault, token, device, activity, or GitHub APIs. The WebSocket hub broadcasts per `userID`.
 
-Admins can create users and list `adminUserSummary` fields (`username`, `is_admin`, `created_at`). They do **not** receive another user's GitHub PAT, repository, vault bytes, tokens, or activity. Admin login does not require `github_config`.
+Admins can create users and list `adminUserSummary` fields (`username`, `is_admin`, `created_at`). They do **not** receive another user's GitHub App credentials, repository, vault bytes, tokens, or activity. Admin login does not require `github_config`.
 
 ---
 
@@ -434,10 +459,11 @@ One container. No extra services for the basic install. Railway mounts a volume 
 | Area | Path |
 | --- | --- |
 | Process entry | [`cmd/syncidian/main.go`](../cmd/syncidian/main.go) |
-| HTTP routes + auth | [`internal/server/server.go`](../internal/server/server.go) |
+| HTTP routes + auth | [`internal/server/server.go`](../internal/server/server.go), [`internal/server/auth.go`](../internal/server/auth.go), [`internal/server/auth_github.go`](../internal/server/auth_github.go) |
 | Plan / push / devices | [`internal/server/sync.go`](../internal/server/sync.go) |
 | Sync decisions | [`internal/syncengine/plan.go`](../internal/syncengine/plan.go) |
-| GitHub backup | [`internal/server/github.go`](../internal/server/github.go), [`internal/gitx/repo.go`](../internal/gitx/repo.go) |
+| GitHub backup | [`internal/server/github.go`](../internal/server/github.go), [`internal/server/github_app.go`](../internal/server/github_app.go), [`internal/githubapp`](../internal/githubapp), [`internal/gitx/repo.go`](../internal/gitx/repo.go) |
+| GitHub App self-host setup | [`docs/github-app.md`](github-app.md) |
 | MCP tools | [`internal/mcp/mcp.go`](../internal/mcp/mcp.go) |
 | Live updates | [`internal/server/ws.go`](../internal/server/ws.go) |
 | Persistence | [`internal/store/store.go`](../internal/store/store.go) |
