@@ -80,7 +80,7 @@ Use this when GitHub’s manifest flow is blocked, or you want the credentials i
 
 On the app’s settings page:
 
-1. Note **App ID** (number) and the slug in the URL (`https://github.com/apps/<slug>`).
+1. Note **App ID** (number) and the **slug only** (`<slug>` from `https://github.com/apps/<slug>` — do not paste the full URL).
 2. **Client ID** is shown on the page. **Generate a new client secret** and copy it once.
 3. **Private keys** → **Generate a private key**. Download the `.pem` file.
 
@@ -146,5 +146,6 @@ If GitHub sent them to the **Setup URL** after install, Syncidian records the in
 | Install succeeds but Syncidian says credentials are missing | Setup URL must be `{base}/api/v1/github/app/setup`. Sign in as a **non-admin** vault user; admins do not connect a repo. |
 | Cannot install on someone else’s GitHub account | Make the app installable on **Any account** (public to GitHub users, not the Marketplace). |
 | Push/pull fails | Contents must be **read and write**. The install must include the chosen repo. Branch must be `main`. |
+| Connect with GitHub opens a GitHub 404 (`github.com/apps/https://…`) | `SYNCIDIAN_GITHUB_APP_SLUG` (or the admin slug field) was set to a full URL. Use only the slug (`syncidian`), not `https://github.com/apps/syncidian`. Syncidian now normalizes pasted URLs, but re-save credentials or fix the env var and restart. |
 
 Admins never connect a vault repository and cannot see another user’s GitHub credentials.

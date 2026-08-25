@@ -96,6 +96,71 @@ func AppURLs(base string) URLs {
 	}
 }
 
+// NormalizeAppSlug accepts a bare slug or a pasted GitHub App URL and returns
+// the path segment used in https://github.com/apps/<slug>/…
+// Examples: "syncidian", "https://github.com/apps/syncidian",
+// "github.com/apps/syncidian/installations/new" → "syncidian".
+func NormalizeAppSlug(raw string) string {
+	s := strings.TrimSpace(raw)
+	if s == "" {
+		return ""
+	}
+	lower := strings.ToLower(s)
+	for _, prefix := range []string{
+		"https://github.com/apps/",
+		"http://github.com/apps/",
+		"https://www.github.com/apps/",
+		"http://www.github.com/apps/",
+		"github.com/apps/",
+		"www.github.com/apps/",
+		"/apps/",
+	} {
+		if strings.HasPrefix(lower, prefix) {
+			s = s[len(prefix):]
+			lower = strings.ToLower(s)
+			break
+		}
+	}
+	// Also accept "https://github.com/apps" with no trailing path.
+	for _, exact := range []string{
+		"https://github.com/apps",
+		"http://github.com/apps",
+		"https://www.github.com/apps",
+		"http://www.github.com/apps",
+		"github.com/apps",
+		"www.github.com/apps",
+		"/apps",
+	} {
+		if lower == exact {
+			return ""
+		}
+	}
+	s = strings.Trim(s, "/")
+	if i := strings.IndexByte(s, '/'); i >= 0 {
+		s = s[:i]
+	}
+	if i := strings.IndexByte(s, '?'); i >= 0 {
+		s = s[:i]
+	}
+	if i := strings.IndexByte(s, '#'); i >= 0 {
+		s = s[:i]
+	}
+	// Reject leftovers that still look like a URL scheme (bad paste).
+	if strings.Contains(s, ":") {
+		return ""
+	}
+	return strings.TrimSpace(s)
+}
+
+// InstallURL is the GitHub page where a user installs this App on a repository.
+func InstallURL(slug string) string {
+	slug = NormalizeAppSlug(slug)
+	if slug == "" {
+		return ""
+	}
+	return "https://github.com/apps/" + slug + "/installations/new"
+}
+
 func ConvertManifest(code string) (*AppCredentials, error) {
 	code = strings.TrimSpace(code)
 	if code == "" {
@@ -111,6 +176,10 @@ func ConvertManifest(code string) (*AppCredentials, error) {
 	}
 	if creds.ID == 0 || creds.PEM == "" {
 		return nil, fmt.Errorf("GitHub App conversion returned incomplete credentials")
+	}
+	creds.Slug = NormalizeAppSlug(creds.Slug)
+	if creds.Slug == "" {
+		creds.Slug = NormalizeAppSlug(creds.HTMLURL)
 	}
 	return &creds, nil
 }

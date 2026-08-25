@@ -48,6 +48,44 @@ func TestSignJWT(t *testing.T) {
 	}
 }
 
+func TestNormalizeAppSlug(t *testing.T) {
+	cases := map[string]string{
+		"syncidian": "syncidian",
+		"  syncidian  ": "syncidian",
+		"https://github.com/apps/syncidian": "syncidian",
+		"http://github.com/apps/syncidian/": "syncidian",
+		"https://github.com/apps/syncidian/installations/new": "syncidian",
+		"github.com/apps/syncidian/installations/new": "syncidian",
+		"https://www.github.com/apps/My-App": "My-App",
+		"/apps/syncidian": "syncidian",
+		"https://github.com/apps/syncidian?tab=installations": "syncidian",
+		"": "",
+		"https://github.com/apps/": "",
+	}
+	for in, want := range cases {
+		if got := NormalizeAppSlug(in); got != want {
+			t.Fatalf("NormalizeAppSlug(%q)=%q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestInstallURL(t *testing.T) {
+	want := "https://github.com/apps/syncidian/installations/new"
+	for _, in := range []string{
+		"syncidian",
+		"https://github.com/apps/syncidian",
+		"https://github.com/apps/syncidian/installations/new",
+		"github.com/apps/syncidian",
+	} {
+		if got := InstallURL(in); got != want {
+			t.Fatalf("InstallURL(%q)=%q, want %q", in, got, want)
+		}
+	}
+	if InstallURL("") != "" {
+		t.Fatal("empty slug should yield empty install URL")
+	}
+}
+
 func TestNewManifestRequestsWriteAccess(t *testing.T) {
 	m := NewManifest("https://sync.example.com", "Syncidian-test")
 	if m.DefaultPermissions["contents"] != "write" {

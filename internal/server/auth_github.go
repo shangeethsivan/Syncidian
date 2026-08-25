@@ -15,7 +15,7 @@ func (s *Server) instanceGitHubApp() *store.GitHubApp {
 	if s.Cfg.GitHubAppID != 0 && s.Cfg.GitHubAppPEM != "" && s.Cfg.GitHubClientID != "" {
 		return &store.GitHubApp{
 			AppID:        s.Cfg.GitHubAppID,
-			Slug:         s.Cfg.GitHubAppSlug,
+			Slug:         githubapp.NormalizeAppSlug(s.Cfg.GitHubAppSlug),
 			PEM:          s.Cfg.GitHubAppPEM,
 			ClientID:     s.Cfg.GitHubClientID,
 			ClientSecret: s.Cfg.GitHubClientSecret,
@@ -25,6 +25,7 @@ func (s *Server) instanceGitHubApp() *store.GitHubApp {
 	if a == nil {
 		return &store.GitHubApp{}
 	}
+	a.Slug = githubapp.NormalizeAppSlug(a.Slug)
 	return a
 }
 
@@ -126,11 +127,11 @@ func (s *Server) handleGitHubAuthCallback(w http.ResponseWriter, r *http.Request
 	}
 	if next == "install" || next == "setup" {
 		if app.Slug != "" {
-			http.Redirect(w, r, "https://github.com/apps/"+url.PathEscape(app.Slug)+"/installations/new", http.StatusFound)
+			http.Redirect(w, r, githubapp.InstallURL(app.Slug), http.StatusFound)
 			return
 		}
 	}
-	s.dashboardRedirect(w, r, url.Values{"github": {"connected"}})
+	s.dashboardRedirect(w, r, url.Values{"github": {"signed_in"}})
 }
 
 func (s *Server) upsertGitHubUser(gh *githubapp.User) (*store.User, error) {

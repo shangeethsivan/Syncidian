@@ -645,6 +645,30 @@ func TestPublicLandingAdminAndGitHubAppURLs(t *testing.T) {
 		t.Fatalf("github_url after instance app: %v", m)
 	}
 
+	// Pasting a full GitHub App URL as the slug must still produce a clean install URL.
+	res, m = doJSON(t, http.MethodPost, hs.URL+"/api/v1/github/app/register", map[string]any{
+		"app_id": 100, "slug": "https://github.com/apps/syncidian/installations/new",
+		"pem": "-----BEGIN PRIVATE KEY-----\nMIIB\n-----END PRIVATE KEY-----",
+		"client_id": "Iv1.xyz", "client_secret": "secret2",
+	}, adminCookies, "")
+	if res.StatusCode != 200 {
+		t.Fatalf("register app with URL slug: %d %v", res.StatusCode, m)
+	}
+	if m["slug"] != "syncidian" {
+		t.Fatalf("register should normalize slug, got %v", m)
+	}
+	res, m = doJSON(t, http.MethodPost, hs.URL+"/api/v1/github/app/start", map[string]any{}, bob, "")
+	if res.StatusCode != 200 {
+		t.Fatalf("app start after URL slug: %d %v", res.StatusCode, m)
+	}
+	githubURL, _ = m["github_url"].(string)
+	if githubURL != "https://github.com/apps/syncidian/installations/new" {
+		t.Fatalf("github_url must not double-prefix apps/: %q", githubURL)
+	}
+	if strings.Contains(githubURL, "apps/https://") {
+		t.Fatalf("malformed install URL: %q", githubURL)
+	}
+
 	start, err = http.NewRequest(http.MethodGet, hs.URL+"/api/v1/auth/github/start", nil)
 	if err != nil {
 		t.Fatal(err)
@@ -658,7 +682,7 @@ func TestPublicLandingAdminAndGitHubAppURLs(t *testing.T) {
 		t.Fatalf("github start with app: %d", redir.StatusCode)
 	}
 	loc = redir.Header.Get("Location")
-	if !strings.Contains(loc, "https://github.com/login/oauth/authorize") || !strings.Contains(loc, "client_id=Iv1.abc") {
+	if !strings.Contains(loc, "https://github.com/login/oauth/authorize") || !strings.Contains(loc, "client_id=Iv1.xyz") {
 		t.Fatalf("expected GitHub OAuth redirect, got %q", loc)
 	}
 }
