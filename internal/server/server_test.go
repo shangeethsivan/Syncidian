@@ -314,6 +314,111 @@ func TestSyncAutoMergesSimpleTypingConflict(t *testing.T) {
 	}
 }
 
+func TestSyncMoveFileAndFolder(t *testing.T) {
+	hs, done := newTestServer(t)
+	defer done()
+	token, deviceID := vaultPluginAuth(t, hs, "bob")
+
+	note := "# moved\n"
+	hash := fileSHA256([]byte(note))
+	pushNote(t, hs, token, deviceID, "Inbox/Hello.md", note, "")
+
+	res, m := doJSON(t, http.MethodPost, hs.URL+"/api/v1/sync/push", map[string]any{
+		"device_id": deviceID,
+		"files": []map[string]any{
+			{
+				"path":      "Inbox/Hello.md",
+				"hash":      "",
+				"deleted":   true,
+				"base_hash": hash,
+				"mtime":     2,
+			},
+			{
+				"path":         "Notes/Hello.md",
+				"hash":         hash,
+				"mtime":        2,
+				"content":      base64.StdEncoding.EncodeToString([]byte(note)),
+				"base_hash":    hash,
+				"renamed_from": "Inbox/Hello.md",
+			},
+		},
+	}, nil, token)
+	if res.StatusCode != 200 {
+		t.Fatalf("move file %d %v", res.StatusCode, m)
+	}
+
+	res, man := doJSON(t, http.MethodGet, hs.URL+"/api/v1/sync/manifest", nil, nil, token)
+	files, _ := man["files"].([]any)
+	if res.StatusCode != 200 || len(files) != 1 {
+		t.Fatalf("manifest after file move: %d %v", res.StatusCode, man)
+	}
+	item, _ := files[0].(map[string]any)
+	if item["path"] != "Notes/Hello.md" {
+		t.Fatalf("moved path %v", item)
+	}
+
+	a, b := "# A\n", "# B\n"
+	hashA, hashB := fileSHA256([]byte(a)), fileSHA256([]byte(b))
+	pushNote(t, hs, token, deviceID, "Projects/a.md", a, "")
+	pushNote(t, hs, token, deviceID, "Projects/nested/b.md", b, "")
+
+	res, m = doJSON(t, http.MethodPost, hs.URL+"/api/v1/sync/push", map[string]any{
+		"device_id": deviceID,
+		"files": []map[string]any{
+			{
+				"path":         "Archive/a.md",
+				"hash":         hashA,
+				"mtime":        4,
+				"content":      base64.StdEncoding.EncodeToString([]byte(a)),
+				"base_hash":    hashA,
+				"renamed_from": "Projects/a.md",
+			},
+			{
+				"path":         "Archive/nested/b.md",
+				"hash":         hashB,
+				"mtime":        4,
+				"content":      base64.StdEncoding.EncodeToString([]byte(b)),
+				"base_hash":    hashB,
+				"renamed_from": "Projects/nested/b.md",
+			},
+		},
+	}, nil, token)
+	if res.StatusCode != 200 {
+		t.Fatalf("move folder %d %v", res.StatusCode, m)
+	}
+
+	res, man = doJSON(t, http.MethodGet, hs.URL+"/api/v1/sync/manifest", nil, nil, token)
+	if res.StatusCode != 200 {
+		t.Fatalf("manifest %d %v", res.StatusCode, man)
+	}
+	got := map[string]bool{}
+	for _, rawFile := range man["files"].([]any) {
+		got[rawFile.(map[string]any)["path"].(string)] = true
+	}
+	if got["Projects/a.md"] || got["Projects/nested/b.md"] {
+		t.Fatalf("old folder paths remained: %v", got)
+	}
+	if !got["Notes/Hello.md"] || !got["Archive/a.md"] || !got["Archive/nested/b.md"] {
+		t.Fatalf("new paths missing: %v", got)
+	}
+
+	res, plan := doJSON(t, http.MethodPost, hs.URL+"/api/v1/sync/plan", map[string]any{
+		"device_id": deviceID,
+		"files": []map[string]any{
+			{"path": "Notes/Hello.md", "hash": hash, "base_hash": hash},
+			{"path": "Archive/a.md", "hash": hashA, "base_hash": hashA},
+			{"path": "Archive/nested/b.md", "hash": hashB, "base_hash": hashB},
+			{"path": "Projects/a.md", "hash": "", "deleted": true, "base_hash": hashA},
+		},
+	}, nil, token)
+	if res.StatusCode != 200 {
+		t.Fatalf("plan %d %v", res.StatusCode, plan)
+	}
+	if pulls, _ := plan["Pull"].([]any); len(pulls) != 0 {
+		t.Fatalf("moved files came back as pull: %v", plan)
+	}
+}
+
 func TestDashboardServed(t *testing.T) {
 	hs, done := newTestServer(t)
 	defer done()

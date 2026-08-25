@@ -70,6 +70,7 @@ var SyncidianPlugin = class extends import_obsidian.Plugin {
     this.ws = null;
     this.pending = /* @__PURE__ */ new Map();
     this.idleTimer = null;
+    this.applyingRemote = 0;
   }
   async onload() {
     await this.loadSettings();
@@ -268,11 +269,9 @@ var SyncidianPlugin = class extends import_obsidian.Plugin {
       for (const path of plan.Pull || []) {
         await this.pullFile(path);
       }
-      if ((plan.Delete || []).length)
-        await this.pushPaths(plan.Delete, true);
-      const toPush = plan.Push || [];
-      if (toPush.length)
-        await this.pushPaths(toPush, false);
+      if ((plan.Delete || []).length || (plan.Push || []).length) {
+        await this.pushBatch(plan.Delete || [], plan.Push || []);
+      }
       for (const path of plan.Conflicts || []) {
         await this.raiseConflict(path);
       }
@@ -367,29 +366,40 @@ var SyncidianPlugin = class extends import_obsidian.Plugin {
     }
   }
   async pushPaths(paths, deleted) {
+    if (deleted)
+      await this.pushBatch(paths, []);
+    else
+      await this.pushBatch([], paths);
+  }
+  async pushBatch(deletes, upserts, renamedFrom = {}) {
     const files = [];
-    for (const path of paths) {
-      if (deleted) {
-        files.push({
-          path,
-          hash: "",
-          deleted: true,
-          base_hash: this.settings.hashes[path] || "",
-          mtime: Date.now() / 1e3,
-          content: ""
-        });
+    const movedAway = new Set(Object.values(renamedFrom).filter(Boolean));
+    for (const path of deletes) {
+      if (movedAway.has(path))
         continue;
-      }
+      files.push({
+        path,
+        hash: "",
+        deleted: true,
+        renamed_from: "",
+        base_hash: this.settings.hashes[path] || "",
+        mtime: Math.floor(Date.now() / 1e3),
+        content: ""
+      });
+    }
+    for (const path of upserts) {
       const af = this.app.vault.getAbstractFileByPath(path);
       if (!(af instanceof import_obsidian.TFile))
         continue;
       const data = await this.app.vault.readBinary(af);
       const hash = await sha256(data);
+      const from = renamedFrom[path] || "";
       files.push({
         path,
         hash,
         deleted: false,
-        base_hash: this.settings.hashes[path] || "",
+        renamed_from: from,
+        base_hash: this.settings.hashes[from] || this.settings.hashes[path] || "",
         mtime: Math.floor(af.stat.mtime / 1e3),
         content: b64encode(new Uint8Array(data))
       });
@@ -409,6 +419,8 @@ var SyncidianPlugin = class extends import_obsidian.Plugin {
       else
         delete this.settings.hashes[p];
     }
+    for (const old of movedAway)
+      delete this.settings.hashes[old];
     await this.saveSettings();
     for (const c of res.conflicts || []) {
       new ConflictModal(this.app, this, c.id, c.path).open();
@@ -434,7 +446,7 @@ var SyncidianPlugin = class extends import_obsidian.Plugin {
     return out;
   }
   queueChange(file, deleted) {
-    if (!this.connected)
+    if (!this.connected || this.syncing || this.applyingRemote)
       return;
     if (deleted) {
       const paths = file instanceof import_obsidian.TFile ? [file.path] : this.pathsUnder(file.path);
@@ -447,37 +459,72 @@ var SyncidianPlugin = class extends import_obsidian.Plugin {
       for (const p of paths.length ? paths : [file.path]) {
         if (ignored(p))
           continue;
-        this.pending.set(p, true);
+        this.pending.set(p, { deleted: true });
       }
     } else {
       if (!(file instanceof import_obsidian.TFile) || ignored(file.path))
         return;
-      this.pending.set(file.path, false);
+      const prev = this.pending.get(file.path);
+      this.pending.set(file.path, { deleted: false, renamedFrom: prev == null ? void 0 : prev.renamedFrom });
     }
     this.scheduleFlush();
   }
   queueRename(oldPath, file) {
-    if (!this.connected)
+    if (!this.connected || this.syncing || this.applyingRemote)
       return;
-    const oldPaths = this.pathsUnder(oldPath);
-    for (const p of oldPaths.length ? oldPaths : ignored(oldPath) ? [] : [oldPath]) {
-      this.pending.set(p, true);
-    }
     if (file instanceof import_obsidian.TFile) {
-      if (!ignored(file.path))
-        this.pending.set(file.path, false);
-    } else {
-      const oldPrefix = oldPath.replace(/\/$/, "") + "/";
-      const newPrefix = file.path.replace(/\/$/, "") + "/";
-      for (const p of Object.keys(this.settings.hashes)) {
-        if (p === oldPath || p.startsWith(oldPrefix)) {
-          const np = p === oldPath ? file.path : newPrefix + p.slice(oldPrefix.length);
-          if (!ignored(np))
-            this.pending.set(np, false);
-        }
+      if (!ignored(oldPath))
+        this.pending.set(oldPath, { deleted: true });
+      if (!ignored(file.path)) {
+        this.pending.set(file.path, { deleted: false, renamedFrom: oldPath });
       }
+    } else {
+      this.queueFolderRename(oldPath, file.path);
     }
     this.scheduleFlush();
+  }
+  queueFolderRename(oldPath, newPath) {
+    const oldFolder = oldPath.replace(/\/$/, "");
+    const newFolder = newPath.replace(/\/$/, "");
+    const remap = (p) => {
+      if (p === oldFolder)
+        return newFolder;
+      if (p.startsWith(oldFolder + "/"))
+        return newFolder + p.slice(oldFolder.length);
+      return null;
+    };
+    for (const [p, op] of [...this.pending.entries()]) {
+      const np = remap(p);
+      if (np == null)
+        continue;
+      this.pending.delete(p);
+      if (!ignored(p))
+        this.pending.set(p, { deleted: true });
+      if (!ignored(np)) {
+        this.pending.set(np, { deleted: op.deleted, renamedFrom: op.renamedFrom || p });
+      }
+    }
+    for (const p of Object.keys(this.settings.hashes)) {
+      const np = remap(p);
+      if (np == null || ignored(np))
+        continue;
+      this.pending.set(p, { deleted: true });
+      this.pending.set(np, { deleted: false, renamedFrom: p });
+    }
+    for (const f of this.app.vault.getAllLoadedFiles()) {
+      if (!(f instanceof import_obsidian.TFile) || ignored(f.path))
+        continue;
+      if (f.path !== newFolder && !f.path.startsWith(newFolder + "/"))
+        continue;
+      const rel = f.path === newFolder ? "" : f.path.slice(newFolder.length + 1);
+      const oldP = rel ? `${oldFolder}/${rel}` : oldFolder;
+      if (!ignored(oldP))
+        this.pending.set(oldP, { deleted: true });
+      this.pending.set(f.path, { deleted: false, renamedFrom: oldP });
+    }
+    if (!this.pathsUnder(oldFolder).length && !ignored(oldFolder)) {
+      this.pending.set(oldFolder, { deleted: true });
+    }
   }
   scheduleFlush() {
     this.clearIdleTimer();
@@ -505,19 +552,20 @@ var SyncidianPlugin = class extends import_obsidian.Plugin {
     this.pending = /* @__PURE__ */ new Map();
     const toDelete = [];
     const toPush = [];
-    for (const [p, deleted] of snapshot) {
-      if (deleted)
+    const renamedFrom = {};
+    for (const [p, op] of snapshot) {
+      if (op.deleted)
         toDelete.push(p);
-      else
+      else {
         toPush.push(p);
+        if (op.renamedFrom)
+          renamedFrom[p] = op.renamedFrom;
+      }
     }
     this.syncing = true;
     this.setStatus("syncing");
     try {
-      if (toDelete.length)
-        await this.pushPaths(toDelete, true);
-      if (toPush.length)
-        await this.pushPaths(toPush, false);
+      await this.pushBatch(toDelete, toPush, renamedFrom);
       this.setStatus("ok");
     } catch (e) {
       this.setStatus("error");
@@ -544,14 +592,19 @@ var SyncidianPlugin = class extends import_obsidian.Plugin {
         try {
           const msg = JSON.parse(ev.data);
           if (msg.type === "file_changed" && msg.path) {
-            if (msg.deleted) {
-              const f = this.app.vault.getAbstractFileByPath(msg.path);
-              if (f)
-                await this.app.vault.delete(f);
-              delete this.settings.hashes[msg.path];
-              await this.saveSettings();
-            } else {
-              await this.pullFile(msg.path);
+            this.applyingRemote++;
+            try {
+              if (msg.deleted) {
+                const f = this.app.vault.getAbstractFileByPath(msg.path);
+                if (f)
+                  await this.app.vault.delete(f);
+                delete this.settings.hashes[msg.path];
+                await this.saveSettings();
+              } else {
+                await this.pullFile(msg.path);
+              }
+            } finally {
+              this.applyingRemote--;
             }
           }
           if (msg.type === "github_synced") {

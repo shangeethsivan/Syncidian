@@ -212,16 +212,16 @@ sequenceDiagram
   participant Git as gitx
   participant GH as GitHub
 
-  User->>Vault: Edit note
-  Vault->>Plugin: create / modify / delete
-  Plugin->>Plugin: Queue path, wait 3s after last keystroke
-  Plugin->>API: POST /api/v1/sync/push
+  User->>Vault: Edit, delete, or move a note/folder
+  Vault->>Plugin: create / modify / delete / rename
+  Plugin->>Plugin: Queue path, wait 3s after last change
+  Plugin->>API: POST /api/v1/sync/push (add, modify, delete, rename_from)
   API->>API: ClassifyPush(client, server, base)
-  alt accept or simple auto-merge
-    API->>API: Write vault file + UpsertFile
+  alt accept, move, or simple auto-merge
+    API->>API: Write, RemoveAll, or os.Rename + UpsertFile
     API->>Hub: Broadcast file_changed (skip sender)
-    Hub->>Other: pullFile(path)
-    API->>Git: CommitAll
+    Hub->>Other: pullFile or local delete
+    API->>Git: CommitAll (add / modify / rm / mv)
     opt GitHub configured
       Git->>GH: Push
     end
@@ -263,7 +263,7 @@ flowchart TD
   Tomb -->|no| Pull
 ```
 
-`ClassifyPush` is the write-side counterpart: accept, no-op, or raise a conflict before bytes are written. `AutoMerge` then resolves simple replacements and typing continuations without opening the conflict UI. Folder deletes remove the directory and every descendant file record.
+`ClassifyPush` is the write-side counterpart: accept, no-op, or raise a conflict before bytes are written. `AutoMerge` then resolves simple replacements and typing continuations without opening the conflict UI. Folder deletes remove the directory and every descendant file record. File and folder moves are a single push (`renamed_from` plus the new path) so Git records them as a rename, not as a delete followed by an add.
 
 ---
 
@@ -479,7 +479,8 @@ One container. No extra services for the basic install. Railway mounts a volume 
 | HTTP routes + auth | [`internal/server/server.go`](../internal/server/server.go), [`internal/server/auth.go`](../internal/server/auth.go), [`internal/server/auth_github.go`](../internal/server/auth_github.go) |
 | Plan / push / devices | [`internal/server/sync.go`](../internal/server/sync.go) |
 | Sync decisions | [`internal/syncengine/plan.go`](../internal/syncengine/plan.go), [`internal/syncengine/merge.go`](../internal/syncengine/merge.go) |
-| GitHub backup | [`internal/server/github.go`](../internal/server/github.go), [`internal/server/github_app.go`](../internal/server/github_app.go), [`internal/githubapp`](../internal/githubapp), [`internal/gitx/repo.go`](../internal/gitx/repo.go) |
+| Git add / modify / rm / mv | [`internal/gitx/repo.go`](../internal/gitx/repo.go) |
+| GitHub backup | [`internal/server/github.go`](../internal/server/github.go), [`internal/server/github_app.go`](../internal/server/github_app.go), [`internal/githubapp`](../internal/githubapp) |
 | GitHub App self-host setup | [`docs/github-app.md`](github-app.md) |
 | MCP tools | [`internal/mcp/mcp.go`](../internal/mcp/mcp.go) |
 | Live updates | [`internal/server/ws.go`](../internal/server/ws.go) |

@@ -103,6 +103,20 @@ func TestPlanSyncServerTombstone(t *testing.T) {
 	}
 }
 
+func TestPlanSyncRemoteDelete(t *testing.T) {
+	client := map[string]string{"old.md": "abc", "moved.md": "abc"}
+	server := map[string]string{"old.md": "", "moved.md": "abc"}
+	base := map[string]string{"old.md": "abc"}
+	got := PlanSync(client, server, base)
+	sort.Strings(got.Pull)
+	if len(got.Push) != 0 || len(got.Delete) != 0 {
+		t.Fatalf("stale copy of remotely deleted file should pull, got %+v", got)
+	}
+	if len(got.Pull) != 1 || got.Pull[0] != "old.md" {
+		t.Fatalf("want pull old.md, got %+v", got)
+	}
+}
+
 func TestClassifyPush(t *testing.T) {
 	if got := ClassifyPush("aaa", "", "", false); got != "accept" {
 		t.Fatalf("new file: %s", got)

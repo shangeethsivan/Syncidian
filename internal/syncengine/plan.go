@@ -78,7 +78,17 @@ func PlanSync(client, server, base map[string]string) Plan {
 			plan.Conflicts = append(plan.Conflicts, p)
 			continue
 		}
-		if serverGone {
+		if !onServer {
+			plan.Push = append(plan.Push, p)
+			continue
+		}
+		if sh == "" {
+			// Server tombstone: pull the delete if this device still has the last synced bytes.
+			bh := base[p]
+			if bh != "" && bh == ch {
+				plan.Pull = append(plan.Pull, p)
+				continue
+			}
 			plan.Push = append(plan.Push, p)
 			continue
 		}

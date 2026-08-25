@@ -28,6 +28,11 @@ const DEFAULT_SETTINGS: SyncidianSettings = {
 /** Wait until typing/edits stop, then wait this long before pushing. */
 const IDLE_SYNC_MS = 3000;
 
+interface PendingOp {
+  deleted: boolean;
+  renamedFrom?: string;
+}
+
 const IGNORE = [
   /^\.obsidian\/workspace(-mobile)?\.json$/,
   /^\.obsidian\/workspace-/,
@@ -71,8 +76,9 @@ export default class SyncidianPlugin extends Plugin {
   connected = false;
   syncing = false;
   ws: WebSocket | null = null;
-  pending = new Map<string, boolean>();
+  pending = new Map<string, PendingOp>();
   idleTimer: number | null = null;
+  applyingRemote = 0;
 
   async onload() {
     await this.loadSettings();
@@ -268,9 +274,9 @@ export default class SyncidianPlugin extends Plugin {
       for (const path of plan.Pull || []) {
         await this.pullFile(path);
       }
-      if ((plan.Delete || []).length) await this.pushPaths(plan.Delete, true);
-      const toPush: string[] = plan.Push || [];
-      if (toPush.length) await this.pushPaths(toPush, false);
+      if ((plan.Delete || []).length || (plan.Push || []).length) {
+        await this.pushBatch(plan.Delete || [], plan.Push || []);
+      }
       for (const path of plan.Conflicts || []) {
         await this.raiseConflict(path);
       }
@@ -363,28 +369,37 @@ export default class SyncidianPlugin extends Plugin {
   }
 
   async pushPaths(paths: string[], deleted: boolean) {
+    if (deleted) await this.pushBatch(paths, []);
+    else await this.pushBatch([], paths);
+  }
+
+  async pushBatch(deletes: string[], upserts: string[], renamedFrom: Record<string, string> = {}) {
     const files = [];
-    for (const path of paths) {
-      if (deleted) {
-        files.push({
-          path,
-          hash: "",
-          deleted: true,
-          base_hash: this.settings.hashes[path] || "",
-          mtime: Date.now() / 1000,
-          content: "",
-        });
-        continue;
-      }
+    const movedAway = new Set(Object.values(renamedFrom).filter(Boolean));
+    for (const path of deletes) {
+      if (movedAway.has(path)) continue;
+      files.push({
+        path,
+        hash: "",
+        deleted: true,
+        renamed_from: "",
+        base_hash: this.settings.hashes[path] || "",
+        mtime: Math.floor(Date.now() / 1000),
+        content: "",
+      });
+    }
+    for (const path of upserts) {
       const af = this.app.vault.getAbstractFileByPath(path);
       if (!(af instanceof TFile)) continue;
       const data = await this.app.vault.readBinary(af);
       const hash = await sha256(data);
+      const from = renamedFrom[path] || "";
       files.push({
         path,
         hash,
         deleted: false,
-        base_hash: this.settings.hashes[path] || "",
+        renamed_from: from,
+        base_hash: this.settings.hashes[from] || this.settings.hashes[path] || "",
         mtime: Math.floor(af.stat.mtime / 1000),
         content: b64encode(new Uint8Array(data)),
       });
@@ -400,6 +415,7 @@ export default class SyncidianPlugin extends Plugin {
       else if (f) this.settings.hashes[p] = f.hash;
       else delete this.settings.hashes[p];
     }
+    for (const old of movedAway) delete this.settings.hashes[old];
     await this.saveSettings();
     for (const c of res.conflicts || []) {
       new ConflictModal(this.app, this, c.id, c.path).open();
@@ -426,7 +442,7 @@ export default class SyncidianPlugin extends Plugin {
   }
 
   queueChange(file: TAbstractFile, deleted: boolean) {
-    if (!this.connected) return;
+    if (!this.connected || this.syncing || this.applyingRemote) return;
     if (deleted) {
       const paths = file instanceof TFile ? [file.path] : this.pathsUnder(file.path);
       if (file instanceof TFile) {
@@ -436,34 +452,63 @@ export default class SyncidianPlugin extends Plugin {
       }
       for (const p of paths.length ? paths : [file.path]) {
         if (ignored(p)) continue;
-        this.pending.set(p, true);
+        this.pending.set(p, { deleted: true });
       }
     } else {
       if (!(file instanceof TFile) || ignored(file.path)) return;
-      this.pending.set(file.path, false);
+      const prev = this.pending.get(file.path);
+      this.pending.set(file.path, { deleted: false, renamedFrom: prev?.renamedFrom });
     }
     this.scheduleFlush();
   }
 
   queueRename(oldPath: string, file: TAbstractFile) {
-    if (!this.connected) return;
-    const oldPaths = this.pathsUnder(oldPath);
-    for (const p of oldPaths.length ? oldPaths : ignored(oldPath) ? [] : [oldPath]) {
-      this.pending.set(p, true);
-    }
+    if (!this.connected || this.syncing || this.applyingRemote) return;
     if (file instanceof TFile) {
-      if (!ignored(file.path)) this.pending.set(file.path, false);
-    } else {
-      const oldPrefix = oldPath.replace(/\/$/, "") + "/";
-      const newPrefix = file.path.replace(/\/$/, "") + "/";
-      for (const p of Object.keys(this.settings.hashes)) {
-        if (p === oldPath || p.startsWith(oldPrefix)) {
-          const np = p === oldPath ? file.path : newPrefix + p.slice(oldPrefix.length);
-          if (!ignored(np)) this.pending.set(np, false);
-        }
+      if (!ignored(oldPath)) this.pending.set(oldPath, { deleted: true });
+      if (!ignored(file.path)) {
+        this.pending.set(file.path, { deleted: false, renamedFrom: oldPath });
       }
+    } else {
+      this.queueFolderRename(oldPath, file.path);
     }
     this.scheduleFlush();
+  }
+
+  queueFolderRename(oldPath: string, newPath: string) {
+    const oldFolder = oldPath.replace(/\/$/, "");
+    const newFolder = newPath.replace(/\/$/, "");
+    const remap = (p: string): string | null => {
+      if (p === oldFolder) return newFolder;
+      if (p.startsWith(oldFolder + "/")) return newFolder + p.slice(oldFolder.length);
+      return null;
+    };
+    for (const [p, op] of [...this.pending.entries()]) {
+      const np = remap(p);
+      if (np == null) continue;
+      this.pending.delete(p);
+      if (!ignored(p)) this.pending.set(p, { deleted: true });
+      if (!ignored(np)) {
+        this.pending.set(np, { deleted: op.deleted, renamedFrom: op.renamedFrom || p });
+      }
+    }
+    for (const p of Object.keys(this.settings.hashes)) {
+      const np = remap(p);
+      if (np == null || ignored(np)) continue;
+      this.pending.set(p, { deleted: true });
+      this.pending.set(np, { deleted: false, renamedFrom: p });
+    }
+    for (const f of this.app.vault.getAllLoadedFiles()) {
+      if (!(f instanceof TFile) || ignored(f.path)) continue;
+      if (f.path !== newFolder && !f.path.startsWith(newFolder + "/")) continue;
+      const rel = f.path === newFolder ? "" : f.path.slice(newFolder.length + 1);
+      const oldP = rel ? `${oldFolder}/${rel}` : oldFolder;
+      if (!ignored(oldP)) this.pending.set(oldP, { deleted: true });
+      this.pending.set(f.path, { deleted: false, renamedFrom: oldP });
+    }
+    if (!this.pathsUnder(oldFolder).length && !ignored(oldFolder)) {
+      this.pending.set(oldFolder, { deleted: true });
+    }
   }
 
   scheduleFlush() {
@@ -492,15 +537,18 @@ export default class SyncidianPlugin extends Plugin {
     this.pending = new Map();
     const toDelete: string[] = [];
     const toPush: string[] = [];
-    for (const [p, deleted] of snapshot) {
-      if (deleted) toDelete.push(p);
-      else toPush.push(p);
+    const renamedFrom: Record<string, string> = {};
+    for (const [p, op] of snapshot) {
+      if (op.deleted) toDelete.push(p);
+      else {
+        toPush.push(p);
+        if (op.renamedFrom) renamedFrom[p] = op.renamedFrom;
+      }
     }
     this.syncing = true;
     this.setStatus("syncing");
     try {
-      if (toDelete.length) await this.pushPaths(toDelete, true);
-      if (toPush.length) await this.pushPaths(toPush, false);
+      await this.pushBatch(toDelete, toPush, renamedFrom);
       this.setStatus("ok");
     } catch (e) {
       this.setStatus("error");
@@ -528,13 +576,18 @@ export default class SyncidianPlugin extends Plugin {
         try {
           const msg = JSON.parse(ev.data);
           if (msg.type === "file_changed" && msg.path) {
-            if (msg.deleted) {
-              const f = this.app.vault.getAbstractFileByPath(msg.path);
-              if (f) await this.app.vault.delete(f);
-              delete this.settings.hashes[msg.path];
-              await this.saveSettings();
-            } else {
-              await this.pullFile(msg.path);
+            this.applyingRemote++;
+            try {
+              if (msg.deleted) {
+                const f = this.app.vault.getAbstractFileByPath(msg.path);
+                if (f) await this.app.vault.delete(f);
+                delete this.settings.hashes[msg.path];
+                await this.saveSettings();
+              } else {
+                await this.pullFile(msg.path);
+              }
+            } finally {
+              this.applyingRemote--;
             }
           }
           if (msg.type === "github_synced") {
