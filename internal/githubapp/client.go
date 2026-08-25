@@ -236,6 +236,74 @@ func ListRepos(installToken string) ([]Repo, error) {
 	return out.Repositories, nil
 }
 
+// Installation is a GitHub App installation on an account.
+type Installation struct {
+	ID      int64 `json:"id"`
+	AppID   int64 `json:"app_id"`
+	Account struct {
+		Login string `json:"login"`
+	} `json:"account"`
+}
+
+// GetInstallation returns an installation that belongs to this App (JWT auth).
+// Used to confirm an installation_id from a callback before binding it to a user.
+func GetInstallation(appID int64, pemData []byte, installationID int64) (*Installation, error) {
+	jwt, err := SignJWT(appID, pemData)
+	if err != nil {
+		return nil, err
+	}
+	url := fmt.Sprintf("https://api.github.com/app/installations/%d", installationID)
+	body, err := do(http.MethodGet, url, "Bearer "+jwt, nil)
+	if err != nil {
+		return nil, err
+	}
+	var inst Installation
+	if err := json.Unmarshal(body, &inst); err != nil {
+		return nil, err
+	}
+	if inst.ID == 0 {
+		return nil, fmt.Errorf("GitHub installation not found")
+	}
+	return &inst, nil
+}
+
+// ListUserInstallations lists App installations the user can access (user OAuth token).
+func ListUserInstallations(userToken string) ([]Installation, error) {
+	body, err := do(http.MethodGet, "https://api.github.com/user/installations?per_page=100", "Bearer "+userToken, nil)
+	if err != nil {
+		return nil, err
+	}
+	var out struct {
+		Installations []Installation `json:"installations"`
+	}
+	if err := json.Unmarshal(body, &out); err != nil {
+		return nil, err
+	}
+	if out.Installations == nil {
+		out.Installations = []Installation{}
+	}
+	return out.Installations, nil
+}
+
+// FindAppInstallation returns the installation for appID from a user token, if any.
+func FindAppInstallation(userToken string, appID int64) (int64, error) {
+	list, err := ListUserInstallations(userToken)
+	if err != nil {
+		return 0, err
+	}
+	var match int64
+	for _, inst := range list {
+		if inst.AppID == appID {
+			if match != 0 {
+				// Multiple installs of this app (e.g. personal + org); caller should use installation_id.
+				return 0, nil
+			}
+			match = inst.ID
+		}
+	}
+	return match, nil
+}
+
 // SignJWT builds a GitHub App RS256 JWT. iss is the numeric App ID.
 func SignJWT(appID int64, pemData []byte) (string, error) {
 	key, err := parseRSAKey(pemData)

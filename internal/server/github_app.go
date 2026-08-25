@@ -314,6 +314,11 @@ func (s *Server) setPendingInstallIntent(w http.ResponseWriter, r *http.Request)
 	})
 }
 
+func (s *Server) hasPendingInstallIntent(r *http.Request) bool {
+	c, err := r.Cookie(pendingInstallIntentCookie)
+	return err == nil && c.Value != ""
+}
+
 func (s *Server) clearPendingInstallCookies(w http.ResponseWriter, r *http.Request) {
 	secure := r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https")
 	expired := func(name string) *http.Cookie {

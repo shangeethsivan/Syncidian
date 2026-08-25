@@ -990,8 +990,9 @@ async function github(main) {
         ${gh.instance_app ? `
         <p>Install the Syncidian GitHub App with Contents <b>read and write</b>. Pick one repository. You do not paste a personal access token, and SSH deploy keys are not used.</p>
         <ol>
-          <li>Click <b>Connect with GitHub</b>.</li>
-          <li>Click <b>Install</b> and allow access to one repository (or several, then pick below).</li>
+          <li>Click <b>Connect with GitHub</b> (same browser where you are signed in).</li>
+          <li>Click <b>Install &amp; Authorize</b> and allow access to one repository (or several, then pick below).</li>
+          <li>If you already installed the app earlier, open <b>Connect with GitHub</b> again and confirm the repository so Syncidian can finish linking it.</li>
         </ol>` : `
         <p>This creates a GitHub App for this instance with Contents <b>read and write</b>. You do not paste a personal access token, and SSH deploy keys are not used. If an administrator already registered the app at <code>/admin</code>, you only need to install it.</p>
         <ol>

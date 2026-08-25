@@ -219,6 +219,7 @@ func TestDashboardServed(t *testing.T) {
 		`iOS`,
 		`id="setup-obsidian"`,
 		`Restricted mode`,
+		`already installed the app earlier`,
 	} {
 		if !bytes.Contains(b, []byte(needle)) {
 			t.Fatalf("dashboard missing required markup %q", needle)

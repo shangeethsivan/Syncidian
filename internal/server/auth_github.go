@@ -77,23 +77,30 @@ func (s *Server) handleGitHubAuthCallback(w http.ResponseWriter, r *http.Request
 		s.dashboardRedirect(w, r, url.Values{"github": {"error"}, "message": {msg}})
 		return
 	}
-	if !s.validGitHubState(r, r.URL.Query().Get("state")) {
-		s.dashboardRedirect(w, r, url.Values{
-			"github":  {"error"},
-			"message": {"GitHub sign-in expired. Try Connect with GitHub again from the dashboard."},
-		})
-		return
-	}
 
 	installationID, _ := strconv.ParseInt(r.URL.Query().Get("installation_id"), 10, 64)
+	stateOK := s.validGitHubState(r, r.URL.Query().Get("state"))
+	hasIntent := s.hasPendingInstallIntent(r)
 
-	// Prefer the already-signed-in vault user when this redirect is an App install
-	// return (Install & Authorize). Re-running OAuth must not switch accounts.
+	// Install & Authorize (OAuth during installation) returns here with
+	// installation_id — not the setup URL. Prefer the existing session so we
+	// do not switch accounts. Accept matching state, an install-intent cookie
+	// from Connect with GitHub, or a verified App installation (already installed).
 	if installationID != 0 {
 		if existing, _ := s.authenticate(r); existing != nil && !existing.IsAdmin {
-			s.finishInstallation(w, r, existing, installationID)
-			return
+			if stateOK || hasIntent || s.installationOwnedByApp(installationID) {
+				s.finishInstallation(w, r, existing, installationID)
+				return
+			}
 		}
+	}
+
+	if !stateOK {
+		s.dashboardRedirect(w, r, url.Values{
+			"github":  {"error"},
+			"message": {"GitHub sign-in expired. Open GitHub in the dashboard and click Connect with GitHub again."},
+		})
+		return
 	}
 
 	app := s.instanceGitHubApp()
@@ -135,6 +142,12 @@ func (s *Server) handleGitHubAuthCallback(w http.ResponseWriter, r *http.Request
 			}
 		}
 	}
+	// Already installed earlier but never bound (common before the callback fix).
+	if installationID == 0 && app.AppID != 0 {
+		if id, err := githubapp.FindAppInstallation(token, app.AppID); err == nil && id != 0 {
+			installationID = id
+		}
+	}
 	if installationID != 0 {
 		s.finishInstallation(w, r, u, installationID)
 		return
@@ -144,7 +157,7 @@ func (s *Server) handleGitHubAuthCallback(w http.ResponseWriter, r *http.Request
 	if c, err := r.Cookie("syncidian_github_next"); err == nil && c.Value != "" {
 		next = c.Value
 	}
-	if next == "install" || next == "setup" {
+	if next == "install" || next == "setup" || next == "reconcile" {
 		if app.Slug != "" {
 			state, err := randomHex(16)
 			if err != nil {
@@ -158,6 +171,15 @@ func (s *Server) handleGitHubAuthCallback(w http.ResponseWriter, r *http.Request
 		}
 	}
 	s.dashboardRedirect(w, r, url.Values{"github": {"signed_in"}})
+}
+
+func (s *Server) installationOwnedByApp(installationID int64) bool {
+	app := s.instanceGitHubApp()
+	if !app.Configured() || installationID == 0 {
+		return false
+	}
+	inst, err := githubapp.GetInstallation(app.AppID, []byte(app.PEM), installationID)
+	return err == nil && inst != nil && inst.ID == installationID
 }
 
 func (s *Server) upsertGitHubUser(gh *githubapp.User) (*store.User, error) {
