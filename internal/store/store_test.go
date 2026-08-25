@@ -113,3 +113,31 @@ func TestGitHubIdentityAndInstanceApp(t *testing.T) {
 		t.Fatalf("instance app: %+v %v", app, err)
 	}
 }
+
+func TestMarkDeletedPrefix(t *testing.T) {
+	st, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	u, err := st.CreateUser("bob", "hash", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range []string{"Projects/a.md", "Projects/b.md", "keep.md"} {
+		if err := st.UpsertFile(FileMeta{UserID: u.ID, Path: p, Hash: "x"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	paths, err := st.MarkDeletedPrefix(u.ID, "Projects", 9)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(paths) != 2 {
+		t.Fatalf("marked %v", paths)
+	}
+	live, err := st.ListFiles(u.ID, false)
+	if err != nil || len(live) != 1 || live[0].Path != "keep.md" {
+		t.Fatalf("live %+v %v", live, err)
+	}
+}

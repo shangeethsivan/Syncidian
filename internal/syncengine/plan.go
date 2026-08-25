@@ -49,18 +49,36 @@ type PlanFile struct {
 type Plan struct {
 	Pull      []string `json:"Pull"`
 	Push      []string `json:"Push"`
+	Delete    []string `json:"Delete"`
 	Conflicts []string `json:"Conflicts"`
 }
 
 // PlanSync compares a client's file hashes against the server source of truth.
 // base is the client's last-known server hash per path (may be empty).
+// An empty client hash means the path is gone locally (tombstone). An empty
+// server hash is a server-side tombstone from a previous delete.
 func PlanSync(client, server, base map[string]string) Plan {
-	plan := Plan{Pull: []string{}, Push: []string{}, Conflicts: []string{}}
+	plan := Plan{Pull: []string{}, Push: []string{}, Delete: []string{}, Conflicts: []string{}}
 	seen := map[string]struct{}{}
 	for p, ch := range client {
 		seen[p] = struct{}{}
 		sh, onServer := server[p]
-		if !onServer {
+		clientGone := ch == ""
+		serverGone := !onServer || sh == ""
+
+		if clientGone && serverGone {
+			continue
+		}
+		if clientGone {
+			bh := base[p]
+			if !onServer || bh == sh || bh == "" {
+				plan.Delete = append(plan.Delete, p)
+				continue
+			}
+			plan.Conflicts = append(plan.Conflicts, p)
+			continue
+		}
+		if serverGone {
 			plan.Push = append(plan.Push, p)
 			continue
 		}
@@ -78,8 +96,11 @@ func PlanSync(client, server, base map[string]string) Plan {
 		}
 		plan.Conflicts = append(plan.Conflicts, p)
 	}
-	for p := range server {
+	for p, sh := range server {
 		if _, ok := seen[p]; ok {
+			continue
+		}
+		if sh == "" {
 			continue
 		}
 		plan.Pull = append(plan.Pull, p)

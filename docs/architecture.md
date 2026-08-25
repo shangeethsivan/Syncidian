@@ -68,7 +68,7 @@ flowchart LR
   CMD["cmd/syncidian<br/>serve · user · token"] --> CFG["internal/config"]
   CMD --> SRV["internal/server"]
   SRV --> ST["internal/store<br/>SQLite + vault dirs"]
-  SRV --> ENG["internal/syncengine<br/>PlanSync · ClassifyPush"]
+  SRV --> ENG["internal/syncengine<br/>PlanSync · ClassifyPush · AutoMerge"]
   SRV --> GIT["internal/gitx"]
   SRV --> GHA["internal/githubapp"]
   SRV --> MCP["internal/mcp"]
@@ -169,15 +169,20 @@ sequenceDiagram
   API-->>Plugin: device id
 
   Plugin->>Plugin: Hash every local file SHA-256
-  Plugin->>API: POST /api/v1/sync/plan<br/>path, hash, base_hash
+  Plugin->>API: POST /api/v1/sync/plan<br/>path, hash, base_hash, deleted
   API->>DB: ListFiles
-  API-->>Plugin: Pull / Push / Conflicts
+  API-->>Plugin: Pull / Push / Delete / Conflicts
 
   loop Each path in Pull
     Plugin->>API: GET /api/v1/sync/file?path=
     API->>DB: Read vault bytes
     API-->>Plugin: base64 content
     Plugin->>Obsidian: create/modify/delete
+  end
+
+  opt Paths in Delete
+    Plugin->>API: POST /api/v1/sync/push deleted
+    API->>DB: RemoveAll + MarkDeletedPrefix
   end
 
   opt Paths in Push
@@ -190,7 +195,7 @@ sequenceDiagram
   Note over Plugin,API: Live file_changed and github_synced events
 ```
 
-After the first plan/push, the plugin keeps a local `hashes` map (last-known server hash per path). That map is the `base_hash` used on later syncs.
+After the first plan/push, the plugin keeps a local `hashes` map (last-known server hash per path). That map is the `base_hash` used on later syncs. Locally deleted files that are still in `hashes` are sent as tombstones so a resync deletes them on the server instead of restoring them.
 
 ---
 
@@ -208,10 +213,11 @@ sequenceDiagram
   participant GH as GitHub
 
   User->>Vault: Edit note
-  Vault->>Plugin: create / modify / delete (debounced 400ms)
+  Vault->>Plugin: create / modify / delete
+  Plugin->>Plugin: Queue path, wait 3s after last keystroke
   Plugin->>API: POST /api/v1/sync/push
   API->>API: ClassifyPush(client, server, base)
-  alt accept
+  alt accept or simple auto-merge
     API->>API: Write vault file + UpsertFile
     API->>Hub: Broadcast file_changed (skip sender)
     Hub->>Other: pullFile(path)
@@ -219,7 +225,7 @@ sequenceDiagram
     opt GitHub configured
       Git->>GH: Push
     end
-  else conflict
+  else large conflict
     API->>API: CreateConflict both versions
     API-->>Plugin: conflicts[]
     Plugin->>User: Conflict modal
@@ -232,11 +238,17 @@ The user never runs git. The plugin never holds GitHub credentials.
 
 ## 6. Sync plan decisions
 
-`PlanSync` compares three hashes per path: the client's current file, the server's current file, and the client's last-known server hash (`base`).
+`PlanSync` compares three hashes per path: the client's current file, the server's current file, and the client's last-known server hash (`base`). Empty client hashes are local deletes (tombstones). Empty server hashes are server tombstones.
 
 ```mermaid
 flowchart TD
-  Start["For each client path"] --> OnServer{"On server?"}
+  Start["For each client path"] --> Gone{"Client hash empty?"}
+  Gone -->|yes| SGone{"Server gone or tombstone?"}
+  SGone -->|yes| SkipD["No-op"]
+  SGone -->|no| BaseDel{"base == server or empty?"}
+  BaseDel -->|yes| Delete["Delete"]
+  BaseDel -->|no| Conflict["Conflict"]
+  Gone -->|no| OnServer{"On server?"}
   OnServer -->|no| Push["Push"]
   OnServer -->|yes| Same{"client hash == server hash?"}
   Same -->|yes| Skip["No-op"]
@@ -244,22 +256,26 @@ flowchart TD
   BaseS -->|yes| Push
   BaseS -->|no| BaseC{"base == client?"}
   BaseC -->|yes| Pull["Pull"]
-  BaseC -->|no| Conflict["Conflict"]
+  BaseC -->|no| Conflict
 
-  Start2["Server paths the client never sent"] --> Pull
+  Start2["Server paths the client never sent"] --> Tomb{"Server tombstone?"}
+  Tomb -->|yes| Skip2["No-op"]
+  Tomb -->|no| Pull
 ```
 
-`ClassifyPush` is the write-side counterpart: accept, no-op, or raise a conflict before bytes are written.
+`ClassifyPush` is the write-side counterpart: accept, no-op, or raise a conflict before bytes are written. `AutoMerge` then resolves simple replacements and typing continuations without opening the conflict UI. Folder deletes remove the directory and every descendant file record.
 
 ---
 
 ## 7. Conflict resolution
 
-The first version is human-in-the-loop. A small-LLM auto-resolver is on the roadmap, not in this MVP.
+Simple replacements and typing continuations merge automatically (`AutoMerge`). The conflict modal opens only when the two versions have large, overlapping differences. A small-LLM resolver is still on the roadmap for ambiguous cases.
 
 ```mermaid
 flowchart TD
-  Detect["Same path changed on two devices<br/>before sync completed"] --> StoreC["Server stores both blobs<br/>conflicts table"]
+  Detect["Same path changed on two devices<br/>before sync completed"] --> Simple{"Simple replacement<br/>or one version extends the other?"}
+  Simple -->|yes| Auto["Accept AutoMerge result"]
+  Simple -->|no| StoreC["Server stores both blobs<br/>conflicts table"]
   StoreC --> UI["Plugin ConflictModal<br/>or dashboard Conflicts"]
   UI --> KeepL["Keep local"]
   UI --> KeepR["Keep remote"]
@@ -267,7 +283,8 @@ flowchart TD
   KeepL --> Resolve["POST /api/v1/conflicts/id/resolve"]
   KeepR --> Resolve
   Merge --> Resolve
-  Resolve --> Write["Write chosen bytes to vault"]
+  Auto --> Write["Write chosen bytes to vault"]
+  Resolve --> Write
   Write --> Broadcast["WebSocket file_changed"]
   Write --> Commit["Git commit + optional GitHub push"]
 ```
@@ -461,7 +478,7 @@ One container. No extra services for the basic install. Railway mounts a volume 
 | Process entry | [`cmd/syncidian/main.go`](../cmd/syncidian/main.go) |
 | HTTP routes + auth | [`internal/server/server.go`](../internal/server/server.go), [`internal/server/auth.go`](../internal/server/auth.go), [`internal/server/auth_github.go`](../internal/server/auth_github.go) |
 | Plan / push / devices | [`internal/server/sync.go`](../internal/server/sync.go) |
-| Sync decisions | [`internal/syncengine/plan.go`](../internal/syncengine/plan.go) |
+| Sync decisions | [`internal/syncengine/plan.go`](../internal/syncengine/plan.go), [`internal/syncengine/merge.go`](../internal/syncengine/merge.go) |
 | GitHub backup | [`internal/server/github.go`](../internal/server/github.go), [`internal/server/github_app.go`](../internal/server/github_app.go), [`internal/githubapp`](../internal/githubapp), [`internal/gitx/repo.go`](../internal/gitx/repo.go) |
 | GitHub App self-host setup | [`docs/github-app.md`](github-app.md) |
 | MCP tools | [`internal/mcp/mcp.go`](../internal/mcp/mcp.go) |

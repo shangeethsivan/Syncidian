@@ -571,7 +571,7 @@ The user does not need to manually:
 * Refresh
 * Trigger sync
 
-The plugin handles this automatically.
+The plugin handles this automatically. Edits are queued until typing stops, then pushed after a 3 second idle. Simple replacements merge on their own; large conflicts still open a resolver. Deleting a folder deletes every file under it on the server so a later sync does not restore it.
 
 ---
 
