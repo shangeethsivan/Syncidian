@@ -58,4 +58,4 @@ When you change auth, GitHub scoping, admin privacy, or where data is stored acr
 
 ## Help walkthrough
 
-The dashboard **Help** button must describe the same workflow as the diagrams: public landing with GitHub sign-in, optional email, admin at `/admin`, persist `/data` so deploys do not wipe users, register the instance GitHub App (`docs/github-app.md`), then optional per-user GitHub, admin without repo sync.
+The dashboard **Help** button must describe the same workflow as the diagrams: public landing with GitHub sign-in, optional email, admin at `/admin`, persist `/data` so deploys do not wipe users, register the instance GitHub App (`docs/github-app.md`), then optional per-user GitHub, admin without repo sync. Plugin install is Community plugins first, with BRAT or `scripts/install-plugin.sh` as fallback until the listing is live.

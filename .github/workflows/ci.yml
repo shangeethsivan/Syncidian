@@ -30,8 +30,25 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
+          cache: npm
+          cache-dependency-path: plugin/package-lock.json
+      - name: Plugin metadata at repo root
+        run: |
+          diff -u plugin/manifest.json manifest.json
+          diff -u plugin/versions.json versions.json
+          node -e '
+            const m = require("./manifest.json");
+            const p = require("./plugin/package.json");
+            const v = require("./versions.json");
+            if (m.id !== "syncidian") throw new Error("plugin id must be syncidian");
+            if (/obsidian/i.test(m.id)) throw new Error("plugin id must not contain obsidian");
+            if (!/^[0-9]+\.[0-9]+\.[0-9]+$/.test(m.version)) throw new Error("version must be x.y.z");
+            if (m.version !== p.version) throw new Error("package.json version must match manifest.json");
+            if (v[m.version] !== m.minAppVersion) throw new Error("versions.json must map this version to minAppVersion");
+          '
+
       - name: Build plugin
         working-directory: plugin
         run: |
-          npm install
+          npm ci
           npm run build

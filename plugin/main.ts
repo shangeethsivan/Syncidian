@@ -700,7 +700,7 @@ class SyncidianSettingTab extends PluginSettingTab {
     containerEl.empty();
     containerEl.createEl("h2", { text: "Syncidian" });
     containerEl.createEl("p", {
-      text: "Point this vault at your Syncidian server. GitHub is configured per user in the dashboard, not here.",
+      text: "Install from Community plugins (or BRAT). Point this vault at your Syncidian server. GitHub is configured per user in the dashboard, not here.",
     });
     let urlInput: HTMLInputElement | null = null;
     let tokenInput: HTMLInputElement | null = null;

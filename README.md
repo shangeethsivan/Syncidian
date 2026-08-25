@@ -2,6 +2,8 @@
 
 > **Sync your knowledge. Back it up. Connect your AI. Own your data.**
 
+**Obsidian plugin:** install **Syncidian** from Community plugins (or [BRAT](https://github.com/TfTHacker/obsidian42-brat) / sideload). Point it at your Syncidian server with a `sk_sync_…` token. This plugin does not use Obsidian Sync.
+
 Syncidian is an open-source, self-hostable **Obsidian synchronization and AI bridge**.
 
 It runs as an Obsidian plugin on your devices and connects to a lightweight Syncidian server that coordinates synchronization between them.
@@ -26,7 +28,7 @@ docker run -d \
 
 # 🚀 Quick start (Mac, Linux, or Windows with Docker)
 
-This repository is ready to run. Clone it, start the server, sideload the Obsidian plugin, and sync.
+This repository is ready to run. Clone it, start the server, install the Obsidian plugin, and sync.
 
 ## 1. Start the server
 
@@ -60,9 +62,23 @@ Users, GitHub App credentials, and vault files live in SQLite on disk. Railway�
 
 Health check: `GET /health`.
 
-## 2. Install the Obsidian plugin (manual — required)
+## 2. Install the Obsidian plugin
 
-The plugin is **not** in the Obsidian Community Plugin store yet. Every vault/machine needs a one-time sideload. There is no extra server-side plugin deployment.
+You still run a Syncidian server (step 1). The plugin is only the Obsidian client.
+
+**From Community plugins** (easiest, once listed):
+
+1. Settings → Community plugins → turn **Restricted mode** off.
+2. Browse → search **Syncidian** → Install → Enable.
+3. Settings → Syncidian:
+   * Server URL: `http://localhost:8080` (or your deployed URL)
+   * Access token: the `sk_sync_…` value from the dashboard
+   * Device name: e.g. `MacBook Pro`
+4. Click **Connect**.
+
+**If it is not listed yet**, install [BRAT](https://github.com/TfTHacker/obsidian42-brat), then add `shangeethsivan/Syncidian` (needs a GitHub Release whose tag matches `manifest.json` `version`).
+
+**Sideload** from this repo (desktop, or copy the same folder onto a phone):
 
 ```bash
 # from this repository
@@ -82,18 +98,9 @@ Or copy these files by hand into `{Vault}/.obsidian/plugins/syncidian/`:
 * `plugin/main.js`
 * `plugin/styles.css`
 
-Then in Obsidian:
+Then Settings → Community plugins → turn **Restricted mode** off → enable **Syncidian** → Connect as above.
 
-1. Settings → Community plugins → turn **Restricted mode off** (allow community plugins).
-2. Reload plugins / restart Obsidian.
-3. Enable **Syncidian**.
-4. Settings → Syncidian:
-   * Server URL: `http://localhost:8080` (or your deployed URL)
-   * Access token: the `sk_sync_…` value from the dashboard
-   * Device name: e.g. `MacBook Pro`
-5. Click **Connect**.
-
-Repeat the plugin copy + token on each device (Windows, Mac, Android, iOS). Create one token per person; the same user can register many devices.
+Repeat the token (and install, if you sideloaded) on each device (Windows, Mac, Android, iOS). Create one token per person; the same user can register many devices. On phones the server URL must be HTTPS reachable from the device (not `localhost`).
 
 ## 3. Optional: GitHub backup (per user)
 
@@ -114,17 +121,28 @@ Authorization: Bearer sk_sync_…
 
 # 📦 Publishing the Obsidian plugin
 
-**You do not need to publish anything to start using Syncidian.** Sideloading from this repo is enough.
+Obsidian’s community directory reads **`manifest.json` at the repository root** (kept in sync with `plugin/manifest.json`). Users install `main.js`, `manifest.json`, and `styles.css` from a GitHub Release whose **tag matches** that `version` exactly (`0.1.0`, not `v0.1.0`).
 
-If you later want it in Obsidian’s Community Plugin browser, that is a **manual** process (Obsidian does not auto-publish from this repository):
+This repo is set up for that:
 
-1. Keep `plugin/manifest.json`, `plugin/main.js`, and `plugin/styles.css` in git (already done).
-2. Create a GitHub Release whose tag matches `manifest.json` `version` (for example `0.1.0`) and attach those three files, or a `syncidian.zip` containing them.
-3. Open a pull request against [obsidianmd/obsidian-releases](https://github.com/obsidianmd/obsidian-releases) adding Syncidian to `community-plugins.json`.
-4. Wait for Obsidian’s review. They may ask for changes. This can take days to weeks.
-5. After approval, users can install from Community plugins → Browse → “Syncidian” instead of copying files.
+1. Edit the plugin under `plugin/`. After a version bump, copy metadata to the root:
 
-Until that review lands, tell testers to use `scripts/install-plugin.sh` or the [BRAT](https://github.com/TfTHacker/obsidian42-brat) plugin pointed at this GitHub repo.
+   ```bash
+   make plugin-manifest
+   ```
+
+2. Push an annotated tag matching `plugin/manifest.json` `version`. `.github/workflows/release.yml` builds the plugin, attests the artifacts, and publishes the three files on a GitHub Release:
+
+   ```bash
+   git tag -a 0.1.0 -m "0.1.0"
+   git push origin 0.1.0
+   ```
+
+3. Submit (or update) the listing at [community.obsidian.md](https://community.obsidian.md): sign in with your Obsidian account, link GitHub, and add this repository (`shangeethsivan/Syncidian`). The directory uses the root `manifest.json` on the default branch; the `id` is `syncidian`.
+
+4. Address automated review feedback, then bump the version and tag again. After approval, people install from Community plugins → Browse → **Syncidian**.
+
+Until that listing is live, testers can use [BRAT](https://github.com/TfTHacker/obsidian42-brat) pointed at this GitHub repo (after the first tagged release) or `scripts/install-plugin.sh`.
 
 Rebuilding the plugin after TypeScript changes:
 
@@ -132,7 +150,7 @@ Rebuilding the plugin after TypeScript changes:
 cd plugin && npm install && npm run build
 ```
 
-`plugin/main.js` is the compiled artifact Obsidian loads. Commit it so people can install without Node.js.
+`plugin/main.js` is the compiled artifact Obsidian loads. Commit it so people can sideload without Node.js.
 
 ---
 
@@ -198,7 +216,7 @@ flowchart TD
   Role -->|user| UserHome["User dashboard"]
   UserHome --> Repo["Optional: install GitHub App<br/>one repo for this user · main"]
   UserHome --> Tok["Create sk_sync_ token"]
-  Tok --> Plug["Sideload Obsidian plugin"]
+  Tok --> Plug["Install Obsidian plugin"]
   Plug --> Sync["Devices sync through the server"]
   Repo --> Backup["Server commits/pushes that user's vault"]
 ```
@@ -484,7 +502,7 @@ Future authentication options may include:
 
 # 🔌 Configure the Obsidian Plugin
 
-Install Syncidian inside Obsidian.
+Install **Syncidian** from Community plugins (or BRAT / sideload), then open Settings → Syncidian.
 
 The plugin configuration should remain intentionally small:
 
@@ -1212,6 +1230,7 @@ The self-hosted version will remain free and open source.
 * [x] Dockerfile
 * [x] Single-container deployment
 * [x] Docker Compose
+* [ ] Community Plugin directory
 * [ ] Pre-built container images
 * [ ] GHCR publishing
 * [x] VPS deployment guide

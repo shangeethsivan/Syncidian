@@ -2,7 +2,11 @@
 set -euo pipefail
 
 if [[ $# -lt 1 ]]; then
-  echo "Install the Syncidian Obsidian plugin into a vault (manual sideload)."
+  echo "Sideload the Syncidian Obsidian plugin into a vault."
+  echo
+  echo "Preferred: Settings → Community plugins → Browse → Syncidian."
+  echo "If it is not listed yet, install BRAT and add shangeethsivan/Syncidian,"
+  echo "or use this script:"
   echo
   echo "Usage: $0 /path/to/YourVault"
   echo
@@ -35,4 +39,4 @@ echo "  2. Settings → Community plugins → turn community plugins on (Safe mo
 echo "  3. Enable Syncidian"
 echo "  4. Paste your server URL and access token"
 echo
-echo "The plugin is not in the Community Plugin store yet. This copy step is required on every machine."
+echo "If Community plugins → Browse already lists Syncidian, install from there instead of copying files."
