@@ -80,6 +80,8 @@ You still run a Syncidian server (step 1). The plugin is only the Obsidian clien
 
 **Sideload** from this repo (desktop, or copy the same folder onto a phone):
 
+Syncidian is a **mobile-capable** community plugin (`isDesktopOnly: false`). It does **not** use Node.js, Electron, or a local Git binary — that is why [Obsidian Git](https://github.com/denolehov/obsidian-git) and similar plugins never run on Android or iOS, and why this one can.
+
 ```bash
 # from this repository
 chmod +x scripts/install-plugin.sh
@@ -100,7 +102,15 @@ Or copy these files by hand into `{Vault}/.obsidian/plugins/syncidian/`:
 
 Then Settings → Community plugins → turn **Restricted mode** off → enable **Syncidian** → Connect as above.
 
-Repeat the token (and install, if you sideloaded) on each device (Windows, Mac, Android, iOS). Create one token per person; the same user can register many devices. On phones the server URL must be HTTPS reachable from the device (not `localhost`).
+Repeat the token (and install, if you sideloaded) on each device (Windows, Mac, Android, iOS). Create one token per person; the same user can register many devices.
+
+### Android and iOS
+
+The plugin is **not desktop-only**. Unlike Git community plugins, it does not use Node.js, Electron, or a local `git` binary, so it loads on phones.
+
+Copy the same three files into the vault on the device (Files app, iCloud, USB, Syncthing, or a vault that already has them from desktop), or install from Community plugins / BRAT on the phone. Turn Restricted mode off and enable **Syncidian**.
+
+On a phone, **Server URL must be a public `https://` address** (your Railway domain or similar). `http://localhost:8080` is the phone itself, not your computer. iOS often blocks plain `http://`. Details: [`plugin/README.md`](plugin/README.md).
 
 ## 3. Optional: GitHub backup (per user)
 
@@ -151,7 +161,7 @@ This repo is set up for that:
 
 4. Address automated review feedback, then bump the version and tag again. After approval, people install from Community plugins → Browse → **Syncidian**.
 
-Until that listing is live, testers can use [BRAT](https://github.com/TfTHacker/obsidian42-brat) pointed at this GitHub repo (after the first tagged release) or `scripts/install-plugin.sh`.
+Until that listing is live, testers can use [BRAT](https://github.com/TfTHacker/obsidian42-brat) pointed at this GitHub repo (after the first tagged release) or `scripts/install-plugin.sh`. Keep `isDesktopOnly` **false** so Android and iOS can install it. Mobile review notes: [`docs/community-plugin.md`](docs/community-plugin.md).
 
 Rebuilding the plugin after TypeScript changes:
 
@@ -296,6 +306,8 @@ Syncidian is designed to work wherever Obsidian plugins are supported.
 
 * 🤖 Android
 * 📱 iOS
+
+The plugin is **not** desktop-only. It uses the Obsidian Vault API and `requestUrl` so it loads on phones; Git community plugins that depend on Node or a local `git` binary cannot. On Android and iOS, point the plugin at a public HTTPS server URL (not `localhost`).
 
 The goal is to maintain one consistent synchronization experience across all supported platforms.
 

@@ -1227,12 +1227,13 @@ func TestCommunityPluginManifestAtRepoRoot(t *testing.T) {
 		t.Fatal(err)
 	}
 	var m struct {
-		ID            string `json:"id"`
-		Name          string `json:"name"`
-		Version       string `json:"version"`
-		MinAppVersion string `json:"minAppVersion"`
-		Description   string `json:"description"`
-		Author        string `json:"author"`
+		ID             string `json:"id"`
+		Name           string `json:"name"`
+		Version        string `json:"version"`
+		MinAppVersion  string `json:"minAppVersion"`
+		Description    string `json:"description"`
+		Author         string `json:"author"`
+		IsDesktopOnly  *bool  `json:"isDesktopOnly"`
 	}
 	if err := json.Unmarshal(raw, &m); err != nil {
 		t.Fatal(err)
@@ -1248,6 +1249,9 @@ func TestCommunityPluginManifestAtRepoRoot(t *testing.T) {
 	}
 	if m.Version == "" || m.MinAppVersion == "" || m.Description == "" || m.Author == "" {
 		t.Fatalf("incomplete manifest: %+v", m)
+	}
+	if m.IsDesktopOnly == nil || *m.IsDesktopOnly {
+		t.Fatal("isDesktopOnly must be false so Android and iOS can install the plugin")
 	}
 
 	pkgRaw, err := os.ReadFile(filepath.Join(root, "plugin", "package.json"))
@@ -1391,5 +1395,45 @@ func TestMCPLoginAndTools(t *testing.T) {
 	}
 	if !strings.Contains(string(raw), "search_notes") || !strings.Contains(string(raw), "get_graph") {
 		t.Fatalf("expected graph/search tools: %s", raw)
+	}
+}
+
+func TestCORSAllowsObsidianMobileOrigins(t *testing.T) {
+	hs, done := newTestServer(t)
+	defer done()
+	origins := []string{
+		"app://obsidian.md",
+		"capacitor://localhost",
+		"ionic://localhost",
+		"http://localhost",
+		"https://localhost",
+	}
+	for _, origin := range origins {
+		req, err := http.NewRequest(http.MethodOptions, hs.URL+"/api/v1/devices/register", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.Header.Set("Origin", origin)
+		req.Header.Set("Access-Control-Request-Method", "POST")
+		req.Header.Set("Access-Control-Request-Headers", "authorization,content-type,x-syncidian-client")
+		res, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		res.Body.Close()
+		if res.StatusCode != http.StatusNoContent {
+			t.Fatalf("%s OPTIONS: want 204, got %d", origin, res.StatusCode)
+		}
+		if got := res.Header.Get("Access-Control-Allow-Origin"); got != origin {
+			t.Fatalf("%s Access-Control-Allow-Origin: got %q", origin, got)
+		}
+		allow := strings.ToLower(res.Header.Get("Access-Control-Allow-Headers"))
+		if !strings.Contains(allow, "authorization") || !strings.Contains(allow, "x-syncidian-client") {
+			t.Fatalf("%s Allow-Headers: %q", origin, allow)
+		}
+		methods := res.Header.Get("Access-Control-Allow-Methods")
+		if !strings.Contains(methods, "POST") {
+			t.Fatalf("%s Allow-Methods: %q", origin, methods)
+		}
 	}
 }

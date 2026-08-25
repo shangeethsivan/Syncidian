@@ -40,3 +40,7 @@ echo "  3. Enable Syncidian"
 echo "  4. Paste your server URL and access token"
 echo
 echo "If Community plugins → Browse already lists Syncidian, install from there instead of copying files."
+echo
+echo "Android / iOS: copy the same three files into the vault on the device, or install from Community plugins / BRAT."
+echo "On a phone, Server URL must be public HTTPS — localhost is the phone, not your computer."
+echo "Unlike Git community plugins, Syncidian is not desktop-only."

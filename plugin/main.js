@@ -22,7 +22,228 @@ __export(main_exports, {
   default: () => SyncidianPlugin
 });
 module.exports = __toCommonJS(main_exports);
+var import_obsidian2 = require("obsidian");
+
+// codec.ts
+var CHUNK = 8192;
+function b64encode(bytes) {
+  let bin = "";
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    const sub = bytes.subarray(i, i + CHUNK);
+    let piece = "";
+    for (let j = 0; j < sub.length; j++)
+      piece += String.fromCharCode(sub[j]);
+    bin += piece;
+  }
+  return btoa(bin);
+}
+function b64decode(s) {
+  const bin = atob(s);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++)
+    out[i] = bin.charCodeAt(i);
+  return out;
+}
+function toArrayBuffer(data) {
+  return data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength);
+}
+
+// hash.ts
+function hex(bytes) {
+  let out = "";
+  for (let i = 0; i < bytes.length; i++)
+    out += bytes[i].toString(16).padStart(2, "0");
+  return out;
+}
+async function sha256(data) {
+  var _a;
+  try {
+    const subtle = (_a = globalThis.crypto) == null ? void 0 : _a.subtle;
+    if (subtle) {
+      const buf = await subtle.digest("SHA-256", data);
+      return hex(new Uint8Array(buf));
+    }
+  } catch (e) {
+  }
+  return sha256Sync(new Uint8Array(data));
+}
+function sha256Sync(bytes) {
+  const K = [
+    1116352408,
+    1899447441,
+    3049323471,
+    3921009573,
+    961987163,
+    1508970993,
+    2453635748,
+    2870763221,
+    3624381080,
+    310598401,
+    607225278,
+    1426881987,
+    1925078388,
+    2162078206,
+    2614888103,
+    3248222580,
+    3835390401,
+    4022224774,
+    264347078,
+    604807628,
+    770255983,
+    1249150122,
+    1555081692,
+    1996064986,
+    2554220882,
+    2821834349,
+    2952996808,
+    3210313671,
+    3336571891,
+    3584528711,
+    113926993,
+    338241895,
+    666307205,
+    773529912,
+    1294757372,
+    1396182291,
+    1695183700,
+    1986661051,
+    2177026350,
+    2456956037,
+    2730485921,
+    2820302411,
+    3259730800,
+    3345764771,
+    3516065817,
+    3600352804,
+    4094571909,
+    275423344,
+    430227734,
+    506948616,
+    659060556,
+    883997877,
+    958139571,
+    1322822218,
+    1537002063,
+    1747873779,
+    1955562222,
+    2024104815,
+    2227730452,
+    2361852424,
+    2428436474,
+    2756734187,
+    3204031479,
+    3329325298
+  ];
+  const rr = (x, n) => x >>> n | x << 32 - n;
+  const len = bytes.length;
+  const bitLenHi = Math.floor(len / 536870912);
+  const bitLenLo = len << 3 >>> 0;
+  const withPad = len + 1;
+  const blockCount = withPad + 8 + 63 >> 6 << 4;
+  const w = new Uint32Array(blockCount);
+  for (let i = 0; i < len; i++)
+    w[i >> 2] |= bytes[i] << 24 - i % 4 * 8;
+  w[len >> 2] |= 128 << 24 - len % 4 * 8;
+  w[blockCount - 2] = bitLenHi;
+  w[blockCount - 1] = bitLenLo;
+  let h0 = 1779033703, h1 = 3144134277, h2 = 1013904242, h3 = 2773480762, h4 = 1359893119, h5 = 2600822924, h6 = 528734635, h7 = 1541459225;
+  const words = new Uint32Array(64);
+  for (let i = 0; i < blockCount; i += 16) {
+    for (let t = 0; t < 16; t++)
+      words[t] = w[i + t];
+    for (let t = 16; t < 64; t++) {
+      const s0 = rr(words[t - 15], 7) ^ rr(words[t - 15], 18) ^ words[t - 15] >>> 3;
+      const s1 = rr(words[t - 2], 17) ^ rr(words[t - 2], 19) ^ words[t - 2] >>> 10;
+      words[t] = words[t - 16] + s0 + words[t - 7] + s1 >>> 0;
+    }
+    let a = h0, b = h1, c = h2, d = h3, e = h4, f = h5, g = h6, h = h7;
+    for (let t = 0; t < 64; t++) {
+      const S1 = rr(e, 6) ^ rr(e, 11) ^ rr(e, 25);
+      const ch = e & f ^ ~e & g;
+      const temp1 = h + S1 + ch + K[t] + words[t] >>> 0;
+      const S0 = rr(a, 2) ^ rr(a, 13) ^ rr(a, 22);
+      const maj = a & b ^ a & c ^ b & c;
+      const temp2 = S0 + maj >>> 0;
+      h = g;
+      g = f;
+      f = e;
+      e = d + temp1 >>> 0;
+      d = c;
+      c = b;
+      b = a;
+      a = temp1 + temp2 >>> 0;
+    }
+    h0 = h0 + a >>> 0;
+    h1 = h1 + b >>> 0;
+    h2 = h2 + c >>> 0;
+    h3 = h3 + d >>> 0;
+    h4 = h4 + e >>> 0;
+    h5 = h5 + f >>> 0;
+    h6 = h6 + g >>> 0;
+    h7 = h7 + h >>> 0;
+  }
+  const out = new Uint8Array(32);
+  const hs = [h0, h1, h2, h3, h4, h5, h6, h7];
+  for (let i = 0; i < 8; i++) {
+    out[i * 4] = hs[i] >>> 24;
+    out[i * 4 + 1] = hs[i] >>> 16 & 255;
+    out[i * 4 + 2] = hs[i] >>> 8 & 255;
+    out[i * 4 + 3] = hs[i] & 255;
+  }
+  return hex(out);
+}
+
+// mobile.ts
 var import_obsidian = require("obsidian");
+function isMobileApp() {
+  return import_obsidian.Platform.isMobile || import_obsidian.Platform.isAndroidApp || import_obsidian.Platform.isIosApp;
+}
+function devicePlatform() {
+  if (import_obsidian.Platform.isAndroidApp)
+    return "Android";
+  if (import_obsidian.Platform.isIosApp)
+    return "iOS";
+  if (import_obsidian.Platform.isMacOS)
+    return "macOS";
+  if (import_obsidian.Platform.isWin)
+    return "Windows";
+  if (import_obsidian.Platform.isLinux)
+    return "Linux";
+  return "unknown";
+}
+function guessDeviceName() {
+  if (import_obsidian.Platform.isAndroidApp)
+    return import_obsidian.Platform.isTablet ? "Android tablet" : "Android";
+  if (import_obsidian.Platform.isIosApp)
+    return import_obsidian.Platform.isTablet ? "iPad" : "iPhone";
+  if (import_obsidian.Platform.isMacOS)
+    return "macOS";
+  if (import_obsidian.Platform.isWin)
+    return "Windows";
+  if (import_obsidian.Platform.isLinux)
+    return "Linux";
+  return "Obsidian";
+}
+function isLoopbackUrl(url) {
+  try {
+    const host = new URL(url).hostname.toLowerCase();
+    return host === "localhost" || host === "127.0.0.1" || host === "::1" || host === "[::1]" || host === "0.0.0.0";
+  } catch (e) {
+    return /localhost|127\.0\.0\.1/i.test(url);
+  }
+}
+function isInsecureHttp(url) {
+  try {
+    return new URL(url).protocol === "http:";
+  } catch (e) {
+    return url.startsWith("http://");
+  }
+}
+function pushBatchSize() {
+  return isMobileApp() ? 6 : 40;
+}
+
+// main.ts
 var DEFAULT_SETTINGS = {
   serverUrl: "http://localhost:8080",
   token: "",
@@ -42,32 +263,16 @@ var IGNORE = [
 function ignored(path) {
   return IGNORE.some((re) => re.test(path));
 }
-async function sha256(data) {
-  const buf = await crypto.subtle.digest("SHA-256", data);
-  return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
-}
-function b64encode(bytes) {
-  let bin = "";
-  bytes.forEach((b) => bin += String.fromCharCode(b));
-  return btoa(bin);
-}
-function b64decode(s) {
-  const bin = atob(s);
-  const out = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++)
-    out[i] = bin.charCodeAt(i);
-  return out;
-}
-function toArrayBuffer(data) {
-  return data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength);
-}
-var SyncidianPlugin = class extends import_obsidian.Plugin {
+var SyncidianPlugin = class extends import_obsidian2.Plugin {
   constructor() {
     super(...arguments);
     this.settings = DEFAULT_SETTINGS;
+    this.statusEl = null;
+    this.ribbonEl = null;
     this.connected = false;
     this.syncing = false;
     this.ws = null;
+    this.wsConnecting = false;
     this.pending = /* @__PURE__ */ new Map();
     this.idleTimer = null;
     this.applyingRemote = 0;
@@ -75,19 +280,32 @@ var SyncidianPlugin = class extends import_obsidian.Plugin {
   async onload() {
     await this.loadSettings();
     if (!this.settings.deviceName || this.settings.deviceName === "Obsidian") {
-      this.settings.deviceName = this.guessDeviceName();
+      this.settings.deviceName = guessDeviceName();
     }
     this.statusEl = this.addStatusBarItem();
-    this.setStatus("offline");
-    this.addSettingTab(new SyncidianSettingTab(this.app, this));
-    this.addRibbonIcon("sync", "Syncidian: sync now", () => {
+    this.statusEl.addClass("syncidian-status");
+    this.ribbonEl = this.addRibbonIcon("sync", "Syncidian: sync now", () => {
       void this.fullSync();
     });
+    this.setStatus("offline");
+    this.addSettingTab(new SyncidianSettingTab(this.app, this));
     this.addCommand({
       id: "syncidian-sync-now",
       name: "Sync now",
       callback: () => void this.fullSync()
     });
+    this.registerInterval(
+      window.setInterval(() => {
+        if (this.connected && !this.ws && !this.wsConnecting)
+          void this.openSocket();
+      }, 8e3)
+    );
+    this.registerInterval(
+      window.setInterval(() => {
+        if (this.connected && !this.ws && !this.syncing)
+          void this.pollRemote();
+      }, 15e3)
+    );
     this.registerEvent(this.app.vault.on("create", (f) => this.queueChange(f, false)));
     this.registerEvent(this.app.vault.on("modify", (f) => this.queueChange(f, false)));
     this.registerEvent(this.app.vault.on("delete", (f) => this.queueChange(f, true)));
@@ -105,36 +323,13 @@ var SyncidianPlugin = class extends import_obsidian.Plugin {
     this.clearIdleTimer();
     (_a = this.ws) == null ? void 0 : _a.close();
     this.ws = null;
-  }
-  guessDeviceName() {
-    const ua = navigator.userAgent;
-    if (/Android/i.test(ua))
-      return "Android";
-    if (/iPhone|iPad|iOS/i.test(ua))
-      return "iOS";
-    if (/Mac/i.test(ua))
-      return "macOS";
-    if (/Win/i.test(ua))
-      return "Windows";
-    if (/Linux/i.test(ua))
-      return "Linux";
-    return "Obsidian";
+    this.wsConnecting = false;
   }
   platform() {
-    const ua = navigator.userAgent;
-    if (/Android/i.test(ua))
-      return "Android";
-    if (/iPhone|iPad|iOS/i.test(ua))
-      return "iOS";
-    if (/Mac/i.test(ua))
-      return "macOS";
-    if (/Win/i.test(ua))
-      return "Windows";
-    if (/Linux/i.test(ua))
-      return "Linux";
-    return "unknown";
+    return devicePlatform();
   }
   setStatus(kind, extra = "") {
+    var _a, _b, _c;
     const labels = {
       offline: "Syncidian \u2022 offline",
       connecting: "Syncidian \u2022 connecting",
@@ -144,7 +339,10 @@ var SyncidianPlugin = class extends import_obsidian.Plugin {
       conflict: "Syncidian \u2022 conflict",
       error: "Syncidian \u2022 error"
     };
-    this.statusEl.setText(extra ? `${labels[kind]} ${extra}` : labels[kind]);
+    const text = extra ? `${labels[kind]} ${extra}` : labels[kind];
+    (_a = this.statusEl) == null ? void 0 : _a.setText(text);
+    (_b = this.ribbonEl) == null ? void 0 : _b.setAttribute("aria-label", text);
+    (_c = this.ribbonEl) == null ? void 0 : _c.setAttribute("title", `${text} \u2014 tap to sync now`);
   }
   apiUrl(path) {
     return this.settings.serverUrl.replace(/\/$/, "") + path;
@@ -156,52 +354,81 @@ var SyncidianPlugin = class extends import_obsidian.Plugin {
   }
   async api(path, opts = {}) {
     this.normalizeCredentials();
-    const headers = new Headers(opts.headers || {});
-    headers.set("Authorization", `Bearer ${this.settings.token}`);
-    headers.set("X-Syncidian-Client", "obsidian-plugin/0.1.0");
-    if (opts.body && !headers.has("Content-Type"))
-      headers.set("Content-Type", "application/json");
-    let res;
+    const headers = {
+      Authorization: `Bearer ${this.settings.token}`,
+      "X-Syncidian-Client": `obsidian-plugin/${this.manifest.version}`
+    };
+    const body = typeof opts.body === "string" ? opts.body : void 0;
+    if (body)
+      headers["Content-Type"] = "application/json";
+    const method = (opts.method || "GET").toString().toUpperCase();
+    let status = 0;
+    let text = "";
     try {
-      res = await fetch(this.apiUrl(path), { ...opts, headers });
+      const res = await (0, import_obsidian2.requestUrl)({
+        url: this.apiUrl(path),
+        method,
+        headers,
+        contentType: body ? "application/json" : void 0,
+        body,
+        throw: false
+      });
+      status = res.status;
+      text = res.text;
     } catch (e) {
       throw new Error(
-        `Cannot reach ${this.settings.serverUrl || "(no server URL)"}. Check Server URL. (${e.message})`
+        `Cannot reach ${this.settings.serverUrl || "(no server URL)"}. On a phone, use a public HTTPS URL, not localhost. (${e.message})`
       );
     }
-    const text = await res.text();
     let data = null;
     try {
       data = text ? JSON.parse(text) : null;
     } catch (e) {
       data = { error: text };
     }
-    if (!res.ok) {
-      if (res.status === 401) {
+    if (status < 200 || status >= 300) {
+      if (status === 401) {
         throw new Error(
           (data == null ? void 0 : data.error) || "Invalid or revoked access token. In the dashboard, sign in as a vault user (not admin), open Tokens, create a new sk_sync_ token, and paste it here."
         );
       }
-      if (res.status === 403) {
+      if (status === 403) {
         throw new Error(
           (data == null ? void 0 : data.error) || "Forbidden. Admins cannot sync a vault \u2014 use a non-admin user token from the Tokens page."
         );
       }
-      throw new Error((data == null ? void 0 : data.error) || res.statusText);
+      throw new Error((data == null ? void 0 : data.error) || `HTTP ${status}`);
     }
     return data;
+  }
+  mobileUrlError() {
+    if (!isMobileApp())
+      return null;
+    if (isLoopbackUrl(this.settings.serverUrl)) {
+      return "On Android and iOS, localhost is this device, not your computer. Set Server URL to your public HTTPS address (for example your Railway domain).";
+    }
+    return null;
   }
   async startup() {
     this.normalizeCredentials();
     if (!this.settings.token || !this.settings.serverUrl) {
       this.setStatus("offline");
-      new import_obsidian.Notice("Syncidian: set Server URL and access token first");
+      new import_obsidian2.Notice("Syncidian: set Server URL and access token first");
       return false;
     }
     if (!this.settings.token.startsWith("sk_sync_")) {
       this.setStatus("error");
-      new import_obsidian.Notice("Syncidian: access token must start with sk_sync_");
+      new import_obsidian2.Notice("Syncidian: access token must start with sk_sync_");
       return false;
+    }
+    const mobileErr = this.mobileUrlError();
+    if (mobileErr) {
+      this.setStatus("error");
+      new import_obsidian2.Notice(`Syncidian: ${mobileErr}`);
+      return false;
+    }
+    if (isMobileApp() && isInsecureHttp(this.settings.serverUrl) && import_obsidian2.Platform.isIosApp) {
+      new import_obsidian2.Notice("Syncidian: iOS often blocks plain HTTP. Prefer an https:// server URL.");
     }
     try {
       await this.connect();
@@ -213,7 +440,7 @@ var SyncidianPlugin = class extends import_obsidian.Plugin {
     } catch (e) {
       console.error(e);
       this.setStatus("error");
-      new import_obsidian.Notice(`Syncidian: ${e.message}`);
+      new import_obsidian2.Notice(`Syncidian: ${e.message}`);
       return false;
     }
   }
@@ -280,7 +507,7 @@ var SyncidianPlugin = class extends import_obsidian.Plugin {
       return true;
     } catch (e) {
       this.setStatus("error");
-      new import_obsidian.Notice(`Syncidian sync failed: ${e.message}`);
+      new import_obsidian2.Notice(`Syncidian sync failed: ${e.message}`);
       return false;
     } finally {
       this.syncing = false;
@@ -290,9 +517,7 @@ var SyncidianPlugin = class extends import_obsidian.Plugin {
   }
   async localManifest() {
     const out = {};
-    for (const file of this.app.vault.getAllLoadedFiles()) {
-      if (!(file instanceof import_obsidian.TFile))
-        continue;
+    for (const file of this.app.vault.getFiles()) {
       if (ignored(file.path))
         continue;
       const data = await this.app.vault.readBinary(file);
@@ -317,8 +542,9 @@ var SyncidianPlugin = class extends import_obsidian.Plugin {
   }
   /** Write bytes, tolerating vault-index lag vs files already on disk. */
   async writeBinary(path, data) {
+    path = (0, import_obsidian2.normalizePath)(path);
     const existing = this.app.vault.getAbstractFileByPath(path);
-    if (existing instanceof import_obsidian.TFile) {
+    if (existing instanceof import_obsidian2.TFile) {
       await this.app.vault.modifyBinary(existing, data);
       return;
     }
@@ -329,7 +555,7 @@ var SyncidianPlugin = class extends import_obsidian.Plugin {
     if (dir)
       await this.ensureFolder(dir);
     const again = this.app.vault.getAbstractFileByPath(path);
-    if (again instanceof import_obsidian.TFile) {
+    if (again instanceof import_obsidian2.TFile) {
       await this.app.vault.modifyBinary(again, data);
       return;
     }
@@ -340,7 +566,7 @@ var SyncidianPlugin = class extends import_obsidian.Plugin {
       if (!/already exists/i.test(msg))
         throw e;
       const raced = this.app.vault.getAbstractFileByPath(path);
-      if (raced instanceof import_obsidian.TFile) {
+      if (raced instanceof import_obsidian2.TFile) {
         await this.app.vault.modifyBinary(raced, data);
         return;
       }
@@ -390,7 +616,7 @@ var SyncidianPlugin = class extends import_obsidian.Plugin {
     }
     for (const path of upserts) {
       const af = this.app.vault.getAbstractFileByPath(path);
-      if (!(af instanceof import_obsidian.TFile))
+      if (!(af instanceof import_obsidian2.TFile))
         continue;
       const data = await this.app.vault.readBinary(af);
       const hash = await sha256(data);
@@ -407,6 +633,14 @@ var SyncidianPlugin = class extends import_obsidian.Plugin {
     }
     if (!files.length)
       return;
+    const chunk = pushBatchSize();
+    for (let i = 0; i < files.length; i += chunk) {
+      const slice = files.slice(i, i + chunk);
+      const last = i + chunk >= files.length;
+      await this.sendPush(slice, last ? movedAway : /* @__PURE__ */ new Set());
+    }
+  }
+  async sendPush(files, movedAway) {
     const res = await this.api("/api/v1/sync/push", {
       method: "POST",
       body: JSON.stringify({ device_id: this.settings.deviceId, files })
@@ -429,7 +663,7 @@ var SyncidianPlugin = class extends import_obsidian.Plugin {
     }
   }
   async raiseConflict(path) {
-    new import_obsidian.Notice(`Syncidian conflict: ${path}`);
+    new import_obsidian2.Notice(`Syncidian conflict: ${path}`);
     this.setStatus("conflict", path);
   }
   pathsUnder(prefix) {
@@ -450,8 +684,8 @@ var SyncidianPlugin = class extends import_obsidian.Plugin {
     if (!this.connected || this.syncing || this.applyingRemote)
       return;
     if (deleted) {
-      const paths = file instanceof import_obsidian.TFile ? [file.path] : this.pathsUnder(file.path);
-      if (file instanceof import_obsidian.TFile) {
+      const paths = file instanceof import_obsidian2.TFile ? [file.path] : this.pathsUnder(file.path);
+      if (file instanceof import_obsidian2.TFile) {
         if (ignored(file.path))
           return;
       } else if (!paths.length && ignored(file.path)) {
@@ -463,7 +697,7 @@ var SyncidianPlugin = class extends import_obsidian.Plugin {
         this.pending.set(p, { deleted: true });
       }
     } else {
-      if (!(file instanceof import_obsidian.TFile) || ignored(file.path))
+      if (!(file instanceof import_obsidian2.TFile) || ignored(file.path))
         return;
       const prev = this.pending.get(file.path);
       this.pending.set(file.path, { deleted: false, renamedFrom: prev == null ? void 0 : prev.renamedFrom });
@@ -473,7 +707,7 @@ var SyncidianPlugin = class extends import_obsidian.Plugin {
   queueRename(oldPath, file) {
     if (!this.connected || this.syncing || this.applyingRemote)
       return;
-    if (file instanceof import_obsidian.TFile) {
+    if (file instanceof import_obsidian2.TFile) {
       if (!ignored(oldPath))
         this.pending.set(oldPath, { deleted: true });
       if (!ignored(file.path)) {
@@ -512,8 +746,8 @@ var SyncidianPlugin = class extends import_obsidian.Plugin {
       this.pending.set(p, { deleted: true });
       this.pending.set(np, { deleted: false, renamedFrom: p });
     }
-    for (const f of this.app.vault.getAllLoadedFiles()) {
-      if (!(f instanceof import_obsidian.TFile) || ignored(f.path))
+    for (const f of this.app.vault.getFiles()) {
+      if (ignored(f.path))
         continue;
       if (f.path !== newFolder && !f.path.startsWith(newFolder + "/"))
         continue;
@@ -571,7 +805,7 @@ var SyncidianPlugin = class extends import_obsidian.Plugin {
     } catch (e) {
       this.setStatus("error");
       console.error(e);
-      new import_obsidian.Notice(`Syncidian sync failed: ${e.message}`);
+      new import_obsidian2.Notice(`Syncidian sync failed: ${e.message}`);
     } finally {
       this.syncing = false;
       if (this.pending.size)
@@ -579,8 +813,9 @@ var SyncidianPlugin = class extends import_obsidian.Plugin {
     }
   }
   async openSocket() {
-    var _a;
-    (_a = this.ws) == null ? void 0 : _a.close();
+    if (this.wsConnecting || this.ws)
+      return;
+    this.wsConnecting = true;
     this.normalizeCredentials();
     const base = this.settings.serverUrl.replace(/\/$/, "");
     let ticket = "";
@@ -588,16 +823,31 @@ var SyncidianPlugin = class extends import_obsidian.Plugin {
       const t = await this.api("/api/v1/ws/ticket", { method: "POST", body: "{}" });
       ticket = (t == null ? void 0 : t.ticket) || "";
     } catch (e) {
+      this.wsConnecting = false;
       return;
     }
-    if (!ticket)
+    if (!ticket) {
+      this.wsConnecting = false;
       return;
+    }
     const wsUrl = base.replace(/^http/, "ws") + `/api/v1/ws?device_id=${encodeURIComponent(this.settings.deviceId)}&ticket=${encodeURIComponent(ticket)}`;
     try {
       this.ws = new WebSocket(wsUrl);
     } catch (e) {
+      this.wsConnecting = false;
       return;
     }
+    this.ws.onopen = () => {
+      this.wsConnecting = false;
+    };
+    this.ws.onerror = () => {
+      var _a;
+      this.wsConnecting = false;
+      try {
+        (_a = this.ws) == null ? void 0 : _a.close();
+      } catch (e) {
+      }
+    };
     this.ws.onmessage = (ev) => {
       void (async () => {
         try {
@@ -628,24 +878,52 @@ var SyncidianPlugin = class extends import_obsidian.Plugin {
     };
     this.ws.onclose = () => {
       this.ws = null;
-      window.setTimeout(() => {
-        if (this.connected)
-          void this.openSocket();
-      }, 4e3);
+      this.wsConnecting = false;
     };
+  }
+  /** HTTP fallback when the mobile WebView blocks WebSockets (cleartext, ATS, captive Wi-Fi). */
+  async pollRemote() {
+    try {
+      const man = await this.api("/api/v1/sync/manifest");
+      const remote = /* @__PURE__ */ new Map();
+      for (const f of man.files || [])
+        remote.set(f.path, f.hash);
+      let need = false;
+      for (const [path, hash] of remote) {
+        if (this.settings.hashes[path] !== hash) {
+          need = true;
+          break;
+        }
+      }
+      if (!need) {
+        for (const path of Object.keys(this.settings.hashes)) {
+          if (!remote.has(path)) {
+            need = true;
+            break;
+          }
+        }
+      }
+      if (need)
+        await this.fullSync();
+    } catch (e) {
+      console.error(e);
+    }
   }
   async loadSettings() {
     this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
     if (!this.settings.hashes)
       this.settings.hashes = {};
     this.normalizeCredentials();
+    if (isMobileApp() && isLoopbackUrl(this.settings.serverUrl)) {
+      this.settings.serverUrl = "";
+    }
   }
   async saveSettings() {
     this.normalizeCredentials();
     await this.saveData(this.settings);
   }
 };
-var ConflictModal = class extends import_obsidian.Modal {
+var ConflictModal = class extends import_obsidian2.Modal {
   constructor(app, plugin, id, path) {
     super(app);
     this.plugin = plugin;
@@ -655,6 +933,8 @@ var ConflictModal = class extends import_obsidian.Modal {
   async onOpen() {
     const { contentEl } = this;
     contentEl.addClass("syncidian-modal");
+    if (isMobileApp())
+      contentEl.addClass("syncidian-modal-mobile");
     contentEl.createEl("h2", { text: "Sync conflict" });
     contentEl.createEl("p", { text: `${this.path} was modified on more than one device.` });
     let data = {};
@@ -691,7 +971,7 @@ var ConflictModal = class extends import_obsidian.Modal {
       })
     });
     await this.plugin.pullFile(this.path);
-    new import_obsidian.Notice(`Resolved ${this.path}`);
+    new import_obsidian2.Notice(`Resolved ${this.path}`);
     this.close();
     this.plugin.setStatus("ok");
   }
@@ -699,7 +979,7 @@ var ConflictModal = class extends import_obsidian.Modal {
     this.contentEl.empty();
   }
 };
-var SyncidianSettingTab = class extends import_obsidian.PluginSettingTab {
+var SyncidianSettingTab = class extends import_obsidian2.PluginSettingTab {
   constructor(app, plugin) {
     super(app, plugin);
     this.plugin = plugin;
@@ -707,21 +987,27 @@ var SyncidianSettingTab = class extends import_obsidian.PluginSettingTab {
   display() {
     const { containerEl } = this;
     containerEl.empty();
-    containerEl.createEl("h2", { text: "Syncidian" });
     containerEl.createEl("p", {
-      text: "Install from Community plugins (or BRAT). Point this vault at your Syncidian server. GitHub is configured per user in the dashboard, not here."
+      text: "Install from Community plugins (or BRAT). Point this vault at your Syncidian server. GitHub is configured per user in the dashboard, not here. Unlike Git plugins, this one uses only the Obsidian API and works on Android and iOS."
     });
+    if (isMobileApp()) {
+      new import_obsidian2.Setting(containerEl).setName("Mobile").setDesc(
+        "Use a public HTTPS server URL. localhost is this phone or tablet, not your computer. iOS often blocks plain http://."
+      );
+    }
     let urlInput = null;
     let tokenInput = null;
     let nameInput = null;
-    new import_obsidian.Setting(containerEl).setName("Server URL").setDesc("Example: http://localhost:8080 or https://sync.example.com").addText((t) => {
+    new import_obsidian2.Setting(containerEl).setName("Server URL").setDesc(
+      isMobileApp() ? "HTTPS address of your Syncidian server, for example https://sync.example.com" : "Example: http://localhost:8080 or https://sync.example.com"
+    ).addText((t) => {
       urlInput = t.inputEl;
-      t.setPlaceholder("http://localhost:8080").setValue(this.plugin.settings.serverUrl).onChange(async (v) => {
+      t.setPlaceholder(isMobileApp() ? "https://sync.example.com" : "http://localhost:8080").setValue(this.plugin.settings.serverUrl).onChange(async (v) => {
         this.plugin.settings.serverUrl = v.trim();
         await this.plugin.saveSettings();
       });
     });
-    new import_obsidian.Setting(containerEl).setName("Access token").setDesc("Created in the Syncidian dashboard Tokens page (vault user, not admin). Starts with sk_sync_").addText((t) => {
+    new import_obsidian2.Setting(containerEl).setName("Access token").setDesc("Created in the Syncidian dashboard Tokens page (vault user, not admin). Starts with sk_sync_").addText((t) => {
       tokenInput = t.inputEl;
       t.inputEl.type = "password";
       t.inputEl.spellcheck = false;
@@ -731,14 +1017,14 @@ var SyncidianSettingTab = class extends import_obsidian.PluginSettingTab {
         await this.plugin.saveSettings();
       });
     });
-    new import_obsidian.Setting(containerEl).setName("Device name").addText((t) => {
+    new import_obsidian2.Setting(containerEl).setName("Device name").addText((t) => {
       nameInput = t.inputEl;
       t.setValue(this.plugin.settings.deviceName).onChange(async (v) => {
         this.plugin.settings.deviceName = v.trim() || "Obsidian";
         await this.plugin.saveSettings();
       });
     });
-    new import_obsidian.Setting(containerEl).setName("Connect").setDesc("Register this device and run an initial sync").addButton(
+    new import_obsidian2.Setting(containerEl).setName("Connect").setDesc("Register this device and run an initial sync").addButton(
       (b) => b.setButtonText("Connect").setCta().onClick(async () => {
         if (urlInput)
           this.plugin.settings.serverUrl = urlInput.value.trim();
@@ -747,9 +1033,14 @@ var SyncidianSettingTab = class extends import_obsidian.PluginSettingTab {
         if (nameInput)
           this.plugin.settings.deviceName = nameInput.value.trim() || "Obsidian";
         await this.plugin.saveSettings();
+        const mobileErr = this.plugin.mobileUrlError();
+        if (mobileErr) {
+          new import_obsidian2.Notice(`Syncidian: ${mobileErr}`);
+          return;
+        }
         const ok = await this.plugin.startup();
         if (ok)
-          new import_obsidian.Notice("Syncidian connected");
+          new import_obsidian2.Notice("Syncidian connected");
       })
     );
   }
