@@ -80,10 +80,22 @@ func (s *Server) handleGitHubAuthCallback(w http.ResponseWriter, r *http.Request
 	if !s.validGitHubState(r, r.URL.Query().Get("state")) {
 		s.dashboardRedirect(w, r, url.Values{
 			"github":  {"error"},
-			"message": {"GitHub sign-in expired. Try again."},
+			"message": {"GitHub sign-in expired. Try Connect with GitHub again from the dashboard."},
 		})
 		return
 	}
+
+	installationID, _ := strconv.ParseInt(r.URL.Query().Get("installation_id"), 10, 64)
+
+	// Prefer the already-signed-in vault user when this redirect is an App install
+	// return (Install & Authorize). Re-running OAuth must not switch accounts.
+	if installationID != 0 {
+		if existing, _ := s.authenticate(r); existing != nil && !existing.IsAdmin {
+			s.finishInstallation(w, r, existing, installationID)
+			return
+		}
+	}
+
 	app := s.instanceGitHubApp()
 	if !app.Configured() {
 		s.dashboardRedirect(w, r, url.Values{"github": {"error"}, "message": {"GitHub App is not registered."}})
@@ -115,19 +127,33 @@ func (s *Server) handleGitHubAuthCallback(w http.ResponseWriter, r *http.Request
 		return
 	}
 	setSessionCookie(w, sess.ID, r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https"))
+
+	if installationID == 0 {
+		if c, err := r.Cookie("syncidian_pending_install"); err == nil && c.Value != "" {
+			if id, e := strconv.ParseInt(c.Value, 10, 64); e == nil && id != 0 {
+				installationID = id
+			}
+		}
+	}
+	if installationID != 0 {
+		s.finishInstallation(w, r, u, installationID)
+		return
+	}
+
 	next := "app"
 	if c, err := r.Cookie("syncidian_github_next"); err == nil && c.Value != "" {
 		next = c.Value
 	}
-	if c, err := r.Cookie("syncidian_pending_install"); err == nil && c.Value != "" {
-		if id, e := strconv.ParseInt(c.Value, 10, 64); e == nil && id != 0 {
-			s.finishInstallation(w, r, u, id)
-			return
-		}
-	}
 	if next == "install" || next == "setup" {
 		if app.Slug != "" {
-			http.Redirect(w, r, githubapp.InstallURL(app.Slug), http.StatusFound)
+			state, err := randomHex(16)
+			if err != nil {
+				s.dashboardRedirect(w, r, url.Values{"github": {"error"}, "message": {"Could not continue to install."}})
+				return
+			}
+			s.setGitHubStateCookie(w, r, state)
+			s.setPendingInstallIntent(w, r)
+			http.Redirect(w, r, githubapp.InstallURL(app.Slug, state), http.StatusFound)
 			return
 		}
 	}

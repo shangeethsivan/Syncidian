@@ -77,12 +77,16 @@ func TestInstallURL(t *testing.T) {
 		"https://github.com/apps/syncidian/installations/new",
 		"github.com/apps/syncidian",
 	} {
-		if got := InstallURL(in); got != want {
+		if got := InstallURL(in, ""); got != want {
 			t.Fatalf("InstallURL(%q)=%q, want %q", in, got, want)
 		}
 	}
-	if InstallURL("") != "" {
+	if InstallURL("", "") != "" {
 		t.Fatal("empty slug should yield empty install URL")
+	}
+	withState := InstallURL("syncidian", "abc123")
+	if withState != want+"?state=abc123" {
+		t.Fatalf("InstallURL with state: %q", withState)
 	}
 }
 

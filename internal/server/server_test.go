@@ -214,6 +214,11 @@ func TestDashboardServed(t *testing.T) {
 		`Connect to GitHub`,
 		`Register the GitHub App`,
 		`docs/github-app.md`,
+		`Obsidian on desktop`,
+		`Android`,
+		`iOS`,
+		`id="setup-obsidian"`,
+		`Restricted mode`,
 	} {
 		if !bytes.Contains(b, []byte(needle)) {
 			t.Fatalf("dashboard missing required markup %q", needle)
@@ -645,6 +650,22 @@ func TestPublicLandingAdminAndGitHubAppURLs(t *testing.T) {
 	if !strings.Contains(githubURL, "github.com/apps/syncidian-test/installations/new") {
 		t.Fatalf("github_url after instance app: %v", m)
 	}
+	if !strings.Contains(githubURL, "state=") {
+		t.Fatalf("install URL must include state so OAuth-during-install can be correlated: %q", githubURL)
+	}
+	gotInstallState := false
+	gotInstallIntent := false
+	for _, c := range res.Cookies() {
+		if c.Name == "syncidian_github_state" && c.Value != "" {
+			gotInstallState = true
+		}
+		if c.Name == "syncidian_install_intent" && c.Value != "" {
+			gotInstallIntent = true
+		}
+	}
+	if !gotInstallState || !gotInstallIntent {
+		t.Fatalf("expected state + install intent cookies on Connect with GitHub, cookies=%v", res.Cookies())
+	}
 
 	// Pasting a full GitHub App URL as the slug must still produce a clean install URL.
 	res, m = doJSON(t, http.MethodPost, hs.URL+"/api/v1/github/app/register", map[string]any{
@@ -663,11 +684,14 @@ func TestPublicLandingAdminAndGitHubAppURLs(t *testing.T) {
 		t.Fatalf("app start after URL slug: %d %v", res.StatusCode, m)
 	}
 	githubURL, _ = m["github_url"].(string)
-	if githubURL != "https://github.com/apps/syncidian/installations/new" {
+	if !strings.HasPrefix(githubURL, "https://github.com/apps/syncidian/installations/new") {
 		t.Fatalf("github_url must not double-prefix apps/: %q", githubURL)
 	}
 	if strings.Contains(githubURL, "apps/https://") {
 		t.Fatalf("malformed install URL: %q", githubURL)
+	}
+	if !strings.Contains(githubURL, "?state=") {
+		t.Fatalf("normalized slug install URL must still carry state: %q", githubURL)
 	}
 
 	start, err = http.NewRequest(http.MethodGet, hs.URL+"/api/v1/auth/github/start", nil)
@@ -685,5 +709,74 @@ func TestPublicLandingAdminAndGitHubAppURLs(t *testing.T) {
 	loc = redir.Header.Get("Location")
 	if !strings.Contains(loc, "https://github.com/login/oauth/authorize") || !strings.Contains(loc, "client_id=Iv1.xyz") {
 		t.Fatalf("expected GitHub OAuth redirect, got %q", loc)
+	}
+}
+
+func TestGitHubAuthCallbackBindsInstallationForSignedInUser(t *testing.T) {
+	hs, done := newTestServer(t)
+	defer done()
+
+	adminCookies := setupAdmin(t, hs)
+	res, m := doJSON(t, http.MethodPost, hs.URL+"/api/v1/github/app/register", map[string]any{
+		"app_id": 42, "slug": "syncidian-bind", "pem": "-----BEGIN PRIVATE KEY-----\nMIIB\n-----END PRIVATE KEY-----",
+		"client_id": "Iv1.bind", "client_secret": "secret",
+	}, adminCookies, "")
+	if res.StatusCode != 200 {
+		t.Fatalf("register: %d %v", res.StatusCode, m)
+	}
+	bob := createAndLoginUser(t, hs, adminCookies, "bob")
+
+	res, m = doJSON(t, http.MethodPost, hs.URL+"/api/v1/github/app/start", map[string]any{}, bob, "")
+	if res.StatusCode != 200 {
+		t.Fatalf("start: %d %v", res.StatusCode, m)
+	}
+	var state string
+	cookies := append([]*http.Cookie{}, bob...)
+	for _, c := range res.Cookies() {
+		cookies = append(cookies, c)
+		if c.Name == "syncidian_github_state" {
+			state = c.Value
+		}
+	}
+	if state == "" {
+		t.Fatal("missing state cookie from Connect with GitHub")
+	}
+
+	// With Request user authorization during installation, GitHub returns to the
+	// OAuth callback with installation_id (not the setup URL).
+	req, err := http.NewRequest(http.MethodGet, hs.URL+"/api/v1/auth/github/callback?code=unused&installation_id=98765&setup_action=install&state="+state, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range cookies {
+		req.AddCookie(c)
+	}
+	redir, err := noFollowClient().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	redir.Body.Close()
+	if redir.StatusCode != http.StatusFound {
+		t.Fatalf("callback status: %d", redir.StatusCode)
+	}
+	loc := redir.Header.Get("Location")
+	if strings.Contains(loc, "github=signed_in") {
+		t.Fatalf("install return must not look like a plain sign-in: %q", loc)
+	}
+	if strings.Contains(loc, "sign-in expired") || strings.Contains(loc, "GitHub+sign-in+expired") {
+		t.Fatalf("install return must accept the Connect state cookie: %q", loc)
+	}
+	// Fake PEM cannot mint an installation token, so expect an error redirect —
+	// but the installation_id must already be stored for this user.
+	if !strings.Contains(loc, "github=") {
+		t.Fatalf("expected github query on redirect: %q", loc)
+	}
+
+	res, m = doJSON(t, http.MethodGet, hs.URL+"/api/v1/github", nil, bob, "")
+	if res.StatusCode != 200 {
+		t.Fatalf("github status: %d %v", res.StatusCode, m)
+	}
+	if m["installed"] != true {
+		t.Fatalf("expected installation recorded after Install & Authorize callback: %v", m)
 	}
 }

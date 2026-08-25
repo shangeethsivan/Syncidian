@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 )
@@ -153,12 +154,19 @@ func NormalizeAppSlug(raw string) string {
 }
 
 // InstallURL is the GitHub page where a user installs this App on a repository.
-func InstallURL(slug string) string {
+// Pass a non-empty state so GitHub returns it on the OAuth callback after
+// "Install & Authorize" (Request user authorization during installation).
+// Without that, Syncidian cannot correlate the redirect and never records the install.
+func InstallURL(slug, state string) string {
 	slug = NormalizeAppSlug(slug)
 	if slug == "" {
 		return ""
 	}
-	return "https://github.com/apps/" + slug + "/installations/new"
+	u := "https://github.com/apps/" + slug + "/installations/new"
+	if state = strings.TrimSpace(state); state != "" {
+		u += "?state=" + url.QueryEscape(state)
+	}
+	return u
 }
 
 func ConvertManifest(code string) (*AppCredentials, error) {
