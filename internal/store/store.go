@@ -16,11 +16,16 @@ import (
 
 type Store struct {
 	db      *sql.DB
+	crypt   *crypter
 	DataDir string
 }
 
 func Open(dataDir string) (*Store, error) {
 	if err := os.MkdirAll(dataDir, 0o700); err != nil {
+		return nil, err
+	}
+	crypt, err := newCrypter(dataDir)
+	if err != nil {
 		return nil, err
 	}
 	dbPath := filepath.Join(dataDir, "syncidian.db")
@@ -30,7 +35,7 @@ func Open(dataDir string) (*Store, error) {
 		return nil, err
 	}
 	db.SetMaxOpenConns(1)
-	s := &Store{db: db, DataDir: dataDir}
+	s := &Store{db: db, crypt: crypt, DataDir: dataDir}
 	if err := s.migrate(); err != nil {
 		_ = db.Close()
 		return nil, err
@@ -149,6 +154,12 @@ func (s *Store) GetInstanceGitHubApp() (*GitHubApp, error) {
 		return nil, err
 	}
 	a.UpdatedAt = parseTime(updated)
+	if a.PEM, err = s.openSecret(a.PEM); err != nil {
+		return nil, err
+	}
+	if a.ClientSecret, err = s.openSecret(a.ClientSecret); err != nil {
+		return nil, err
+	}
 	return a, nil
 }
 
@@ -163,7 +174,7 @@ ON CONFLICT(id) DO UPDATE SET
   client_id = excluded.client_id,
   client_secret = excluded.client_secret,
   updated_at = excluded.updated_at
-`, a.AppID, a.Slug, a.PEM, a.ClientID, a.ClientSecret, now())
+`, a.AppID, a.Slug, s.seal(a.PEM), a.ClientID, s.seal(a.ClientSecret), now())
 	return err
 }
 
@@ -347,15 +358,35 @@ func (s *Store) CreateSession(userID string, ttl time.Duration) (*Session, error
 	}
 	_, err := s.db.Exec(
 		`INSERT INTO sessions (id, user_id, created_at, expires_at) VALUES (?, ?, ?, ?)`,
-		sess.ID, sess.UserID, now(), sess.ExpiresAt.Format(time.RFC3339Nano),
+		HashToken(sess.ID), sess.UserID, now(), sess.ExpiresAt.Format(time.RFC3339Nano),
 	)
 	return sess, err
 }
 
 func (s *Store) GetSession(id string) (*Session, error) {
+	sess, err := s.lookupSession(HashToken(id))
+	if err != nil {
+		return nil, err
+	}
+	if sess == nil {
+		// Pre-hashing rows: look up the raw cookie value once.
+		sess, err = s.lookupSession(id)
+		if err != nil || sess == nil {
+			return sess, err
+		}
+	}
+	sess.ID = id
+	if time.Now().UTC().After(sess.ExpiresAt) {
+		_ = s.DeleteSession(id)
+		return nil, nil
+	}
+	return sess, nil
+}
+
+func (s *Store) lookupSession(storedID string) (*Session, error) {
 	sess := &Session{}
 	var created, expires string
-	err := s.db.QueryRow(`SELECT id, user_id, created_at, expires_at FROM sessions WHERE id = ?`, id).
+	err := s.db.QueryRow(`SELECT id, user_id, created_at, expires_at FROM sessions WHERE id = ?`, storedID).
 		Scan(&sess.ID, &sess.UserID, &created, &expires)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -365,15 +396,11 @@ func (s *Store) GetSession(id string) (*Session, error) {
 	}
 	sess.CreatedAt = parseTime(created)
 	sess.ExpiresAt = parseTime(expires)
-	if time.Now().UTC().After(sess.ExpiresAt) {
-		_, _ = s.db.Exec(`DELETE FROM sessions WHERE id = ?`, id)
-		return nil, nil
-	}
 	return sess, nil
 }
 
 func (s *Store) DeleteSession(id string) error {
-	_, err := s.db.Exec(`DELETE FROM sessions WHERE id = ?`, id)
+	_, err := s.db.Exec(`DELETE FROM sessions WHERE id = ? OR id = ?`, HashToken(id), id)
 	return err
 }
 
@@ -674,7 +701,7 @@ ON CONFLICT(user_id) DO UPDATE SET
   install_token_expires = excluded.install_token_expires,
   last_error = '',
   updated_at = excluded.updated_at
-`, cfg.UserID, cfg.Token, cfg.Repo, cfg.Branch, cfg.AppID, cfg.AppSlug, cfg.AppPEM, cfg.ClientID, cfg.ClientSecret,
+`, cfg.UserID, s.seal(cfg.Token), cfg.Repo, cfg.Branch, cfg.AppID, cfg.AppSlug, s.seal(cfg.AppPEM), cfg.ClientID, s.seal(cfg.ClientSecret),
 		cfg.InstallationID, expires, now())
 	return err
 }
@@ -700,6 +727,15 @@ func (s *Store) GetGitHub(userID string) (*GitHubConfig, error) {
 	c.LastPush = parseTimePtr(lastPush)
 	c.LastPull = parseTimePtr(lastPull)
 	c.UpdatedAt = parseTime(updated)
+	if c.Token, err = s.openSecret(c.Token); err != nil {
+		return nil, err
+	}
+	if c.AppPEM, err = s.openSecret(c.AppPEM); err != nil {
+		return nil, err
+	}
+	if c.ClientSecret, err = s.openSecret(c.ClientSecret); err != nil {
+		return nil, err
+	}
 	return c, nil
 }
 
@@ -710,7 +746,7 @@ func (s *Store) UpdateGitHubInstallToken(userID, token string, expires time.Time
 	}
 	_, err := s.db.Exec(
 		`UPDATE github_config SET token = ?, install_token_expires = ?, updated_at = ? WHERE user_id = ?`,
-		token, exp, now(), userID,
+		s.seal(token), exp, now(), userID,
 	)
 	return err
 }

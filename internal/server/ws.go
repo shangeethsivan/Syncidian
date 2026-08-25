@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -69,7 +70,66 @@ func (h *Hub) Broadcast(userID, skipDevice string, msg any) {
 	}
 }
 
-func (s *Server) handleWS(w http.ResponseWriter, r *http.Request, u *store.User) {
+func (s *Server) handleWSTicket(w http.ResponseWriter, r *http.Request, u *store.User) {
+	raw, err := randomHex(32)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "could not issue websocket ticket")
+		return
+	}
+	ticket := "wst_" + raw
+	s.tickets.Store(store.HashToken(ticket), wsTicket{
+		userID:  u.ID,
+		expires: time.Now().Add(60 * time.Second),
+	})
+	writeJSON(w, http.StatusOK, map[string]any{"ticket": ticket, "expires_in": 60})
+}
+
+type wsTicket struct {
+	userID  string
+	expires time.Time
+}
+
+func (s *Server) redeemWSTicket(raw string) (string, bool) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return "", false
+	}
+	v, ok := s.tickets.LoadAndDelete(store.HashToken(raw))
+	if !ok {
+		return "", false
+	}
+	t, _ := v.(wsTicket)
+	if t.userID == "" || time.Now().After(t.expires) {
+		return "", false
+	}
+	return t.userID, true
+}
+
+func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
+	if strings.TrimSpace(r.URL.Query().Get("token")) != "" {
+		writeError(w, http.StatusBadRequest, "do not put access tokens in the WebSocket URL; POST /api/v1/ws/ticket and connect with the ticket")
+		return
+	}
+	userID := ""
+	if ticket := strings.TrimSpace(r.URL.Query().Get("ticket")); ticket != "" {
+		id, ok := s.redeemWSTicket(ticket)
+		if !ok {
+			writeError(w, http.StatusUnauthorized, "invalid or expired websocket ticket")
+			return
+		}
+		userID = id
+	} else {
+		u, err := s.authenticate(r)
+		if err != nil || u == nil {
+			writeError(w, http.StatusUnauthorized, "unauthorized")
+			return
+		}
+		if u.IsAdmin {
+			writeError(w, http.StatusForbidden, "admins manage users and cannot access private vault or GitHub data")
+			return
+		}
+		userID = u.ID
+	}
 	conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
 		InsecureSkipVerify: true,
 		OriginPatterns:     []string{"*"},
@@ -78,7 +138,7 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request, u *store.User)
 		return
 	}
 	deviceID := r.URL.Query().Get("device_id")
-	client := &wsClient{userID: u.ID, deviceID: deviceID, conn: conn}
+	client := &wsClient{userID: userID, deviceID: deviceID, conn: conn}
 	s.hub.add(client)
 	defer func() {
 		s.hub.remove(client)

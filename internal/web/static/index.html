@@ -500,7 +500,7 @@ docker compose up --build -d</pre>
         <li><b>Option A:</b> Sign in as a regular user → <b>Tokens</b> → <b>Create token</b> → copy <code>sk_sync_…</code>.</li>
         <li><b>Option B (admin):</b> On <b>Users</b>, create a vault user with <b>Also create Obsidian access token</b>, or click <b>Create Obsidian token</b> next to an existing vault user. Copy the value once.</li>
       </ol>
-      <p>If Connect says unauthorized, that token is missing from this server — mint a new one. Attach a <code>/data</code> volume so users, tokens, and GitHub App credentials survive redeploys.</p>
+      <p>If Connect says unauthorized, that token is missing from this server — mint a new one. Attach a <code>/data</code> volume so users, tokens, and GitHub App credentials survive redeploys. The server stores only a hash of the token, not the raw value. GitHub App secrets are encrypted on disk. The plugin never puts the token in a URL.</p>
     `,
   },
   {

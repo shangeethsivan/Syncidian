@@ -70,6 +70,7 @@ Environment:
   SYNCIDIAN_DATA                 Data directory (default ./data, or $RAILWAY_VOLUME_MOUNT_PATH).
                                  Persist this path (Docker/Railway volume at /data) or every
                                  deploy wipes users, GitHub App credentials, and vault files.
+  SYNCIDIAN_DATA_KEY             Optional 32-byte hex/base64 key to encrypt GitHub secrets at rest.
   SYNCIDIAN_PUBLIC_URL           Public URL shown in the dashboard
   SYNCIDIAN_BOOTSTRAP_USER       Create this admin on first boot
   SYNCIDIAN_BOOTSTRAP_PASSWORD   Password for the bootstrap admin

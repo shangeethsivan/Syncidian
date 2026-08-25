@@ -97,21 +97,22 @@ flowchart TB
     Me["GET /api/v1/me · /stats"]
     Users["GET/POST /api/v1/users<br/>POST /api/v1/users/tokens<br/>admin: mint one-time sk_sync_"]
     Tokens["GET/POST /api/v1/tokens<br/>vault user only"]
-    Dev["devices · heartbeat"]
+    Dev["devices list · delete"]
+    Conf["conflicts list · get · resolve"]
     GH["GET/POST /api/v1/github<br/>POST /api/v1/github/app/start"]
     AppAdm["POST /api/v1/github/app/register<br/>admin: instance App"]
     MCPCfg["GET/POST /api/v1/mcp"]
     Act["GET /api/v1/activity"]
   end
 
-  subgraph plugin [Bearer sk_sync_ token]
+  subgraph plugin [Bearer sk_sync_ token — Obsidian plugin and MCP]
     Reg["POST /api/v1/devices/register"]
     Plan["POST /api/v1/sync/plan"]
     Push["POST /api/v1/sync/push"]
     File["GET /api/v1/sync/file"]
     Man["GET /api/v1/sync/manifest"]
-    Conf["conflicts list · get · resolve"]
-    Sock["GET /api/v1/ws"]
+    Ticket["POST /api/v1/ws/ticket"]
+    Sock["GET /api/v1/ws?ticket="]
     MCP["POST /mcp"]
   end
 
@@ -119,7 +120,7 @@ flowchart TB
   session --- plugin
 ```
 
-Both the dashboard cookie (`syncidian_session`) and the plugin/MCP Bearer token go through the same `authenticate()` path. Tokens are stored as SHA-256 hashes; the raw `sk_sync_…` value is shown once. `GET/POST /api/v1/github` is never public — unauthenticated callers receive 401. GitHub App **callback**, **setup**, and **webhook** URLs are public so GitHub can redirect and ping.
+Both the dashboard cookie (`syncidian_session`) and the plugin/MCP Bearer token go through `authenticate()`. Raw `sk_sync_…` values are shown once and stored as SHA-256 hashes. Session cookies are stored hashed too. GitHub App PEM, client secrets, and installation tokens are encrypted at rest (`enc:v1:` AES-256-GCM) with `SYNCIDIAN_DATA_KEY` or `data/secret.key`. Access tokens **cannot** call GitHub connect/disconnect/sync-now or mint more tokens — those require a dashboard session. The plugin identifies itself with `X-Syncidian-Client`; that header is not a security boundary (it is spoofable). Tokens are not accepted in query strings. `GET/POST /api/v1/github` is never public. GitHub App **callback**, **setup**, and **webhook** URLs are public so GitHub can redirect and ping.
 
 ---
 
@@ -420,7 +421,7 @@ erDiagram
   }
 ```
 
-Vault bytes live on disk at `data/vaults/<userId>/`. SQLite (`data/syncidian.db`) stores metadata, auth, devices, conflicts, activity, GitHub config, the instance GitHub App, and MCP permissions.
+Vault bytes live on disk at `data/vaults/<userId>/` as the working copy (markdown, not encrypted — they are the notes). SQLite (`data/syncidian.db`) stores metadata, auth, devices, conflicts, activity, GitHub config, the instance GitHub App, and MCP permissions. Passwords are bcrypt. Access tokens and session IDs are stored hashed. GitHub App PEM, OAuth client secrets, and installation tokens are AES-256-GCM sealed in those columns.
 
 ---
 
@@ -486,7 +487,7 @@ Railway: mount a volume at `/data`. `railway.json` sets `requiredMountPath` to `
 | GitHub App self-host setup | [`docs/github-app.md`](github-app.md) |
 | MCP tools | [`internal/mcp/mcp.go`](../internal/mcp/mcp.go) |
 | Live updates | [`internal/server/ws.go`](../internal/server/ws.go) |
-| Persistence | [`internal/store/store.go`](../internal/store/store.go), [`internal/config/persist.go`](../internal/config/persist.go), [`railway.json`](../railway.json) |
+| Persistence | [`internal/store/store.go`](../internal/store/store.go), [`internal/store/crypt.go`](../internal/store/crypt.go), [`internal/config/persist.go`](../internal/config/persist.go), [`railway.json`](../railway.json) |
 | Dashboard UI | [`internal/web/static/index.html`](../internal/web/static/index.html) |
 | Obsidian plugin | [`plugin/main.ts`](../plugin/main.ts) |
 | Keep diagrams current | [`AGENT.md`](../AGENT.md) |

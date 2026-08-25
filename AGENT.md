@@ -38,11 +38,12 @@ Document and implement these unless a later change explicitly replaces them — 
 
 1. **Public landing, admin at `/admin`.** Unauthenticated visitors see a one-page story with GitHub sign-in, optional email signup, and a link to `/admin`. Operators create the first admin and register the instance GitHub App at `/admin`. Repository install stays per user after identity.
 2. **GitHub is per user, after identity.** One repository per `user_id`. `GET/POST /api/v1/github` requires `authenticate()`.
-3. **Admin login does not need repo sync.** Admins manage users. Vault/GitHub/token-list/device/activity/MCP routes use `vaultAuthed` and return 403 for admins. Admins may mint a **one-time** `sk_sync_` token for a vault user via `POST /api/v1/users/tokens` (by username) or `issue_token` on user create — they still cannot list existing tokens or read vault/GitHub data.
+3. **Admin login does not need repo sync.** Admins manage users. Vault/GitHub/token-list/device/activity/MCP routes use `vaultAuthed` or `sessionVaultAuthed` and return 403 for admins. Admins may mint a **one-time** `sk_sync_` token for a vault user via `POST /api/v1/users/tokens` (by username) or `issue_token` on user create — they still cannot list existing tokens or read vault/GitHub data.
 4. **Admin user list is public fields only:** `username`, `is_admin`, `created_at` (no `id`, vault, tokens, or GitHub).
 5. Device sync works without GitHub. GitHub is optional durable backup.
 6. **GitHub App only, main branch only.** Backup is authorized by installing a GitHub App with Contents read and write. Personal access tokens and deploy keys are not supported. Syncidian always uses `main`. Sign-in uses the instance App callback, setup, and webhook URLs.
 7. **Persistent data directory.** Users, tokens, GitHub App credentials, and vault files live under `SYNCIDIAN_DATA` (`syncidian.db` + `vaults/`). PaaS deploys wipe the container filesystem unless a volume is mounted at `/data`. Warn on `/admin` when persistence is ephemeral. Do not store that state only in the image layer.
+8. **Secrets at rest.** Access tokens and session IDs are hashed. GitHub App PEM, client secrets, and installation tokens are encrypted (`enc:v1:`). Bearer `sk_sync_` tokens cannot manage GitHub or mint more tokens. Do not accept access tokens in query strings. `X-Syncidian-Client` identifies the plugin; it is not an auth check.
 
 ## How to update diagrams
 

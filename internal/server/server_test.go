@@ -505,6 +505,7 @@ func TestDashboardServed(t *testing.T) {
 		`persist-banner`,
 		`Data will reset on the next deploy`,
 		`Settings → Volumes`,
+		`The plugin never puts the token in a URL`,
 		`id="setup-obsidian"`,
 		`Restricted mode`,
 		`already installed the app earlier`,
@@ -1145,5 +1146,87 @@ func TestGitHubAuthCallbackBindsInstallationForSignedInUser(t *testing.T) {
 	}
 	if m["installed"] != true {
 		t.Fatalf("expected installation recorded after Install & Authorize callback: %v", m)
+	}
+}
+
+func TestBearerTokenCannotManageGitHub(t *testing.T) {
+	hs, done := newTestServer(t)
+	defer done()
+	admin := setupAdmin(t, hs)
+	cookies := createAndLoginUser(t, hs, admin, "bob")
+	res, m := doJSON(t, http.MethodPost, hs.URL+"/api/v1/tokens", map[string]string{"name": "plugin"}, cookies, "")
+	token, _ := m["token"].(string)
+	if token == "" {
+		t.Fatalf("token: %v", m)
+	}
+
+	res, m = doJSON(t, http.MethodGet, hs.URL+"/api/v1/github", nil, nil, token)
+	if res.StatusCode != http.StatusForbidden {
+		t.Fatalf("bearer GET github: want 403, got %d %v", res.StatusCode, m)
+	}
+	res, m = doJSON(t, http.MethodPost, hs.URL+"/api/v1/github", map[string]any{"repo": "bob/vault"}, nil, token)
+	if res.StatusCode != http.StatusForbidden {
+		t.Fatalf("bearer POST github: want 403, got %d %v", res.StatusCode, m)
+	}
+	res, m = doJSON(t, http.MethodPost, hs.URL+"/api/v1/github/app/start", map[string]any{}, nil, token)
+	if res.StatusCode != http.StatusForbidden {
+		t.Fatalf("bearer github app start: want 403, got %d %v", res.StatusCode, m)
+	}
+	res, m = doJSON(t, http.MethodPost, hs.URL+"/api/v1/tokens", map[string]string{"name": "another"}, nil, token)
+	if res.StatusCode != http.StatusForbidden {
+		t.Fatalf("bearer mint token: want 403, got %d %v", res.StatusCode, m)
+	}
+
+	res, m = doJSON(t, http.MethodGet, hs.URL+"/api/v1/github", nil, cookies, "")
+	if res.StatusCode != 200 {
+		t.Fatalf("session GET github: %d %v", res.StatusCode, m)
+	}
+}
+
+func TestAccessTokenRejectedInQueryString(t *testing.T) {
+	hs, done := newTestServer(t)
+	defer done()
+	admin := setupAdmin(t, hs)
+	cookies := createAndLoginUser(t, hs, admin, "bob")
+	_, m := doJSON(t, http.MethodPost, hs.URL+"/api/v1/tokens", map[string]string{"name": "plugin"}, cookies, "")
+	token, _ := m["token"].(string)
+
+	req, err := http.NewRequest(http.MethodPost, hs.URL+"/api/v1/devices/register?token="+token, strings.NewReader(`{"name":"Mac","platform":"macOS"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	out, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer out.Body.Close()
+	if out.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("query token should be ignored, got %d", out.StatusCode)
+	}
+}
+
+func TestWebsocketTicketNotRawToken(t *testing.T) {
+	hs, done := newTestServer(t)
+	defer done()
+	admin := setupAdmin(t, hs)
+	cookies := createAndLoginUser(t, hs, admin, "bob")
+	res, m := doJSON(t, http.MethodPost, hs.URL+"/api/v1/tokens", map[string]string{"name": "plugin"}, cookies, "")
+	token, _ := m["token"].(string)
+
+	res, m = doJSON(t, http.MethodGet, hs.URL+"/api/v1/ws?token="+token, nil, nil, "")
+	if res.StatusCode != http.StatusBadRequest {
+		t.Fatalf("raw token in WS URL: want 400, got %d %v", res.StatusCode, m)
+	}
+
+	res, m = doJSON(t, http.MethodPost, hs.URL+"/api/v1/ws/ticket", map[string]any{}, nil, token)
+	ticket, _ := m["ticket"].(string)
+	if res.StatusCode != 200 || !strings.HasPrefix(ticket, "wst_") {
+		t.Fatalf("ticket: %d %v", res.StatusCode, m)
+	}
+
+	res, m = doJSON(t, http.MethodGet, hs.URL+"/api/v1/ws?ticket=wst_nope", nil, nil, "")
+	if res.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("bad ticket: want 401, got %d %v", res.StatusCode, m)
 	}
 }
