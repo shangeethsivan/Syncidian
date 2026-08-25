@@ -142,11 +142,25 @@ export default class SyncidianPlugin extends Plugin {
     return this.settings.serverUrl.replace(/\/$/, "") + path;
   }
 
+  /** Normalize URL/token before every request (trim paste noise). */
+  normalizeCredentials() {
+    this.settings.serverUrl = (this.settings.serverUrl || "").trim().replace(/\/$/, "");
+    this.settings.token = (this.settings.token || "").trim().replace(/\s+/g, "");
+  }
+
   async api(path: string, opts: RequestInit = {}): Promise<any> {
+    this.normalizeCredentials();
     const headers = new Headers(opts.headers || {});
     headers.set("Authorization", `Bearer ${this.settings.token}`);
     if (opts.body && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
-    const res = await fetch(this.apiUrl(path), { ...opts, headers });
+    let res: Response;
+    try {
+      res = await fetch(this.apiUrl(path), { ...opts, headers });
+    } catch (e) {
+      throw new Error(
+        `Cannot reach ${this.settings.serverUrl || "(no server URL)"}. Check Server URL. (${(e as Error).message})`
+      );
+    }
     const text = await res.text();
     let data: any = null;
     try {
@@ -154,13 +168,34 @@ export default class SyncidianPlugin extends Plugin {
     } catch {
       data = { error: text };
     }
-    if (!res.ok) throw new Error(data?.error || res.statusText);
+    if (!res.ok) {
+      if (res.status === 401) {
+        throw new Error(
+          data?.error ||
+            "Invalid or revoked access token. In the dashboard, sign in as a vault user (not admin), open Tokens, create a new sk_sync_ token, and paste it here."
+        );
+      }
+      if (res.status === 403) {
+        throw new Error(
+          data?.error ||
+            "Forbidden. Admins cannot sync a vault — use a non-admin user token from the Tokens page."
+        );
+      }
+      throw new Error(data?.error || res.statusText);
+    }
     return data;
   }
 
   async startup(): Promise<boolean> {
+    this.normalizeCredentials();
     if (!this.settings.token || !this.settings.serverUrl) {
       this.setStatus("offline");
+      new Notice("Syncidian: set Server URL and access token first");
+      return false;
+    }
+    if (!this.settings.token.startsWith("sk_sync_")) {
+      this.setStatus("error");
+      new Notice("Syncidian: access token must start with sk_sync_");
       return false;
     }
     try {
@@ -431,9 +466,11 @@ export default class SyncidianPlugin extends Plugin {
   async loadSettings() {
     this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
     if (!this.settings.hashes) this.settings.hashes = {};
+    this.normalizeCredentials();
   }
 
   async saveSettings() {
+    this.normalizeCredentials();
     await this.saveData(this.settings);
   }
 }
@@ -512,38 +549,52 @@ class SyncidianSettingTab extends PluginSettingTab {
     containerEl.createEl("p", {
       text: "Point this vault at your Syncidian server. GitHub is configured per user in the dashboard, not here.",
     });
+    let urlInput: HTMLInputElement | null = null;
+    let tokenInput: HTMLInputElement | null = null;
+    let nameInput: HTMLInputElement | null = null;
     new Setting(containerEl)
       .setName("Server URL")
       .setDesc("Example: http://localhost:8080 or https://sync.example.com")
-      .addText((t) =>
+      .addText((t) => {
+        urlInput = t.inputEl;
         t.setPlaceholder("http://localhost:8080").setValue(this.plugin.settings.serverUrl).onChange(async (v) => {
           this.plugin.settings.serverUrl = v.trim();
           await this.plugin.saveSettings();
-        })
-      );
+        });
+      });
     new Setting(containerEl)
       .setName("Access token")
-      .setDesc("Created in the Syncidian dashboard. Starts with sk_sync_")
+      .setDesc("Created in the Syncidian dashboard Tokens page (vault user, not admin). Starts with sk_sync_")
       .addText((t) => {
+        tokenInput = t.inputEl;
         t.inputEl.type = "password";
+        t.inputEl.spellcheck = false;
+        t.inputEl.autocomplete = "off";
         t.setPlaceholder("sk_sync_…").setValue(this.plugin.settings.token).onChange(async (v) => {
-          this.plugin.settings.token = v.trim();
+          this.plugin.settings.token = v.trim().replace(/\s+/g, "");
           await this.plugin.saveSettings();
         });
       });
     new Setting(containerEl)
       .setName("Device name")
-      .addText((t) =>
+      .addText((t) => {
+        nameInput = t.inputEl;
         t.setValue(this.plugin.settings.deviceName).onChange(async (v) => {
           this.plugin.settings.deviceName = v.trim() || "Obsidian";
           await this.plugin.saveSettings();
-        })
-      );
+        });
+      });
     new Setting(containerEl)
       .setName("Connect")
       .setDesc("Register this device and run an initial sync")
       .addButton((b) =>
         b.setButtonText("Connect").setCta().onClick(async () => {
+          // Read inputs directly so Connect works even if the last keystroke/paste
+          // has not flushed through onChange yet.
+          if (urlInput) this.plugin.settings.serverUrl = urlInput.value.trim();
+          if (tokenInput) this.plugin.settings.token = tokenInput.value.trim().replace(/\s+/g, "");
+          if (nameInput) this.plugin.settings.deviceName = nameInput.value.trim() || "Obsidian";
+          await this.plugin.saveSettings();
           const ok = await this.plugin.startup();
           if (ok) new Notice("Syncidian connected");
         })

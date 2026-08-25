@@ -473,12 +473,12 @@ docker compose up --build -d</pre>
   {
     title: "6. Create an access token",
     html: () => `
-      <p>The plugin authenticates with a dashboard token from <b>your</b> user, not the admin.</p>
+      <p>The plugin authenticates with a dashboard token from a <b>vault user</b>, not the admin account.</p>
       <ol>
-        <li>Open the <b>Tokens</b> page after you sign in as a regular user.</li>
-        <li>Name the token after the device, for example <code>MacBook Pro</code>.</li>
-        <li>Click <b>Create token</b> and copy the <code>sk_sync_…</code> value immediately.</li>
+        <li><b>Option A:</b> Sign in as a regular user → <b>Tokens</b> → <b>Create token</b> → copy <code>sk_sync_…</code>.</li>
+        <li><b>Option B (admin):</b> On <b>Users</b>, create a vault user with <b>Also create Obsidian access token</b>, or click <b>Create Obsidian token</b> next to an existing vault user. Copy the value once.</li>
       </ol>
+      <p>If Connect says unauthorized, that token is missing from this server — mint a new one. Persist <code>/data</code> on Railway so tokens survive redeploys.</p>
     `,
   },
   {
@@ -1115,24 +1115,51 @@ async function users(main) {
   main.innerHTML = `
     <h1>Users</h1>
     <p class="muted">Admins manage users. This list shows only username, role, and created time — no vaults, tokens, or GitHub details.</p>
+    <p class="muted">Vault users need an <code>sk_sync_</code> token for the Obsidian plugin. Admins cannot sync; mint a one-time token for a vault user below.</p>
     ${isAdmin() ? `<div class="card">
+      <h2>Create vault user</h2>
       <label>Username</label><input id="u-name" />
       <label>Password</label><input id="u-pass" type="password" />
       <div class="check"><input id="u-admin" type="checkbox" /> Admin (user management only; no repo sync)</div>
+      <div class="check"><input id="u-token" type="checkbox" checked /> Also create Obsidian access token</div>
       <button class="btn" id="u-create" type="button">Create user</button>
       <div id="u-flash"></div>
     </div>` : ""}
-    <div class="card"><table><thead><tr><th>Username</th><th>Role</th><th>Created</th></tr></thead>
-    <tbody>${list.map(u => `<tr><td>${esc(u.username)}</td><td>${u.is_admin ? "admin" : "user"}</td><td>${when(u.created_at)}</td></tr>`).join("")}</tbody></table></div>`;
+    <div class="card"><table><thead><tr><th>Username</th><th>Role</th><th>Created</th><th></th></tr></thead>
+    <tbody>${list.map(u => `<tr>
+      <td>${esc(u.username)}</td>
+      <td>${u.is_admin ? "admin" : "user"}</td>
+      <td>${when(u.created_at)}</td>
+      <td>${(!u.is_admin && isAdmin()) ? `<button class="btn secondary" data-issue-token="${esc(u.username)}" type="button">Create Obsidian token</button>` : ""}</td>
+    </tr>`).join("")}</tbody></table>
+    <div id="u-token-flash"></div>
+    </div>`;
   const btn = $("u-create");
   if (btn) btn.onclick = async () => {
     try {
-      await api("/api/v1/users", { method: "POST", body: JSON.stringify({
-        username: $("u-name").value, password: $("u-pass").value, admin: $("u-admin").checked
+      const issue = $("u-token") && $("u-token").checked && !($("u-admin") && $("u-admin").checked);
+      const created = await api("/api/v1/users", { method: "POST", body: JSON.stringify({
+        username: $("u-name").value, password: $("u-pass").value, admin: $("u-admin").checked,
+        issue_token: !!issue, token_name: "Obsidian"
       })});
-      users(main);
+      if (created.token) {
+        flash($("u-flash"), "", "ok");
+        $("u-flash").innerHTML = `<div class="flash ok">User created. Copy this Obsidian token now — it will not be shown again.</div><div class="token">${esc(created.token)}</div>`;
+      } else {
+        users(main);
+      }
     } catch (e) { flash($("u-flash"), e.message); }
   };
+  main.querySelectorAll("[data-issue-token]").forEach((b) => {
+    b.onclick = async () => {
+      try {
+        const t = await api("/api/v1/users/tokens", { method: "POST", body: JSON.stringify({
+          username: b.dataset.issueToken, name: "Obsidian"
+        })});
+        $("u-token-flash").innerHTML = `<div class="flash ok">Copy this token for <b>${esc(t.username)}</b> now. It will not be shown again.</div><div class="token">${esc(t.token)}</div>`;
+      } catch (e) { flash($("u-token-flash"), e.message); }
+    };
+  });
 }
 
 async function activity(main) {

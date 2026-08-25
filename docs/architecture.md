@@ -95,8 +95,8 @@ flowchart TB
 
   subgraph session [Dashboard session cookie — after login]
     Me["GET /api/v1/me · /stats"]
-    Users["GET/POST /api/v1/users<br/>admin: public fields only"]
-    Tokens["GET/POST /api/v1/tokens"]
+    Users["GET/POST /api/v1/users<br/>POST /api/v1/users/tokens<br/>admin: mint one-time sk_sync_"]
+    Tokens["GET/POST /api/v1/tokens<br/>vault user only"]
     Dev["devices · heartbeat"]
     GH["GET/POST /api/v1/github<br/>POST /api/v1/github/app/start"]
     AppAdm["POST /api/v1/github/app/register<br/>admin: instance App"]
