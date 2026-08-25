@@ -43,7 +43,7 @@ Document and implement these unless a later change explicitly replaces them — 
 5. Device sync works without GitHub. GitHub is optional durable backup.
 6. **GitHub App only, main branch only.** Backup is authorized by installing a GitHub App with Contents read and write. Personal access tokens and deploy keys are not supported. Syncidian always uses `main`. Sign-in uses the instance App callback, setup, and webhook URLs.
 7. **Persistent data directory.** Users, tokens, GitHub App credentials, and vault files live under `SYNCIDIAN_DATA` (`syncidian.db` + `vaults/`). PaaS deploys wipe the container filesystem unless a volume is mounted at `/data`. Warn on `/admin` when persistence is ephemeral. Do not store that state only in the image layer.
-8. **Secrets at rest.** Access tokens and session IDs are hashed. GitHub App PEM, client secrets, and installation tokens are encrypted (`enc:v1:`). Bearer `sk_sync_` tokens cannot manage GitHub or mint more tokens. Do not accept access tokens in query strings. `X-Syncidian-Client` identifies the plugin; it is not an auth check.
+8. **Secrets at rest.** Access tokens and session IDs are hashed. GitHub App PEM, client secrets, and installation tokens are encrypted (`enc:v1:`). Bearer `sk_sync_` tokens cannot manage GitHub or mint more tokens. Do not accept access tokens in HTTP query strings.
 
 ## How to update diagrams
 

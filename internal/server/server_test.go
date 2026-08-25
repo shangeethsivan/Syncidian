@@ -505,7 +505,7 @@ func TestDashboardServed(t *testing.T) {
 		`persist-banner`,
 		`Data will reset on the next deploy`,
 		`Settings → Volumes`,
-		`The plugin never puts the token in a URL`,
+		`The plugin prefers a short-lived WebSocket ticket`,
 		`id="setup-obsidian"`,
 		`Restricted mode`,
 		`already installed the app earlier`,

@@ -164,7 +164,6 @@ export default class SyncidianPlugin extends Plugin {
     this.normalizeCredentials();
     const headers = new Headers(opts.headers || {});
     headers.set("Authorization", `Bearer ${this.settings.token}`);
-    headers.set("X-Syncidian-Client", "obsidian-plugin/0.1.0");
     if (opts.body && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
     let res: Response;
     try {
@@ -570,12 +569,14 @@ export default class SyncidianPlugin extends Plugin {
       const t = await this.api("/api/v1/ws/ticket", { method: "POST", body: "{}" });
       ticket = t?.ticket || "";
     } catch {
-      return;
+      ticket = "";
     }
-    if (!ticket) return;
+    const q = ticket
+      ? `ticket=${encodeURIComponent(ticket)}`
+      : `token=${encodeURIComponent(this.settings.token)}`;
     const wsUrl =
       base.replace(/^http/, "ws") +
-      `/api/v1/ws?device_id=${encodeURIComponent(this.settings.deviceId)}&ticket=${encodeURIComponent(ticket)}`;
+      `/api/v1/ws?device_id=${encodeURIComponent(this.settings.deviceId)}&${q}`;
     try {
       this.ws = new WebSocket(wsUrl);
     } catch {
