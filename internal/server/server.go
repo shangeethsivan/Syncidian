@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"io"
 	"io/fs"
 	"log/slog"
@@ -22,6 +23,8 @@ import (
 	"github.com/shangeethsivan/Syncidian/internal/web"
 	"golang.org/x/crypto/bcrypt"
 )
+
+var errInvalidToken = errors.New("invalid or revoked access token")
 
 type Server struct {
 	Cfg   config.Config
@@ -153,7 +156,11 @@ func (s *Server) authed(fn func(http.ResponseWriter, *http.Request, *store.User)
 	return func(w http.ResponseWriter, r *http.Request) {
 		user, err := s.authenticate(r)
 		if err != nil || user == nil {
-			writeError(w, http.StatusUnauthorized, "unauthorized")
+			msg := "unauthorized"
+			if errors.Is(err, errInvalidToken) {
+				msg = err.Error()
+			}
+			writeError(w, http.StatusUnauthorized, msg)
 			return
 		}
 		fn(w, r.WithContext(context.WithValue(r.Context(), userKey, user)), user)
@@ -175,18 +182,28 @@ func (s *Server) vaultAuthed(fn func(http.ResponseWriter, *http.Request, *store.
 func (s *Server) authenticate(r *http.Request) (*store.User, error) {
 	raw := ""
 	if h := r.Header.Get("Authorization"); strings.HasPrefix(strings.ToLower(h), "bearer ") {
-		raw = strings.TrimSpace(h[7:])
+		// Slice the original header after the first space so "Bearer"/"bearer"/"BEARER" all work.
+		if i := strings.IndexByte(h, ' '); i >= 0 {
+			raw = strings.TrimSpace(h[i+1:])
+		}
 	}
 	if raw == "" {
 		raw = strings.TrimSpace(r.URL.Query().Get("token"))
 	}
 	if raw != "" {
 		tok, err := s.Store.GetTokenByHash(store.HashToken(raw))
-		if err != nil || tok == nil || tok.RevokedAt != nil {
+		if err != nil {
 			return nil, err
 		}
+		if tok == nil || tok.RevokedAt != nil {
+			return nil, errInvalidToken
+		}
 		s.Store.TouchToken(tok.ID)
-		return s.Store.GetUser(tok.UserID)
+		u, err := s.Store.GetUser(tok.UserID)
+		if err != nil || u == nil {
+			return nil, errInvalidToken
+		}
+		return u, nil
 	}
 	c, err := r.Cookie("syncidian_session")
 	if err != nil || c.Value == "" {

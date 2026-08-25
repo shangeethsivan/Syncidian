@@ -257,6 +257,36 @@ func TestGitHubRequiresAuth(t *testing.T) {
 	}
 }
 
+func TestInvalidAccessTokenMessage(t *testing.T) {
+	hs, done := newTestServer(t)
+	defer done()
+
+	res, m := doJSON(t, http.MethodPost, hs.URL+"/api/v1/devices/register", map[string]string{
+		"name": "macOS", "platform": "macOS",
+	}, nil, "sk_sync_"+strings.Repeat("ab", 32))
+	if res.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("want 401, got %d %v", res.StatusCode, m)
+	}
+	if m["error"] != "invalid or revoked access token" {
+		t.Fatalf("error message: %v", m)
+	}
+
+	// Valid token still registers.
+	adminCookies := setupAdmin(t, hs)
+	cookies := createAndLoginUser(t, hs, adminCookies, "carol")
+	res, m = doJSON(t, http.MethodPost, hs.URL+"/api/v1/tokens", map[string]string{"name": "plugin"}, cookies, "")
+	token, _ := m["token"].(string)
+	if token == "" {
+		t.Fatalf("create token: %v", m)
+	}
+	res, m = doJSON(t, http.MethodPost, hs.URL+"/api/v1/devices/register", map[string]string{
+		"name": "macOS", "platform": "macOS",
+	}, nil, token)
+	if res.StatusCode != 200 || m["id"] == "" {
+		t.Fatalf("register with valid token: %d %v", res.StatusCode, m)
+	}
+}
+
 func TestAdminDoesNotNeedGitHubAndCannotSeePrivateUserData(t *testing.T) {
 	hs, done := newTestServer(t)
 	defer done()
