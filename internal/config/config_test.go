@@ -88,3 +88,15 @@ func TestFromEnvGitHubApp(t *testing.T) {
 		t.Fatalf("PEM newlines should be unescaped: %q", c.GitHubAppPEM)
 	}
 }
+
+func TestFromEnvGitHubAppSlugNormalizesURL(t *testing.T) {
+	t.Setenv("SYNCIDIAN_GITHUB_APP_ID", "123")
+	t.Setenv("SYNCIDIAN_GITHUB_APP_SLUG", "https://github.com/apps/syncidian/installations/new")
+	t.Setenv("SYNCIDIAN_GITHUB_CLIENT_ID", "Iv1.x")
+	t.Setenv("SYNCIDIAN_GITHUB_CLIENT_SECRET", "s")
+	t.Setenv("SYNCIDIAN_GITHUB_APP_PRIVATE_KEY", "pem")
+	c := FromEnv()
+	if c.GitHubAppSlug != "syncidian" {
+		t.Fatalf("GitHubAppSlug=%q, want syncidian", c.GitHubAppSlug)
+	}
+}

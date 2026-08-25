@@ -61,12 +61,16 @@ func (s *Server) handleGitHubAppRegisterSave(w http.ResponseWriter, r *http.Requ
 		writeError(w, http.StatusBadRequest, "invalid json")
 		return
 	}
-	req.Slug = strings.TrimSpace(req.Slug)
+	req.Slug = githubapp.NormalizeAppSlug(req.Slug)
 	req.PEM = strings.TrimSpace(req.PEM)
 	req.ClientID = strings.TrimSpace(req.ClientID)
 	req.ClientSecret = strings.TrimSpace(req.ClientSecret)
 	if req.AppID == 0 || req.PEM == "" || req.ClientID == "" || req.ClientSecret == "" {
 		writeError(w, http.StatusBadRequest, "app_id, pem, client_id, and client_secret are required")
+		return
+	}
+	if req.Slug == "" {
+		writeError(w, http.StatusBadRequest, "slug is required (e.g. syncidian from github.com/apps/syncidian)")
 		return
 	}
 	if err := s.Store.SetInstanceGitHubApp(store.GitHubApp{
@@ -81,7 +85,7 @@ func (s *Server) handleGitHubAppRegisterSave(w http.ResponseWriter, r *http.Requ
 func (s *Server) handleGitHubAppStart(w http.ResponseWriter, r *http.Request, u *store.User) {
 	if inst := s.instanceGitHubApp(); inst.Configured() && inst.Slug != "" {
 		writeJSON(w, http.StatusOK, map[string]any{
-			"github_url": "https://github.com/apps/" + inst.Slug + "/installations/new",
+			"github_url": githubapp.InstallURL(inst.Slug),
 			"existing":   true,
 			"branch":     GitHubBranch,
 			"urls":       githubapp.AppURLs(s.requestBase(r)),
@@ -90,7 +94,7 @@ func (s *Server) handleGitHubAppStart(w http.ResponseWriter, r *http.Request, u 
 	}
 	if cfg, _ := s.Store.GetGitHub(u.ID); cfg.HasApp() && cfg.AppSlug != "" {
 		writeJSON(w, http.StatusOK, map[string]any{
-			"github_url": "https://github.com/apps/" + cfg.AppSlug + "/installations/new",
+			"github_url": githubapp.InstallURL(cfg.AppSlug),
 			"existing":   true,
 			"branch":     GitHubBranch,
 		})
@@ -156,7 +160,7 @@ func (s *Server) handleGitHubAppCallback(w http.ResponseWriter, r *http.Request)
 		s.dashboardRedirect(w, r, url.Values{"github": {"error"}, "message": {err.Error()}})
 		return
 	}
-	http.Redirect(w, r, "https://github.com/apps/"+url.PathEscape(creds.Slug)+"/installations/new", http.StatusFound)
+	http.Redirect(w, r, githubapp.InstallURL(creds.Slug), http.StatusFound)
 }
 
 func (s *Server) handleGitHubAppSetup(w http.ResponseWriter, r *http.Request) {

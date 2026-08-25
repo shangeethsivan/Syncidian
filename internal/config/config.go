@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"github.com/shangeethsivan/Syncidian/internal/githubapp"
 )
 
 type Config struct {
@@ -27,7 +29,7 @@ func FromEnv() Config {
 		PublicURL:          publicURL(),
 		GitName:            env("SYNCIDIAN_GIT_NAME", "Syncidian"),
 		GitEmail:           env("SYNCIDIAN_GIT_EMAIL", "syncidian@localhost"),
-		GitHubAppSlug:      env("SYNCIDIAN_GITHUB_APP_SLUG", ""),
+		GitHubAppSlug:      githubapp.NormalizeAppSlug(env("SYNCIDIAN_GITHUB_APP_SLUG", "")),
 		GitHubClientID:     env("SYNCIDIAN_GITHUB_CLIENT_ID", ""),
 		GitHubClientSecret: env("SYNCIDIAN_GITHUB_CLIENT_SECRET", ""),
 		GitHubAppPEM:       strings.ReplaceAll(env("SYNCIDIAN_GITHUB_APP_PRIVATE_KEY", ""), `\n`, "\n"),
