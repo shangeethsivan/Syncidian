@@ -98,12 +98,15 @@
     }
     #hero-canvas {
       position: fixed; inset: 0; width: 100%; height: 100%;
-      pointer-events: none; z-index: 0; display: none; background: #05030a;
+      pointer-events: none; z-index: 0; display: none;
+      background: radial-gradient(120% 90% at 50% 42%, #a882ff 0%, #7852ee 36%, #027aff 64%, #05030a 100%);
     }
     #hero-canvas.visible { display: block; }
     body.hero-on { background: #05030a; }
     :root[data-theme="light"] body.hero-on { background: #f4f0ff; }
-    :root[data-theme="light"] #hero-canvas { background: #f4f0ff; }
+    :root[data-theme="light"] #hero-canvas {
+      background: radial-gradient(120% 90% at 50% 42%, #e4dbff 0%, #c4b5fd 38%, #93c5fd 68%, #f4f0ff 100%);
+    }
     #landing {
       position: relative; z-index: 1; min-height: 100vh;
       display: flex; flex-direction: column;
@@ -112,6 +115,11 @@
       background: color-mix(in srgb, var(--bg) 38%, transparent);
     }
     #landing .site-foot { padding: 8px 24px 28px; }
+    #landing .ghost { color: color-mix(in srgb, var(--text) 92%, transparent); }
+    #landing .ghost:hover {
+      color: var(--text);
+      background: color-mix(in srgb, var(--card) 48%, transparent);
+    }
     #landing .btn:not(.secondary) {
       background: #7852ee; color: #f7f4ff;
     }
@@ -1194,10 +1202,25 @@ void main() {
     light: { bg: "#f4f0ff", colors: ["#7852ee", "#a882ff", "#027aff", "#c4b5fd"], grain: 0.12 },
   };
 
-  if (!canvas) return { start() {}, stop() {}, applyTheme() {} };
+  function cssFallback() {
+    return {
+      start() {
+        if (!canvas) return;
+        document.body.classList.add("hero-on");
+        canvas.classList.add("visible");
+      },
+      stop() {
+        document.body.classList.remove("hero-on");
+        if (canvas) canvas.classList.remove("visible");
+      },
+      applyTheme() {},
+    };
+  }
+
+  if (!canvas) return cssFallback();
 
   const gl = canvas.getContext("webgl", { alpha: false, antialias: false, powerPreference: "high-performance" });
-  if (!gl) return { start() {}, stop() {}, applyTheme() {} };
+  if (!gl) return cssFallback();
 
   const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -1223,7 +1246,7 @@ void main() {
   gl.attachShader(program, createShader(gl.FRAGMENT_SHADER, fragmentShaderGLSL));
   gl.linkProgram(program);
   if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-    return { start() {}, stop() {}, applyTheme() {} };
+    return cssFallback();
   }
   gl.useProgram(program);
 
