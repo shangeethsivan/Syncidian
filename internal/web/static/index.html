@@ -4,7 +4,6 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Syncidian</title>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
   <script>
     (function () {
       var t = localStorage.getItem("syncidian-theme");
@@ -99,10 +98,40 @@
     }
     #hero-canvas {
       position: fixed; inset: 0; width: 100%; height: 100%;
-      pointer-events: none; z-index: 0; display: none;
+      pointer-events: none; z-index: 0; display: none; background: #05030a;
     }
     #hero-canvas.visible { display: block; }
-    #landing { position: relative; z-index: 1; }
+    body.hero-on { background: #05030a; }
+    :root[data-theme="light"] body.hero-on { background: #f4f0ff; }
+    :root[data-theme="light"] #hero-canvas { background: #f4f0ff; }
+    #landing {
+      position: relative; z-index: 1; min-height: 100vh;
+      display: flex; flex-direction: column;
+    }
+    #landing .site-head {
+      background: color-mix(in srgb, var(--bg) 38%, transparent);
+    }
+    #landing .site-foot { padding: 8px 24px 28px; }
+    #landing .btn:not(.secondary) {
+      background: #7852ee; color: #f7f4ff;
+    }
+    :root[data-theme="dark"] .hero h1 { color: #f7f4ff; text-shadow: 0 10px 48px rgba(5, 3, 10, .45); }
+    :root[data-theme="dark"] .hero .lede,
+    :root[data-theme="dark"] .hero .eyebrow { color: rgba(247, 244, 255, .78); }
+    :root[data-theme="light"] .hero h1 { color: #1a1230; text-shadow: 0 8px 36px rgba(120, 82, 238, .16); }
+    :root[data-theme="light"] .hero .lede,
+    :root[data-theme="light"] .hero .eyebrow { color: #4a4560; }
+    #landing .arch div {
+      background: color-mix(in srgb, var(--card) 58%, transparent);
+      backdrop-filter: blur(18px);
+    }
+    #landing .email-box {
+      background: color-mix(in srgb, var(--card) 72%, transparent);
+      backdrop-filter: blur(18px);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 16px 18px;
+    }
     .flash { padding: 10px 12px; border-radius: 10px; margin: 10px 0; }
     .flash.err { background: color-mix(in srgb, var(--danger) 12%, transparent); color: var(--danger); }
     .flash.ok { background: color-mix(in srgb, var(--ok) 12%, transparent); color: var(--ok); }
@@ -179,7 +208,7 @@
       backdrop-filter: saturate(180%) blur(20px); z-index: 8;
     }
     .hero {
-      min-height: 82vh; display: grid; place-items: center; text-align: center; padding: 48px 24px 80px;
+      flex: 1; display: grid; place-items: center; text-align: center; padding: 32px 24px 48px;
       position: relative; z-index: 2;
     }
     .hero h1 {
@@ -188,9 +217,7 @@
     .eyebrow { text-transform: uppercase; letter-spacing: .16em; font-size: 12px; color: var(--muted); margin: 0 0 18px; }
     .lede { max-width: 34em; margin: 0 auto 36px; color: var(--muted); font-size: 21px; }
     .hero-actions, .cta-actions { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
-    .band { max-width: 820px; margin: 0 auto; padding: 72px 24px; }
-    .band h2 { font-size: clamp(32px, 5vw, 48px); letter-spacing: -.035em; font-weight: 600; margin: 0 0 16px; }
-    .band p { color: var(--muted); font-size: 20px; max-width: 36em; }
+    .hero .arch { max-width: 820px; margin: 40px auto 0; }
     .arch { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 36px; }
     .arch div { padding: 28px 24px; border: 1px solid var(--line); border-radius: 28px; text-align: left; background: var(--card); }
     .arch b { display: block; font-size: 15px; margin-bottom: 8px; }
@@ -217,57 +244,38 @@
         <a class="ghost" href="/admin">Admin</a>
       </div>
     </header>
-    <section class="hero">
+    <section class="hero" id="start">
       <div>
         <p class="eyebrow">Obsidian, privately synced</p>
         <h1>Your vault.<br>On your GitHub.</h1>
-        <p class="lede">Syncidian keeps notes moving across your devices, then backs them up to one repository you own. No personal access tokens. No extra cloud.</p>
+        <p class="lede">Notes on every device. One repository you own.</p>
         <div id="landing-flash" class="landing-flash"></div>
         <div class="hero-actions">
-          <a class="btn" href="/api/v1/auth/github/start">Start a journey with Syncidian</a>
-          <a class="btn secondary" href="/api/v1/auth/github/start?next=install">Connect to your GitHub repository</a>
+          <a class="btn" id="gh-signup" href="/api/v1/auth/github/start?next=install">Continue with GitHub</a>
+          <button class="btn secondary" id="show-email" type="button">Email</button>
+        </div>
+        <form id="email-form" class="email-box hidden">
+          <div id="email-flash"></div>
+          <label>Username</label>
+          <input id="su-user" autocomplete="username" />
+          <label>Email</label>
+          <input id="su-email" type="email" autocomplete="email" />
+          <label>Password</label>
+          <input id="su-pass" type="password" autocomplete="new-password" />
+          <div class="row" style="margin-top:16px">
+            <button class="btn" id="su-btn" type="button">Create account</button>
+            <button class="btn secondary" id="su-login" type="button">I already have an email account</button>
+          </div>
+        </form>
+        <div class="arch">
+          <div><b>Sign in</b><span>GitHub, or email.</span></div>
+          <div><b>Connect a repo</b><span>Install the GitHub App.</span></div>
+          <div><b>Sync</b><span>This server commits to main.</span></div>
         </div>
       </div>
-    </section>
-    <section class="band">
-      <h2>What it is</h2>
-      <p>A small self-hosted sync layer for Obsidian. Devices talk to Syncidian. Syncidian talks to GitHub. Your notes stay yours.</p>
-    </section>
-    <section class="band">
-      <h2>What it solves</h2>
-      <p>Obsidian is local. Life is not. Syncidian gives every device a live copy, then a durable backup on the main branch of one GitHub repository.</p>
-    </section>
-    <section class="band">
-      <h2>How it works</h2>
-      <div class="arch">
-        <div><b>1. Sign in</b><span>GitHub, or email if you prefer.</span></div>
-        <div><b>2. Connect one repo</b><span>Install the GitHub App with read and write access.</span></div>
-        <div><b>3. Sync</b><span>The plugin talks to this server. The server commits to main.</span></div>
-      </div>
-    </section>
-    <section class="band" id="start">
-      <h2>Begin</h2>
-      <p>Sign up using GitHub. That is the whole start.</p>
-      <div class="cta-actions">
-        <a class="btn" id="gh-signup" href="/api/v1/auth/github/start?next=install">Sign up using GitHub</a>
-        <button class="btn secondary" id="show-email" type="button">Sign up with email</button>
-      </div>
-      <form id="email-form" class="email-box hidden">
-        <div id="email-flash"></div>
-        <label>Username</label>
-        <input id="su-user" autocomplete="username" />
-        <label>Email</label>
-        <input id="su-email" type="email" autocomplete="email" />
-        <label>Password</label>
-        <input id="su-pass" type="password" autocomplete="new-password" />
-        <div class="row" style="margin-top:16px">
-          <button class="btn" id="su-btn" type="button">Create account</button>
-          <button class="btn secondary" id="su-login" type="button">I already have an email account</button>
-        </div>
-      </form>
     </section>
     <footer class="site-foot">
-      <p>Syncidian. Your notes. Your GitHub.</p>
+      <p>Your notes. Your GitHub.</p>
     </footer>
   </div>
 
@@ -436,7 +444,7 @@ docker compose up --build -d</pre>
     html: () => `
       <p>Most people sign up with GitHub on the public site. Admins can still create an email account on the <b>Users</b> page. Each account is isolated.</p>
       <ol>
-        <li>On the public site, click <b>Sign up using GitHub</b>.</li>
+        <li>On the public site, click <b>Continue with GitHub</b>.</li>
         <li>Or enter a username and password here, and leave <b>Admin</b> unchecked for vault users.</li>
       </ol>
       <p class="muted">Admins manage users. They should not see any private info of users.</p>
@@ -447,7 +455,7 @@ docker compose up --build -d</pre>
     html: () => `
       <p>GitHub backup is <b>per user</b>. One user can set up one GitHub repository on <code>main</code>. Sign in with GitHub, then install the GitHub App with Contents <b>read and write</b>.</p>
       <ol>
-        <li>On the public site, click <b>Sign up using GitHub</b> or <b>Connect to your GitHub repository</b>.</li>
+        <li>On the public site, click <b>Continue with GitHub</b> or <b>Log in</b>.</li>
         <li>Authorize Syncidian, then click <b>Install</b> on one repository.</li>
         <li>If more than one repository was granted, pick the one vault to use.</li>
       </ol>
@@ -766,7 +774,7 @@ async function adminOverview(main) {
           <li>Paste the values into the form below and click <b>Save credentials</b>, <em>or</em></li>
           <li>Set <code>SYNCIDIAN_GITHUB_APP_ID</code>, <code>SYNCIDIAN_GITHUB_APP_SLUG</code>, <code>SYNCIDIAN_GITHUB_CLIENT_ID</code>, <code>SYNCIDIAN_GITHUB_CLIENT_SECRET</code>, and <code>SYNCIDIAN_GITHUB_APP_PRIVATE_KEY</code>, then restart the server.</li>
         </ol>
-        <p class="muted">When this page shows <b>Registered</b>, people can use <b>Sign up using GitHub</b> on the public site. Full details: <code>docs/github-app.md</code>.</p>
+        <p class="muted">When this page shows <b>Registered</b>, people can use <b>Continue with GitHub</b> on the public site. Full details: <code>docs/github-app.md</code>.</p>
       </div>
       <label>App ID</label>
       <input id="gh-man-app-id" type="number" min="1" placeholder="123456" />
@@ -1100,174 +1108,201 @@ async function activity(main) {
 
 const heroScene = (() => {
   const canvas = $("hero-canvas");
-  if (!canvas || typeof THREE === "undefined") {
+  const vertexShaderGLSL = `
+attribute vec2 position;
+varying vec2 vUv;
+void main() {
+  vUv = position * 0.5 + 0.5;
+  gl_Position = vec4(position, 0.0, 1.0);
+}
+`;
+  const fragmentShaderGLSL = `
+precision highp float;
+varying vec2 vUv;
+
+uniform vec2  u_resolution;
+uniform float u_time;
+uniform float u_grain;
+uniform vec3  u_colors[4];
+uniform vec3  u_bg;
+
+vec3 permute(vec3 x) { return mod(((x*34.0)+1.0)*x, 289.0); }
+
+float snoise(vec2 v){
+  const vec4 C = vec4(0.211324865405187, 0.366025403784439,
+           -0.577350269189626, 0.024390243902439);
+  vec2 i  = floor(v + dot(v, C.yy) );
+  vec2 x0 = v -   i + dot(i, C.xx);
+  vec2 i1 = (x0.x > x0.y) ? vec2(1.0, 0.0) : vec2(0.0, 1.0);
+  vec4 x12 = x0.xyxy + C.xxzz;
+  x12.xy -= i1;
+  i = mod(i, 289.0);
+  vec3 p = permute( permute( i.y + vec3(0.0, i1.y, 1.0 ))
+  + i.x + vec3(0.0, i1.x, 1.0 ));
+  vec3 m = max(0.5 - vec3(dot(x0,x0), dot(x12.xy,x12.xy),
+    dot(x12.zw,x12.zw)), 0.0);
+  m = m*m ;
+  m = m*m ;
+  vec3 x = 2.0 * fract(p * C.www) - 1.0;
+  vec3 h = abs(x) - 0.5;
+  vec3 ox = floor(x + 0.5);
+  vec3 a0 = x - ox;
+  m *= 1.79284291400159 - 0.85373472095314 * ( a0*a0 + h*h );
+  vec3 g;
+  g.x  = a0.x  * x0.x  + h.x  * x0.y;
+  g.yz = a0.yz * x12.xz + h.yz * x12.yw;
+  return 130.0 * dot(m, g);
+}
+
+void main() {
+  vec2 uv = vUv;
+  float ratio = u_resolution.x / u_resolution.y;
+  vec2 p = uv - 0.5;
+  p.x *= ratio;
+
+  float t = u_time * 0.1;
+
+  float n1 = snoise(p * 0.4 + vec2(t * 0.2, -t * 0.3));
+  float n2 = snoise(p * 0.55 + vec2(-t * 0.15, t * 0.25) + n1 * 0.25);
+  float n3 = snoise(p * 0.75 + vec2(t * 0.1, -t * 0.2) + n2 * 0.2);
+
+  vec3 col = u_bg;
+
+  float dist = length(p) * 1.5;
+  float vignette = 1.0 - smoothstep(0.3, 1.2, dist);
+
+  col = mix(col, u_colors[0], smoothstep(-0.2, 0.5, n1) * 0.85);
+  col = mix(col, u_colors[1], smoothstep(-0.1, 0.6, n2) * 0.7);
+  col = mix(col, u_colors[2], smoothstep(-0.3, 0.4, n3) * 0.6);
+  col = mix(col, u_colors[3], smoothstep(0.0, 0.7, n1 * n2) * 0.5);
+
+  float glow = smoothstep(0.8, 0.0, dist) * 0.3;
+  col += u_colors[1] * glow;
+
+  col = mix(col * 0.2, col, vignette);
+
+  float grain = fract(sin(dot(uv, vec2(12.9898, 78.233))) * 43758.5453 + u_time);
+  col += (grain - 0.5) * u_grain * 0.1;
+
+  gl_FragColor = vec4(col, 1.0);
+}
+`;
+
+  const palettes = {
+    dark: { bg: "#05030a", colors: ["#7852ee", "#a882ff", "#027aff", "#2e1065"], grain: 0.28 },
+    light: { bg: "#f4f0ff", colors: ["#7852ee", "#a882ff", "#027aff", "#c4b5fd"], grain: 0.12 },
+  };
+
+  if (!canvas) return { start() {}, stop() {}, applyTheme() {} };
+
+  const gl = canvas.getContext("webgl", { alpha: false, antialias: false, powerPreference: "high-performance" });
+  if (!gl) return { start() {}, stop() {}, applyTheme() {} };
+
+  const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  function hexToRgb(hex) {
+    const h = String(hex || "").replace("#", "");
+    const full = h.length === 3 ? h.split("").map((c) => c + c).join("") : h.padEnd(6, "0");
+    return [
+      parseInt(full.slice(0, 2), 16) / 255,
+      parseInt(full.slice(2, 4), 16) / 255,
+      parseInt(full.slice(4, 6), 16) / 255,
+    ];
+  }
+
+  function createShader(type, src) {
+    const s = gl.createShader(type);
+    gl.shaderSource(s, src);
+    gl.compileShader(s);
+    return s;
+  }
+
+  const program = gl.createProgram();
+  gl.attachShader(program, createShader(gl.VERTEX_SHADER, vertexShaderGLSL));
+  gl.attachShader(program, createShader(gl.FRAGMENT_SHADER, fragmentShaderGLSL));
+  gl.linkProgram(program);
+  if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
     return { start() {}, stop() {}, applyTheme() {} };
   }
+  gl.useProgram(program);
 
-  const isLight = () => document.documentElement.dataset.theme !== "dark";
-  const readCss = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  const buffer = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+  const pos = gl.getAttribLocation(program, "position");
+  gl.enableVertexAttribArray(pos);
+  gl.vertexAttribPointer(pos, 2, gl.FLOAT, false, 0, 0);
 
-  let renderer, scene, camera, core, ring, glow, animId = 0, running = false;
-  let target = { x: 0, y: 0 };
-  let current = { x: 0, y: 0 };
-  let time = 0;
+  const locs = {
+    res: gl.getUniformLocation(program, "u_resolution"),
+    time: gl.getUniformLocation(program, "u_time"),
+    grain: gl.getUniformLocation(program, "u_grain"),
+    colors: gl.getUniformLocation(program, "u_colors"),
+    bg: gl.getUniformLocation(program, "u_bg"),
+  };
 
-  function applyTheme() {
-    const bg = readCss("--bg");
-    const a = readCss("--obsidian-a");
-    const b = readCss("--obsidian-b");
-    const c = readCss("--obsidian-c");
-    if (renderer) renderer.setClearColor(bg, 1);
-    if (core && core.material && core.material.uniforms) {
-      core.material.uniforms.uColorA.value.set(a);
-      core.material.uniforms.uColorB.value.set(b);
-      core.material.uniforms.uColorC.value.set(c);
-      core.material.uniforms.uLight.value = isLight() ? 0.55 : 0.35;
-    }
-    if (ring && ring.material) {
-      ring.material.color.set(b);
-      ring.material.opacity = isLight() ? 0.22 : 0.32;
-    }
-    if (glow && glow.material) {
-      glow.material.color.set(a);
-      glow.material.opacity = isLight() ? 0.08 : 0.14;
-    }
+  let raf = 0;
+  let running = false;
+  let palette = palettes.dark;
+
+  function isLight() {
+    return document.documentElement.dataset.theme !== "dark";
   }
 
-  function init() {
-    renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false, powerPreference: "high-performance" });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-    scene = new THREE.Scene();
-    camera = new THREE.PerspectiveCamera(42, 1, 0.1, 100);
-    camera.position.z = 5.2;
-
-    const vertex = `
-      varying vec3 vNormal;
-      varying vec3 vPos;
-      void main() {
-        vNormal = normalize(normalMatrix * normal);
-        vPos = (modelViewMatrix * vec4(position, 1.0)).xyz;
-        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-      }
-    `;
-    const fragment = `
-      uniform vec3 uColorA;
-      uniform vec3 uColorB;
-      uniform vec3 uColorC;
-      uniform float uLight;
-      varying vec3 vNormal;
-      varying vec3 vPos;
-      void main() {
-        vec3 n = normalize(vNormal);
-        float fresnel = pow(1.0 - max(dot(n, vec3(0.0, 0.0, 1.0)), 0.0), 2.2);
-        float band = smoothstep(-0.35, 0.85, n.y + fresnel * 0.35);
-        vec3 col = mix(uColorA, uColorB, band);
-        col = mix(col, uColorC, fresnel * 0.55);
-        float rim = pow(fresnel, 1.4);
-        col += rim * uColorB * (0.35 + uLight);
-        gl_FragColor = vec4(col, 0.92);
-      }
-    `;
-
-    const material = new THREE.ShaderMaterial({
-      vertexShader: vertex,
-      fragmentShader: fragment,
-      uniforms: {
-        uColorA: { value: new THREE.Color("#7852ee") },
-        uColorB: { value: new THREE.Color("#a882ff") },
-        uColorC: { value: new THREE.Color("#027aff") },
-        uLight: { value: 0.35 },
-      },
-      transparent: true,
-    });
-
-    core = new THREE.Mesh(new THREE.IcosahedronGeometry(1.15, 1), material);
-    scene.add(core);
-
-    ring = new THREE.Mesh(
-      new THREE.TorusGeometry(1.85, 0.012, 12, 120),
-      new THREE.MeshBasicMaterial({ color: 0xa882ff, transparent: true, opacity: 0.32 })
-    );
-    ring.rotation.x = Math.PI * 0.42;
-    scene.add(ring);
-
-    glow = new THREE.Mesh(
-      new THREE.SphereGeometry(2.05, 32, 32),
-      new THREE.MeshBasicMaterial({ color: 0x7852ee, transparent: true, opacity: 0.12, depthWrite: false })
-    );
-    scene.add(glow);
-
-    const onMove = (e) => {
-      const w = window.innerWidth || 1;
-      const h = window.innerHeight || 1;
-      const x = ("clientX" in e ? e.clientX : (e.touches && e.touches[0]?.clientX) || w / 2) / w;
-      const y = ("clientY" in e ? e.clientY : (e.touches && e.touches[0]?.clientY) || h / 2) / h;
-      target.x = (x - 0.5) * 2;
-      target.y = (y - 0.5) * 2;
-    };
-
-    window.addEventListener("pointermove", onMove, { passive: true });
-    window.addEventListener("touchmove", onMove, { passive: true });
-    window.addEventListener("resize", resize);
-    resize();
-    applyTheme();
+  function applyTheme() {
+    palette = isLight() ? palettes.light : palettes.dark;
   }
 
   function resize() {
-    if (!renderer || !camera) return;
-    const w = window.innerWidth;
-    const h = window.innerHeight;
-    renderer.setSize(w, h, false);
-    camera.aspect = w / Math.max(h, 1);
-    camera.updateProjectionMatrix();
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = Math.max(1, Math.floor(window.innerWidth * dpr));
+    canvas.height = Math.max(1, Math.floor(window.innerHeight * dpr));
+    gl.viewport(0, 0, canvas.width, canvas.height);
   }
 
-  function tick() {
+  function paint(t) {
+    const speed = reduceMotion ? 0 : 1.35;
+    gl.uniform2f(locs.res, canvas.width, canvas.height);
+    gl.uniform1f(locs.time, t * 0.001 * speed);
+    gl.uniform1f(locs.grain, palette.grain);
+    gl.uniform3f(locs.bg, ...hexToRgb(palette.bg));
+    const flat = new Float32Array(palette.colors.slice(0, 4).flatMap(hexToRgb));
+    gl.uniform3fv(locs.colors, flat);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+  }
+
+  function render(t) {
     if (!running) return;
-    animId = requestAnimationFrame(tick);
-    time += 0.012;
-    current.x += (target.x - current.x) * 0.06;
-    current.y += (target.y - current.y) * 0.06;
-
-    const tiltX = current.y * 0.42;
-    const tiltY = current.x * 0.55;
-    core.rotation.x = tiltX + Math.sin(time * 0.7) * 0.08;
-    core.rotation.y = tiltY + time * 0.35;
-    core.rotation.z = Math.sin(time * 0.45) * 0.06;
-    core.position.x = current.x * 0.28;
-    core.position.y = -current.y * 0.22;
-
-    ring.rotation.z = -time * 0.22 + current.x * 0.25;
-    ring.rotation.x = Math.PI * 0.42 + current.y * 0.18;
-    ring.position.x = core.position.x * 0.5;
-    ring.position.y = core.position.y * 0.5;
-
-    glow.position.copy(core.position);
-    glow.scale.setScalar(1 + Math.sin(time * 1.1) * 0.04);
-
-    camera.position.x = current.x * 0.18;
-    camera.position.y = -current.y * 0.12;
-    camera.lookAt(core.position);
-    renderer.render(scene, camera);
+    paint(t);
+    if (!reduceMotion) raf = requestAnimationFrame(render);
   }
 
-  init();
+  window.addEventListener("resize", () => {
+    if (!running) return;
+    resize();
+    if (reduceMotion) paint(0);
+  });
 
   return {
     start() {
       if (running) return;
       running = true;
+      document.body.classList.add("hero-on");
       canvas.classList.add("visible");
       applyTheme();
       resize();
-      tick();
+      raf = requestAnimationFrame(render);
     },
     stop() {
       running = false;
+      document.body.classList.remove("hero-on");
       canvas.classList.remove("visible");
-      if (animId) cancelAnimationFrame(animId);
+      if (raf) cancelAnimationFrame(raf);
     },
-    applyTheme,
+    applyTheme() {
+      applyTheme();
+      if (running && reduceMotion) paint(0);
+    },
   };
 })();
 
