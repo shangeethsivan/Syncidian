@@ -167,16 +167,20 @@ var SyncidianPlugin = class extends import_obsidian.Plugin {
   async startup() {
     if (!this.settings.token || !this.settings.serverUrl) {
       this.setStatus("offline");
-      return;
+      return false;
     }
     try {
       await this.connect();
-      await this.fullSync();
+      const ok = await this.fullSync();
+      if (!ok)
+        return false;
       this.openSocket();
+      return true;
     } catch (e) {
       console.error(e);
       this.setStatus("error");
       new import_obsidian.Notice(`Syncidian: ${e.message}`);
+      return false;
     }
   }
   async connect() {
@@ -197,9 +201,9 @@ var SyncidianPlugin = class extends import_obsidian.Plugin {
   }
   async fullSync() {
     if (!this.settings.token)
-      return;
+      return false;
     if (this.syncing)
-      return;
+      return false;
     this.syncing = true;
     this.setStatus("syncing");
     try {
@@ -225,9 +229,11 @@ var SyncidianPlugin = class extends import_obsidian.Plugin {
         await this.raiseConflict(path);
       }
       this.setStatus((plan.Conflicts || []).length ? "conflict" : "ok");
+      return true;
     } catch (e) {
       this.setStatus("error");
       new import_obsidian.Notice(`Syncidian sync failed: ${e.message}`);
+      return false;
     } finally {
       this.syncing = false;
     }
@@ -262,18 +268,32 @@ var SyncidianPlugin = class extends import_obsidian.Plugin {
       const dir = path.split("/").slice(0, -1).join("/");
       if (dir)
         await this.ensureFolder(dir);
-      await this.app.vault.createBinary(path, bytes);
+      const again = this.app.vault.getAbstractFileByPath(path);
+      if (again instanceof import_obsidian.TFile) {
+        await this.app.vault.modifyBinary(again, bytes);
+      } else {
+        await this.app.vault.createBinary(path, bytes);
+      }
     }
     this.settings.hashes[path] = remote.hash;
     await this.saveSettings();
   }
   async ensureFolder(dir) {
-    const parts = dir.split("/");
+    const parts = dir.split("/").filter(Boolean);
     let cur = "";
     for (const p of parts) {
       cur = cur ? `${cur}/${p}` : p;
-      if (!this.app.vault.getAbstractFileByPath(cur)) {
+      if (this.app.vault.getAbstractFileByPath(cur))
+        continue;
+      try {
+        if (await this.app.vault.adapter.exists(cur))
+          continue;
         await this.app.vault.createFolder(cur);
+      } catch (e) {
+        const msg = e.message || String(e);
+        if (/already exists/i.test(msg))
+          continue;
+        throw e;
       }
     }
   }
@@ -491,12 +511,9 @@ var SyncidianSettingTab = class extends import_obsidian.PluginSettingTab {
     );
     new import_obsidian.Setting(containerEl).setName("Connect").setDesc("Register this device and run an initial sync").addButton(
       (b) => b.setButtonText("Connect").setCta().onClick(async () => {
-        try {
-          await this.plugin.startup();
+        const ok = await this.plugin.startup();
+        if (ok)
           new import_obsidian.Notice("Syncidian connected");
-        } catch (e) {
-          new import_obsidian.Notice(e.message);
-        }
       })
     );
   }

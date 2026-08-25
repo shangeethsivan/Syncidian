@@ -154,19 +154,22 @@ export default class SyncidianPlugin extends Plugin {
     return data;
   }
 
-  async startup() {
+  async startup(): Promise<boolean> {
     if (!this.settings.token || !this.settings.serverUrl) {
       this.setStatus("offline");
-      return;
+      return false;
     }
     try {
       await this.connect();
-      await this.fullSync();
+      const ok = await this.fullSync();
+      if (!ok) return false;
       this.openSocket();
+      return true;
     } catch (e) {
       console.error(e);
       this.setStatus("error");
       new Notice(`Syncidian: ${(e as Error).message}`);
+      return false;
     }
   }
 
@@ -187,9 +190,9 @@ export default class SyncidianPlugin extends Plugin {
     this.connected = true;
   }
 
-  async fullSync() {
-    if (!this.settings.token) return;
-    if (this.syncing) return;
+  async fullSync(): Promise<boolean> {
+    if (!this.settings.token) return false;
+    if (this.syncing) return false;
     this.syncing = true;
     this.setStatus("syncing");
     try {
@@ -213,9 +216,11 @@ export default class SyncidianPlugin extends Plugin {
         await this.raiseConflict(path);
       }
       this.setStatus((plan.Conflicts || []).length ? "conflict" : "ok");
+      return true;
     } catch (e) {
       this.setStatus("error");
       new Notice(`Syncidian sync failed: ${(e as Error).message}`);
+      return false;
     } finally {
       this.syncing = false;
     }
@@ -248,19 +253,32 @@ export default class SyncidianPlugin extends Plugin {
     } else {
       const dir = path.split("/").slice(0, -1).join("/");
       if (dir) await this.ensureFolder(dir);
-      await this.app.vault.createBinary(path, bytes);
+      // Recheck: another pull or Obsidian may have created the file while we prepared the folder.
+      const again = this.app.vault.getAbstractFileByPath(path);
+      if (again instanceof TFile) {
+        await this.app.vault.modifyBinary(again, bytes);
+      } else {
+        await this.app.vault.createBinary(path, bytes);
+      }
     }
     this.settings.hashes[path] = remote.hash;
     await this.saveSettings();
   }
 
   async ensureFolder(dir: string) {
-    const parts = dir.split("/");
+    const parts = dir.split("/").filter(Boolean);
     let cur = "";
     for (const p of parts) {
       cur = cur ? `${cur}/${p}` : p;
-      if (!this.app.vault.getAbstractFileByPath(cur)) {
+      if (this.app.vault.getAbstractFileByPath(cur)) continue;
+      // Vault index can lag the filesystem (existing vault folders, prior syncs).
+      try {
+        if (await this.app.vault.adapter.exists(cur)) continue;
         await this.app.vault.createFolder(cur);
+      } catch (e) {
+        const msg = (e as Error).message || String(e);
+        if (/already exists/i.test(msg)) continue;
+        throw e;
       }
     }
   }
@@ -503,12 +521,8 @@ class SyncidianSettingTab extends PluginSettingTab {
       .setDesc("Register this device and run an initial sync")
       .addButton((b) =>
         b.setButtonText("Connect").setCta().onClick(async () => {
-          try {
-            await this.plugin.startup();
-            new Notice("Syncidian connected");
-          } catch (e) {
-            new Notice((e as Error).message);
-          }
+          const ok = await this.plugin.startup();
+          if (ok) new Notice("Syncidian connected");
         })
       );
   }
