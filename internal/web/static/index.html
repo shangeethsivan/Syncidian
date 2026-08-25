@@ -401,13 +401,11 @@ docker compose up --build -d</pre>
   {
     title: "3. Register the GitHub App",
     html: () => `
-      <p>Self-hosters create <b>one GitHub App for this instance</b> so people can sign in with GitHub. Full README: <code>docs/github-app.md</code> in the repository.</p>
+      <p>Self-hosters create <b>one GitHub App for this instance</b> so people can sign in with GitHub. Full walkthrough: <code>docs/github-app.md</code>.</p>
       <ol>
-        <li>On this admin page, copy the <b>Callback URL</b>, <b>Setup URL</b>, and <b>Webhook URL</b> (or click <b>Create GitHub App</b> and let GitHub fill them in).</li>
-        <li>Callback is <code>${esc(location.origin)}/api/v1/auth/github/callback</code> — GitHub’s redirect URI after sign-in.</li>
-        <li>Setup is <code>${esc(location.origin)}/api/v1/github/app/setup</code> — GitHub sends people here after they install the app.</li>
-        <li>Webhook is <code>${esc(location.origin)}/api/v1/github/app/webhook</code> — GitHub requires it so it can ping the app. Syncidian answers that ping.</li>
-        <li>Contents: read and write. Email addresses: read. Always <code>main</code>.</li>
+        <li>On the admin page, copy the <b>Callback</b>, <b>Setup</b>, and <b>Webhook</b> URLs — or click <b>Create GitHub App</b> to pre-fill them.</li>
+        <li>If you create the app by hand in GitHub Developer settings, finish on the admin page: copy <b>App ID</b>, <b>Client ID</b>, generate a <b>client secret</b> and <b>private key</b>, then paste them into <b>Complete setup after creating the GitHub App</b>.</li>
+        <li>Permissions: Contents read and write, Metadata read, Email addresses read. Enable OAuth during installation. Branch is always <code>main</code>.</li>
       </ol>
     `,
   },
@@ -716,6 +714,50 @@ async function adminOverview(main) {
       </div>
       <div id="adm-gh-flash"></div>
     </div>
+    <div class="card">
+      <h2>Complete setup after creating the GitHub App</h2>
+      <p class="muted">Use this when you created the app yourself in GitHub Developer settings instead of the button above. Syncidian needs the app credentials before people can sign in with GitHub.</p>
+      <div class="howto">
+        <h2>1. Create the app on GitHub</h2>
+        <ol>
+          <li>Open <a href="https://github.com/settings/apps/new" target="_blank" rel="noopener">GitHub → Settings → Developer settings → GitHub Apps → New GitHub App</a>.</li>
+          <li>Paste the three URLs from the card above (Callback, Setup, Webhook).</li>
+          <li>Homepage URL: <code>${esc(location.origin)}</code></li>
+          <li>Check <b>Request user authorization (OAuth) during installation</b>.</li>
+          <li>Repository permissions: <b>Contents</b> read and write, <b>Metadata</b> read-only.</li>
+          <li>Account permissions: <b>Email addresses</b> read-only.</li>
+          <li>Install on <b>Any account</b> if other people will use this Syncidian server.</li>
+          <li>Click <b>Create GitHub App</b> on GitHub.</li>
+        </ol>
+        <h2>2. Copy credentials from the app page</h2>
+        <ol>
+          <li>Note the <b>App ID</b> (a number) and the slug in the URL: <code>github.com/apps/&lt;slug&gt;</code>.</li>
+          <li>Copy the <b>Client ID</b>.</li>
+          <li>Under Client secrets, click <b>Generate a new client secret</b> and copy it once.</li>
+          <li>Under Private keys, click <b>Generate a private key</b> and open the downloaded <code>.pem</code> file.</li>
+        </ol>
+        <h2>3. Connect Syncidian</h2>
+        <ol>
+          <li>Paste the values into the form below and click <b>Save credentials</b>, <em>or</em></li>
+          <li>Set <code>SYNCIDIAN_GITHUB_APP_ID</code>, <code>SYNCIDIAN_GITHUB_APP_SLUG</code>, <code>SYNCIDIAN_GITHUB_CLIENT_ID</code>, <code>SYNCIDIAN_GITHUB_CLIENT_SECRET</code>, and <code>SYNCIDIAN_GITHUB_APP_PRIVATE_KEY</code>, then restart the server.</li>
+        </ol>
+        <p class="muted">When this page shows <b>Registered</b>, people can use <b>Sign up using GitHub</b> on the public site. Full details: <code>docs/github-app.md</code>.</p>
+      </div>
+      <label>App ID</label>
+      <input id="gh-man-app-id" type="number" min="1" placeholder="123456" />
+      <label>App slug <span class="muted">(from github.com/apps/…)</span></label>
+      <input id="gh-man-slug" placeholder="syncidian" />
+      <label>Client ID</label>
+      <input id="gh-man-client-id" placeholder="Iv1.…" autocomplete="off" />
+      <label>Client secret</label>
+      <input id="gh-man-client-secret" type="password" placeholder="Paste once from GitHub" autocomplete="off" />
+      <label>Private key (.pem)</label>
+      <textarea id="gh-man-pem" rows="7" placeholder="-----BEGIN RSA PRIVATE KEY-----&#10;…&#10;-----END RSA PRIVATE KEY-----" spellcheck="false"></textarea>
+      <div class="row" style="margin-top:12px">
+        <button class="btn" id="gh-man-save" type="button">Save credentials</button>
+      </div>
+      <div id="adm-gh-man-flash"></div>
+    </div>
   `;
   $("go-users").onclick = () => { page = "users"; paintNav(); render(); };
   $("go-help").onclick = () => openHelp(2);
@@ -744,6 +786,24 @@ async function adminOverview(main) {
       document.body.appendChild(form);
       form.submit();
     } catch (e) { flash($("adm-gh-flash"), e.message); }
+  };
+  $("gh-man-save").onclick = async () => {
+    flash($("adm-gh-man-flash"), "");
+    const appId = Number($("gh-man-app-id").value);
+    const body = {
+      app_id: appId,
+      slug: $("gh-man-slug").value.trim(),
+      client_id: $("gh-man-client-id").value.trim(),
+      client_secret: $("gh-man-client-secret").value.trim(),
+      pem: $("gh-man-pem").value.trim(),
+    };
+    try {
+      await api("/api/v1/github/app/register", { method: "POST", body: JSON.stringify(body) });
+      flash($("adm-gh-man-flash"), "GitHub App registered. People can now sign in with GitHub.", "ok");
+      $("gh-man-client-secret").value = "";
+      publicInfo = await api("/api/v1/setup");
+      render();
+    } catch (e) { flash($("adm-gh-man-flash"), e.message); }
   };
 }
 
