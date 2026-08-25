@@ -44,6 +44,77 @@ func TestPlanSync(t *testing.T) {
 	if !reflect.DeepEqual(got.Conflicts, wantConflicts) {
 		t.Errorf("conflicts %v want %v", got.Conflicts, wantConflicts)
 	}
+	if len(got.Delete) != 0 {
+		t.Errorf("delete %v want none", got.Delete)
+	}
+}
+
+func TestPlanSyncLocalDelete(t *testing.T) {
+	client := map[string]string{
+		"keep.md":     "1",
+		"gone.md":     "",
+		"folder/a.md": "",
+	}
+	server := map[string]string{
+		"keep.md":     "1",
+		"gone.md":     "abc",
+		"folder/a.md": "aaa",
+		"folder/b.md": "bbb",
+	}
+	base := map[string]string{
+		"gone.md":     "abc",
+		"folder/a.md": "aaa",
+	}
+	got := PlanSync(client, server, base)
+	sort.Strings(got.Push)
+	sort.Strings(got.Pull)
+	sort.Strings(got.Delete)
+	sort.Strings(got.Conflicts)
+	if len(got.Push) != 0 {
+		t.Errorf("push %v want none", got.Push)
+	}
+	if !reflect.DeepEqual(got.Delete, []string{"folder/a.md", "gone.md"}) {
+		t.Errorf("delete %v", got.Delete)
+	}
+	if !reflect.DeepEqual(got.Pull, []string{"folder/b.md"}) {
+		t.Errorf("pull %v want [folder/b.md] (no tombstone sent)", got.Pull)
+	}
+	if len(got.Conflicts) != 0 {
+		t.Errorf("conflicts %v", got.Conflicts)
+	}
+}
+
+func TestPlanSyncDeleteVsRemoteEdit(t *testing.T) {
+	client := map[string]string{"note.md": ""}
+	server := map[string]string{"note.md": "new"}
+	base := map[string]string{"note.md": "old"}
+	got := PlanSync(client, server, base)
+	if len(got.Conflicts) != 1 || got.Conflicts[0] != "note.md" {
+		t.Fatalf("want conflict, got %+v", got)
+	}
+}
+
+func TestPlanSyncServerTombstone(t *testing.T) {
+	client := map[string]string{"alive.md": "1"}
+	server := map[string]string{"alive.md": "1", "dead.md": ""}
+	got := PlanSync(client, server, nil)
+	if len(got.Pull) != 0 || len(got.Delete) != 0 || len(got.Push) != 0 {
+		t.Fatalf("tombstone should be ignored: %+v", got)
+	}
+}
+
+func TestPlanSyncRemoteDelete(t *testing.T) {
+	client := map[string]string{"old.md": "abc", "moved.md": "abc"}
+	server := map[string]string{"old.md": "", "moved.md": "abc"}
+	base := map[string]string{"old.md": "abc"}
+	got := PlanSync(client, server, base)
+	sort.Strings(got.Pull)
+	if len(got.Push) != 0 || len(got.Delete) != 0 {
+		t.Fatalf("stale copy of remotely deleted file should pull, got %+v", got)
+	}
+	if len(got.Pull) != 1 || got.Pull[0] != "old.md" {
+		t.Fatalf("want pull old.md, got %+v", got)
+	}
 }
 
 func TestClassifyPush(t *testing.T) {

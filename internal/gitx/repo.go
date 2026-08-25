@@ -68,7 +68,7 @@ func (m *Manager) CommitAll(dir, message string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if err := wt.AddWithOptions(&git.AddOptions{All: true}); err != nil {
+	if err := stageAll(wt); err != nil {
 		return "", err
 	}
 	status, err := wt.Status()
@@ -96,6 +96,31 @@ func (m *Manager) CommitAll(dir, message string) (string, error) {
 		return "", err
 	}
 	return hash.String(), nil
+}
+
+// stageAll is git add -A: new, modified, deleted, and renamed paths.
+func stageAll(wt *git.Worktree) error {
+	if err := wt.AddWithOptions(&git.AddOptions{All: true}); err != nil {
+		return err
+	}
+	status, err := wt.Status()
+	if err != nil {
+		return err
+	}
+	for p, st := range status {
+		p = filepath.ToSlash(p)
+		switch st.Worktree {
+		case git.Deleted:
+			if _, err := wt.Remove(p); err != nil {
+				return fmt.Errorf("git rm %s: %w", p, err)
+			}
+		case git.Untracked, git.Modified, git.Renamed:
+			if _, err := wt.Add(p); err != nil {
+				return fmt.Errorf("git add %s: %w", p, err)
+			}
+		}
+	}
+	return nil
 }
 
 func (m *Manager) Push(dir, token, branch string) error {

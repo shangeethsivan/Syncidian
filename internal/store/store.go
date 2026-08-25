@@ -483,6 +483,51 @@ func (s *Store) GetFile(userID, path string) (*FileMeta, error) {
 	return f, nil
 }
 
+// MarkDeletedPrefix marks path and every live descendant as deleted.
+// Returns the paths that were (or are now) tombstoned.
+func (s *Store) MarkDeletedPrefix(userID, prefix string, mtime int64) ([]string, error) {
+	prefix = strings.Trim(strings.ReplaceAll(prefix, "\\", "/"), "/")
+	if prefix == "" {
+		return nil, fmt.Errorf("empty path")
+	}
+	rows, err := s.db.Query(
+		`SELECT path FROM files WHERE user_id = ? AND deleted = 0 AND (path = ? OR path LIKE ?)`,
+		userID, prefix, prefix+"/%",
+	)
+	if err != nil {
+		return nil, err
+	}
+	var paths []string
+	for rows.Next() {
+		var p string
+		if err := rows.Scan(&p); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		paths = append(paths, p)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return nil, err
+	}
+	rows.Close()
+	if len(paths) == 0 {
+		if err := s.UpsertFile(FileMeta{UserID: userID, Path: prefix, Deleted: true, Mtime: mtime}); err != nil {
+			return nil, err
+		}
+		return []string{prefix}, nil
+	}
+	_, err = s.db.Exec(
+		`UPDATE files SET deleted = 1, hash = '', size = 0, mtime = ?, updated_at = ?
+		 WHERE user_id = ? AND deleted = 0 AND (path = ? OR path LIKE ?)`,
+		mtime, now(), userID, prefix, prefix+"/%",
+	)
+	if err != nil {
+		return nil, err
+	}
+	return paths, nil
+}
+
 func (s *Store) ListFiles(userID string, includeDeleted bool) ([]FileMeta, error) {
 	q := `SELECT user_id, path, hash, size, mtime, deleted, updated_at FROM files WHERE user_id = ?`
 	if !includeDeleted {

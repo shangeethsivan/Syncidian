@@ -1,9 +1,11 @@
 package server
 
 import (
+	"bytes"
 	"encoding/base64"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -19,6 +21,7 @@ type planRequest struct {
 		Path     string `json:"path"`
 		Hash     string `json:"hash"`
 		BaseHash string `json:"base_hash"`
+		Deleted  bool   `json:"deleted"`
 	} `json:"files"`
 }
 
@@ -29,12 +32,13 @@ type pushRequest struct {
 }
 
 type pushFile struct {
-	Path     string `json:"path"`
-	Hash     string `json:"hash"`
-	Mtime    int64  `json:"mtime"`
-	Content  string `json:"content"`
-	Deleted  bool   `json:"deleted"`
-	BaseHash string `json:"base_hash"`
+	Path        string `json:"path"`
+	Hash        string `json:"hash"`
+	Mtime       int64  `json:"mtime"`
+	Content     string `json:"content"`
+	Deleted     bool   `json:"deleted"`
+	BaseHash    string `json:"base_hash"`
+	RenamedFrom string `json:"renamed_from"`
 }
 
 func (s *Server) handleRegisterDevice(w http.ResponseWriter, r *http.Request, u *store.User) {
@@ -161,7 +165,11 @@ func (s *Server) handleSyncPlan(w http.ResponseWriter, r *http.Request, u *store
 		if syncengine.Ignore(f.Path) {
 			continue
 		}
-		client[f.Path] = f.Hash
+		if f.Deleted {
+			client[f.Path] = ""
+		} else {
+			client[f.Path] = f.Hash
+		}
 		if f.BaseHash != "" {
 			base[f.Path] = f.BaseHash
 		}
@@ -214,80 +222,103 @@ func (s *Server) handleSyncPush(w http.ResponseWriter, r *http.Request, u *store
 		writeError(w, http.StatusBadRequest, "invalid json")
 		return
 	}
-	accepted := make([]string, 0)
-	var conflicts []map[string]any
-	changed := 0
+	var files []pushFile
 	for _, f := range req.Files {
 		f.Path = strings.TrimPrefix(filepath.ToSlash(f.Path), "/")
+		f.RenamedFrom = strings.TrimPrefix(filepath.ToSlash(f.RenamedFrom), "/")
 		if f.Path == "" || syncengine.Ignore(f.Path) {
 			continue
 		}
-		existing, err := s.Store.GetFile(u.ID, f.Path)
+		if f.RenamedFrom != "" && syncengine.Ignore(f.RenamedFrom) {
+			f.RenamedFrom = ""
+		}
+		files = append(files, f)
+	}
+
+	accepted := make([]string, 0)
+	var conflicts []map[string]any
+	changed := 0
+	movedFrom := map[string]struct{}{}
+	applied := make([]bool, len(files))
+
+	for i := range files {
+		f := &files[i]
+		if f.Deleted || f.RenamedFrom == "" {
+			continue
+		}
+		kind, serverHash, err := s.classifyPushFile(u.ID, f)
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
-		serverHash := ""
-		serverExists := existing != nil && !existing.Deleted
-		if existing != nil {
-			serverHash = existing.Hash
-		}
-		kind := syncengine.ClassifyPush(f.Hash, serverHash, f.BaseHash, serverExists)
-		if f.Deleted {
-			if serverExists && f.BaseHash != "" && f.BaseHash != serverHash {
-				kind = "conflict"
-			} else {
-				kind = "accept"
-			}
-		}
-		if kind == "noop" {
-			accepted = append(accepted, f.Path)
-			continue
+		if src, err := s.Store.GetFile(u.ID, f.RenamedFrom); err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		} else if src != nil && !src.Deleted && f.BaseHash != "" && f.BaseHash != src.Hash {
+			kind = "conflict"
+			serverHash = src.Hash
 		}
 		if kind == "conflict" {
-			local, _ := s.readVaultFile(u.ID, f.Path)
-			incoming, _ := decodeContent(f.Content)
-			c := &store.Conflict{
-				UserID:        u.ID,
-				Path:          f.Path,
-				LocalHash:     f.Hash,
-				RemoteHash:    serverHash,
-				LocalContent:  incoming,
-				RemoteContent: local,
-				DeviceID:      req.DeviceID,
-			}
-			if err := s.Store.CreateConflict(c); err != nil {
+			_, _, err := s.finishPushFile(u.ID, req.DeviceID, *f, kind, serverHash, &accepted, &conflicts)
+			if err != nil {
 				writeError(w, http.StatusInternalServerError, err.Error())
 				return
 			}
-			conflicts = append(conflicts, map[string]any{
-				"id":          c.ID,
-				"path":        f.Path,
-				"local_hash":  f.Hash,
-				"remote_hash": serverHash,
-			})
+			applied[i] = true
 			continue
 		}
-		if err := s.applyFile(u.ID, f); err != nil {
+		events, err := s.applyMove(u.ID, *f)
+		if err != nil {
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
 		}
-		accepted = append(accepted, f.Path)
-		changed++
-		s.hub.Broadcast(u.ID, req.DeviceID, map[string]any{
-			"type":    "file_changed",
-			"path":    f.Path,
-			"hash":    f.Hash,
-			"deleted": f.Deleted,
-		})
+		for _, ev := range events {
+			accepted = append(accepted, ev.path)
+			s.hub.Broadcast(u.ID, req.DeviceID, map[string]any{
+				"type":    "file_changed",
+				"path":    ev.path,
+				"hash":    ev.hash,
+				"deleted": ev.deleted,
+			})
+		}
+		applied[i] = true
+		movedFrom[f.RenamedFrom] = struct{}{}
+		changed += len(events)
 	}
+
+	for i := range files {
+		if applied[i] {
+			continue
+		}
+		f := &files[i]
+		if f.Deleted {
+			if _, moved := movedFrom[f.Path]; moved {
+				accepted = append(accepted, f.Path)
+				continue
+			}
+		}
+		kind, serverHash, err := s.classifyPushFile(u.ID, f)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		ok, n, err := s.finishPushFile(u.ID, req.DeviceID, *f, kind, serverHash, &accepted, &conflicts)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		if ok {
+			changed += n
+		}
+	}
+
 	if req.DeviceID != "" {
 		_ = s.Store.TouchDevice(req.DeviceID, changed)
 	}
 	if changed > 0 {
 		msg := req.Message
 		if msg == "" {
-			msg = "Syncidian: vault update"
+			msg = pushMessage(files)
 		}
 		commit, gitErr := s.commitAndMaybePush(u.ID, msg)
 		_ = s.Store.AddActivity(store.Activity{
@@ -310,41 +341,260 @@ func (s *Server) handleSyncPush(w http.ResponseWriter, r *http.Request, u *store
 	})
 }
 
-func (s *Server) applyFile(userID string, f pushFile) error {
+func pushMessage(files []pushFile) string {
+	moves, deletes, writes := 0, 0, 0
+	for _, f := range files {
+		switch {
+		case f.RenamedFrom != "":
+			moves++
+		case f.Deleted:
+			deletes++
+		default:
+			writes++
+		}
+	}
+	switch {
+	case moves > 0 && deletes == 0 && writes == 0:
+		return "Syncidian: move"
+	case deletes > 0 && moves == 0 && writes == 0:
+		return "Syncidian: delete"
+	default:
+		return "Syncidian: vault update"
+	}
+}
+
+func (s *Server) classifyPushFile(userID string, f *pushFile) (kind, serverHash string, err error) {
+	existing, err := s.Store.GetFile(userID, f.Path)
+	if err != nil {
+		return "", "", err
+	}
+	serverExists := existing != nil && !existing.Deleted
+	if existing != nil {
+		serverHash = existing.Hash
+	}
+	kind = syncengine.ClassifyPush(f.Hash, serverHash, f.BaseHash, serverExists)
+	if f.Deleted {
+		if serverExists && f.BaseHash != "" && f.BaseHash != serverHash {
+			kind = "conflict"
+		} else {
+			kind = "accept"
+		}
+	}
+	if kind == "conflict" && !f.Deleted {
+		remote, _ := s.readVaultFile(userID, f.Path)
+		incoming, _ := decodeContent(f.Content)
+		if merged, ok := syncengine.AutoMerge(incoming, remote); ok {
+			if bytes.Equal(merged, remote) && !bytes.Equal(merged, incoming) {
+				kind = "noop"
+			} else {
+				f.Content = base64.StdEncoding.EncodeToString(merged)
+				f.Hash = fileSHA256(merged)
+				kind = "accept"
+			}
+		}
+	}
+	return kind, serverHash, nil
+}
+
+func (s *Server) finishPushFile(userID, deviceID string, f pushFile, kind, serverHash string, accepted *[]string, conflicts *[]map[string]any) (applied bool, changed int, err error) {
+	if kind == "noop" {
+		*accepted = append(*accepted, f.Path)
+		return false, 0, nil
+	}
+	if kind == "conflict" {
+		local, _ := s.readVaultFile(userID, f.Path)
+		incoming, _ := decodeContent(f.Content)
+		c := &store.Conflict{
+			UserID:        userID,
+			Path:          f.Path,
+			LocalHash:     f.Hash,
+			RemoteHash:    serverHash,
+			LocalContent:  incoming,
+			RemoteContent: local,
+			DeviceID:      deviceID,
+		}
+		if err := s.Store.CreateConflict(c); err != nil {
+			return false, 0, err
+		}
+		*conflicts = append(*conflicts, map[string]any{
+			"id":          c.ID,
+			"path":        f.Path,
+			"local_hash":  f.Hash,
+			"remote_hash": serverHash,
+		})
+		return false, 0, nil
+	}
+	var affected []string
+	affected, err = s.applyFile(userID, f)
+	if err != nil {
+		return false, 0, err
+	}
+	*accepted = append(*accepted, affected...)
+	for _, p := range affected {
+		s.hub.Broadcast(userID, deviceID, map[string]any{
+			"type":    "file_changed",
+			"path":    p,
+			"hash":    f.Hash,
+			"deleted": f.Deleted,
+		})
+	}
+	return true, len(affected), nil
+}
+
+type fileEvent struct {
+	path    string
+	hash    string
+	deleted bool
+}
+
+func (s *Server) applyFile(userID string, f pushFile) ([]string, error) {
 	full, ok := s.vaultPath(userID, f.Path)
 	if !ok {
-		return errInvalidPath
+		return nil, errInvalidPath
 	}
 	if f.Deleted {
-		_ = os.Remove(full)
-		return s.Store.UpsertFile(store.FileMeta{
-			UserID:  userID,
-			Path:    f.Path,
-			Hash:    "",
-			Deleted: true,
-			Mtime:   f.Mtime,
-		})
+		if err := os.RemoveAll(full); err != nil && !os.IsNotExist(err) {
+			return nil, err
+		}
+		s.pruneEmptyParents(userID, path.Dir(filepath.ToSlash(f.Path)))
+		paths, err := s.Store.MarkDeletedPrefix(userID, f.Path, f.Mtime)
+		if err != nil {
+			return nil, err
+		}
+		return paths, nil
 	}
 	b, err := decodeContent(f.Content)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if f.Hash == "" {
 		f.Hash = fileSHA256(b)
 	}
 	if err := os.MkdirAll(filepath.Dir(full), 0o700); err != nil {
-		return err
+		return nil, err
 	}
 	if err := os.WriteFile(full, b, 0o600); err != nil {
-		return err
+		return nil, err
 	}
-	return s.Store.UpsertFile(store.FileMeta{
+	if err := s.Store.UpsertFile(store.FileMeta{
 		UserID: userID,
 		Path:   f.Path,
 		Hash:   f.Hash,
 		Size:   int64(len(b)),
 		Mtime:  f.Mtime,
-	})
+	}); err != nil {
+		return nil, err
+	}
+	return []string{f.Path}, nil
+}
+
+func (s *Server) applyMove(userID string, f pushFile) ([]fileEvent, error) {
+	from := strings.TrimPrefix(filepath.ToSlash(f.RenamedFrom), "/")
+	if from == "" || from == f.Path {
+		paths, err := s.applyFile(userID, f)
+		if err != nil {
+			return nil, err
+		}
+		out := make([]fileEvent, 0, len(paths))
+		for _, p := range paths {
+			out = append(out, fileEvent{path: p, hash: f.Hash, deleted: false})
+		}
+		return out, nil
+	}
+	fromFull, okFrom := s.vaultPath(userID, from)
+	toFull, okTo := s.vaultPath(userID, f.Path)
+	if !okFrom || !okTo {
+		return nil, errInvalidPath
+	}
+	if err := os.MkdirAll(filepath.Dir(toFull), 0o700); err != nil {
+		return nil, err
+	}
+	moved := false
+	if _, err := os.Lstat(fromFull); err == nil {
+		if _, err := os.Lstat(toFull); err == nil {
+			_ = os.RemoveAll(toFull)
+		}
+		if err := os.Rename(fromFull, toFull); err == nil {
+			moved = true
+		}
+	}
+	if !moved {
+		if _, err := s.applyFile(userID, pushFile{
+			Path:    f.Path,
+			Hash:    f.Hash,
+			Mtime:   f.Mtime,
+			Content: f.Content,
+		}); err != nil {
+			return nil, err
+		}
+		if err := os.RemoveAll(fromFull); err != nil && !os.IsNotExist(err) {
+			return nil, err
+		}
+	} else if f.Content != "" {
+		b, err := decodeContent(f.Content)
+		if err != nil {
+			return nil, err
+		}
+		if len(b) > 0 {
+			if f.Hash == "" {
+				f.Hash = fileSHA256(b)
+			}
+			if err := os.WriteFile(toFull, b, 0o600); err != nil {
+				return nil, err
+			}
+		}
+	}
+	s.pruneEmptyParents(userID, path.Dir(from))
+	if _, err := s.Store.MarkDeletedPrefix(userID, from, f.Mtime); err != nil {
+		return nil, err
+	}
+	if f.Hash == "" {
+		b, err := os.ReadFile(toFull)
+		if err != nil {
+			return nil, err
+		}
+		f.Hash = fileSHA256(b)
+	}
+	st, _ := os.Stat(toFull)
+	size := int64(0)
+	if st != nil && !st.IsDir() {
+		size = st.Size()
+	}
+	if err := s.Store.UpsertFile(store.FileMeta{
+		UserID: userID,
+		Path:   f.Path,
+		Hash:   f.Hash,
+		Size:   size,
+		Mtime:  f.Mtime,
+	}); err != nil {
+		return nil, err
+	}
+	return []fileEvent{
+		{path: from, hash: "", deleted: true},
+		{path: f.Path, hash: f.Hash, deleted: false},
+	}, nil
+}
+
+func (s *Server) pruneEmptyParents(userID, dirRel string) {
+	dirRel = path.Clean(strings.TrimPrefix(filepath.ToSlash(dirRel), "/"))
+	root := filepath.Clean(s.Store.VaultDir(userID))
+	for dirRel != "" && dirRel != "." && dirRel != "/" {
+		full, ok := s.vaultPath(userID, dirRel)
+		if !ok {
+			return
+		}
+		if filepath.Clean(full) == root {
+			return
+		}
+		entries, err := os.ReadDir(full)
+		if err != nil || len(entries) > 0 {
+			return
+		}
+		if err := os.Remove(full); err != nil {
+			return
+		}
+		dirRel = path.Dir(dirRel)
+	}
 }
 
 func decodeContent(s string) ([]byte, error) {
@@ -434,7 +684,7 @@ func (s *Server) handleResolveConflict(w http.ResponseWriter, r *http.Request, u
 		return
 	}
 	hash := fileSHA256(body)
-	err = s.applyFile(u.ID, pushFile{
+	_, err = s.applyFile(u.ID, pushFile{
 		Path:    c.Path,
 		Hash:    hash,
 		Mtime:   time.Now().Unix(),

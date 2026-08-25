@@ -78,6 +78,49 @@ func setupAdmin(t *testing.T, hs *httptest.Server) []*http.Cookie {
 	return res.Cookies()
 }
 
+func vaultPluginAuth(t *testing.T, hs *httptest.Server, username string) (token, deviceID string) {
+	t.Helper()
+	adminCookies := setupAdmin(t, hs)
+	cookies := createAndLoginUser(t, hs, adminCookies, username)
+	res, m := doJSON(t, http.MethodPost, hs.URL+"/api/v1/tokens", map[string]string{"name": "plugin"}, cookies, "")
+	token, _ = m["token"].(string)
+	if !strings.HasPrefix(token, "sk_sync_") {
+		t.Fatalf("token %v", m)
+	}
+	res, m = doJSON(t, http.MethodPost, hs.URL+"/api/v1/devices/register", map[string]string{
+		"name": "MacBook", "platform": "macOS", "plugin_version": "0.1.0",
+	}, nil, token)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("register %d %v", res.StatusCode, m)
+	}
+	deviceID, _ = m["id"].(string)
+	if deviceID == "" {
+		t.Fatalf("device: %v", m)
+	}
+	return token, deviceID
+}
+
+func pushNote(t *testing.T, hs *httptest.Server, token, deviceID, path, body, base string) map[string]any {
+	t.Helper()
+	file := map[string]any{
+		"path":    path,
+		"hash":    fileSHA256([]byte(body)),
+		"mtime":   1,
+		"content": base64.StdEncoding.EncodeToString([]byte(body)),
+	}
+	if base != "" {
+		file["base_hash"] = base
+	}
+	res, m := doJSON(t, http.MethodPost, hs.URL+"/api/v1/sync/push", map[string]any{
+		"device_id": deviceID,
+		"files":     []map[string]any{file},
+	}, nil, token)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("push %s: %d %v", path, res.StatusCode, m)
+	}
+	return m
+}
+
 func createAndLoginUser(t *testing.T, hs *httptest.Server, adminCookies []*http.Cookie, username string) []*http.Cookie {
 	t.Helper()
 	res, m := doJSON(t, http.MethodPost, hs.URL+"/api/v1/users", map[string]any{
@@ -167,6 +210,212 @@ func TestHealthAndSetupFlow(t *testing.T) {
 	conflicts, _ := m["conflicts"].([]any)
 	if len(conflicts) != 1 {
 		t.Fatalf("expected conflict, got %v", m)
+	}
+}
+
+func TestSyncFolderDeleteRemovesChildren(t *testing.T) {
+	hs, done := newTestServer(t)
+	defer done()
+	token, deviceID := vaultPluginAuth(t, hs, "bob")
+
+	a := "# A\n"
+	b := "# B\n"
+	hashA := fileSHA256([]byte(a))
+	pushNote(t, hs, token, deviceID, "Projects/a.md", a, "")
+	pushNote(t, hs, token, deviceID, "Projects/b.md", b, "")
+
+	res, m := doJSON(t, http.MethodPost, hs.URL+"/api/v1/sync/push", map[string]any{
+		"device_id": deviceID,
+		"files": []map[string]any{{
+			"path":      "Projects",
+			"hash":      "",
+			"deleted":   true,
+			"base_hash": hashA,
+			"mtime":     3,
+			"content":   "",
+		}},
+	}, nil, token)
+	if res.StatusCode != 200 {
+		t.Fatalf("delete folder %d %v", res.StatusCode, m)
+	}
+	accepted, _ := m["accepted"].([]any)
+	if len(accepted) < 2 {
+		t.Fatalf("expected child paths accepted, got %v", m)
+	}
+
+	res, man := doJSON(t, http.MethodGet, hs.URL+"/api/v1/sync/manifest", nil, nil, token)
+	files, _ := man["files"].([]any)
+	if res.StatusCode != 200 || len(files) != 0 {
+		t.Fatalf("manifest after folder delete: %d %v", res.StatusCode, man)
+	}
+
+	res, plan := doJSON(t, http.MethodPost, hs.URL+"/api/v1/sync/plan", map[string]any{
+		"device_id": deviceID,
+		"files":     []map[string]any{},
+	}, nil, token)
+	if res.StatusCode != 200 {
+		t.Fatalf("plan %d %v", res.StatusCode, plan)
+	}
+	if pulls, _ := plan["Pull"].([]any); len(pulls) != 0 {
+		t.Fatalf("deleted folder came back as pull: %v", plan)
+	}
+}
+
+func TestSyncPlanTombstonesDeleteInsteadOfPull(t *testing.T) {
+	hs, done := newTestServer(t)
+	defer done()
+	token, deviceID := vaultPluginAuth(t, hs, "bob")
+
+	body := "# keep on server\n"
+	hash := fileSHA256([]byte(body))
+	pushNote(t, hs, token, deviceID, "Gone/note.md", body, "")
+
+	res, plan := doJSON(t, http.MethodPost, hs.URL+"/api/v1/sync/plan", map[string]any{
+		"device_id": deviceID,
+		"files": []map[string]any{{
+			"path":      "Gone/note.md",
+			"hash":      "",
+			"deleted":   true,
+			"base_hash": hash,
+		}},
+	}, nil, token)
+	if res.StatusCode != 200 {
+		t.Fatalf("plan %d %v", res.StatusCode, plan)
+	}
+	if pulls, _ := plan["Pull"].([]any); len(pulls) != 0 {
+		t.Fatalf("local delete should not pull: %v", plan)
+	}
+	deletes, _ := plan["Delete"].([]any)
+	if len(deletes) != 1 || deletes[0] != "Gone/note.md" {
+		t.Fatalf("want Delete Gone/note.md, got %v", plan)
+	}
+}
+
+func TestSyncAutoMergesSimpleTypingConflict(t *testing.T) {
+	hs, done := newTestServer(t)
+	defer done()
+	token, deviceID := vaultPluginAuth(t, hs, "bob")
+
+	base := "Shared intro that both copies still have.\n"
+	pushNote(t, hs, token, deviceID, "Inbox/Hello.md", base, "")
+	extended := base + "And then I kept typing.\n"
+	m := pushNote(t, hs, token, deviceID, "Inbox/Hello.md", extended, "deadbeef")
+	if conflicts, _ := m["conflicts"].([]any); len(conflicts) != 0 {
+		t.Fatalf("typing continuation should auto-merge, got %v", m)
+	}
+
+	res, file := doJSON(t, http.MethodGet, hs.URL+"/api/v1/sync/file?path=Inbox/Hello.md", nil, nil, token)
+	if res.StatusCode != 200 {
+		t.Fatalf("get file %d %v", res.StatusCode, file)
+	}
+	raw, _ := base64.StdEncoding.DecodeString(file["content"].(string))
+	if string(raw) != extended {
+		t.Fatalf("merged content %q", raw)
+	}
+}
+
+func TestSyncMoveFileAndFolder(t *testing.T) {
+	hs, done := newTestServer(t)
+	defer done()
+	token, deviceID := vaultPluginAuth(t, hs, "bob")
+
+	note := "# moved\n"
+	hash := fileSHA256([]byte(note))
+	pushNote(t, hs, token, deviceID, "Inbox/Hello.md", note, "")
+
+	res, m := doJSON(t, http.MethodPost, hs.URL+"/api/v1/sync/push", map[string]any{
+		"device_id": deviceID,
+		"files": []map[string]any{
+			{
+				"path":      "Inbox/Hello.md",
+				"hash":      "",
+				"deleted":   true,
+				"base_hash": hash,
+				"mtime":     2,
+			},
+			{
+				"path":         "Notes/Hello.md",
+				"hash":         hash,
+				"mtime":        2,
+				"content":      base64.StdEncoding.EncodeToString([]byte(note)),
+				"base_hash":    hash,
+				"renamed_from": "Inbox/Hello.md",
+			},
+		},
+	}, nil, token)
+	if res.StatusCode != 200 {
+		t.Fatalf("move file %d %v", res.StatusCode, m)
+	}
+
+	res, man := doJSON(t, http.MethodGet, hs.URL+"/api/v1/sync/manifest", nil, nil, token)
+	files, _ := man["files"].([]any)
+	if res.StatusCode != 200 || len(files) != 1 {
+		t.Fatalf("manifest after file move: %d %v", res.StatusCode, man)
+	}
+	item, _ := files[0].(map[string]any)
+	if item["path"] != "Notes/Hello.md" {
+		t.Fatalf("moved path %v", item)
+	}
+
+	a, b := "# A\n", "# B\n"
+	hashA, hashB := fileSHA256([]byte(a)), fileSHA256([]byte(b))
+	pushNote(t, hs, token, deviceID, "Projects/a.md", a, "")
+	pushNote(t, hs, token, deviceID, "Projects/nested/b.md", b, "")
+
+	res, m = doJSON(t, http.MethodPost, hs.URL+"/api/v1/sync/push", map[string]any{
+		"device_id": deviceID,
+		"files": []map[string]any{
+			{
+				"path":         "Archive/a.md",
+				"hash":         hashA,
+				"mtime":        4,
+				"content":      base64.StdEncoding.EncodeToString([]byte(a)),
+				"base_hash":    hashA,
+				"renamed_from": "Projects/a.md",
+			},
+			{
+				"path":         "Archive/nested/b.md",
+				"hash":         hashB,
+				"mtime":        4,
+				"content":      base64.StdEncoding.EncodeToString([]byte(b)),
+				"base_hash":    hashB,
+				"renamed_from": "Projects/nested/b.md",
+			},
+		},
+	}, nil, token)
+	if res.StatusCode != 200 {
+		t.Fatalf("move folder %d %v", res.StatusCode, m)
+	}
+
+	res, man = doJSON(t, http.MethodGet, hs.URL+"/api/v1/sync/manifest", nil, nil, token)
+	if res.StatusCode != 200 {
+		t.Fatalf("manifest %d %v", res.StatusCode, man)
+	}
+	got := map[string]bool{}
+	for _, rawFile := range man["files"].([]any) {
+		got[rawFile.(map[string]any)["path"].(string)] = true
+	}
+	if got["Projects/a.md"] || got["Projects/nested/b.md"] {
+		t.Fatalf("old folder paths remained: %v", got)
+	}
+	if !got["Notes/Hello.md"] || !got["Archive/a.md"] || !got["Archive/nested/b.md"] {
+		t.Fatalf("new paths missing: %v", got)
+	}
+
+	res, plan := doJSON(t, http.MethodPost, hs.URL+"/api/v1/sync/plan", map[string]any{
+		"device_id": deviceID,
+		"files": []map[string]any{
+			{"path": "Notes/Hello.md", "hash": hash, "base_hash": hash},
+			{"path": "Archive/a.md", "hash": hashA, "base_hash": hashA},
+			{"path": "Archive/nested/b.md", "hash": hashB, "base_hash": hashB},
+			{"path": "Projects/a.md", "hash": "", "deleted": true, "base_hash": hashA},
+		},
+	}, nil, token)
+	if res.StatusCode != 200 {
+		t.Fatalf("plan %d %v", res.StatusCode, plan)
+	}
+	if pulls, _ := plan["Pull"].([]any); len(pulls) != 0 {
+		t.Fatalf("moved files came back as pull: %v", plan)
 	}
 }
 
@@ -749,7 +998,7 @@ func TestPublicLandingAdminAndGitHubAppURLs(t *testing.T) {
 	// Pasting a full GitHub App URL as the slug must still produce a clean install URL.
 	res, m = doJSON(t, http.MethodPost, hs.URL+"/api/v1/github/app/register", map[string]any{
 		"app_id": 100, "slug": "https://github.com/apps/syncidian/installations/new",
-		"pem": "-----BEGIN PRIVATE KEY-----\nMIIB\n-----END PRIVATE KEY-----",
+		"pem":       "-----BEGIN PRIVATE KEY-----\nMIIB\n-----END PRIVATE KEY-----",
 		"client_id": "Iv1.xyz", "client_secret": "secret2",
 	}, adminCookies, "")
 	if res.StatusCode != 200 {
