@@ -70,6 +70,7 @@ func (s *Server) Handler() http.Handler {
 
 	mux.HandleFunc("GET /api/v1/users", s.authed(s.handleListUsers))
 	mux.HandleFunc("POST /api/v1/users", s.authed(s.handleCreateUser))
+	mux.HandleFunc("POST /api/v1/users/tokens", s.adminAuthed(s.handleAdminIssueToken))
 
 	mux.HandleFunc("GET /api/v1/tokens", s.vaultAuthed(s.handleListTokens))
 	mux.HandleFunc("POST /api/v1/tokens", s.vaultAuthed(s.handleCreateToken))

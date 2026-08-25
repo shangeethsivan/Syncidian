@@ -287,6 +287,54 @@ func TestInvalidAccessTokenMessage(t *testing.T) {
 	}
 }
 
+func TestAdminCanIssueVaultUserToken(t *testing.T) {
+	hs, done := newTestServer(t)
+	defer done()
+	adminCookies := setupAdmin(t, hs)
+
+	res, m := doJSON(t, http.MethodPost, hs.URL+"/api/v1/users", map[string]any{
+		"username": "vault1", "password": "password1", "admin": false, "issue_token": true, "token_name": "Mac",
+	}, adminCookies, "")
+	if res.StatusCode != http.StatusCreated {
+		t.Fatalf("create user+token: %d %v", res.StatusCode, m)
+	}
+	token, _ := m["token"].(string)
+	if !strings.HasPrefix(token, "sk_sync_") {
+		t.Fatalf("expected token on create: %v", m)
+	}
+	res, m = doJSON(t, http.MethodPost, hs.URL+"/api/v1/devices/register", map[string]string{
+		"name": "macOS", "platform": "macOS",
+	}, nil, token)
+	if res.StatusCode != 200 || m["id"] == "" {
+		t.Fatalf("register with admin-issued token: %d %v", res.StatusCode, m)
+	}
+
+	res, m = doJSON(t, http.MethodPost, hs.URL+"/api/v1/users/tokens", map[string]any{
+		"username": "vault1", "name": "Phone",
+	}, adminCookies, "")
+	if res.StatusCode != http.StatusCreated {
+		t.Fatalf("admin issue token: %d %v", res.StatusCode, m)
+	}
+	token2, _ := m["token"].(string)
+	if !strings.HasPrefix(token2, "sk_sync_") || token2 == token {
+		t.Fatalf("expected a new token: %v", m)
+	}
+	res, m = doJSON(t, http.MethodPost, hs.URL+"/api/v1/devices/register", map[string]string{
+		"name": "iPhone", "platform": "iOS",
+	}, nil, token2)
+	if res.StatusCode != 200 {
+		t.Fatalf("register with second admin-issued token: %d %v", res.StatusCode, m)
+	}
+
+	// Admins cannot mint tokens for themselves.
+	res, m = doJSON(t, http.MethodPost, hs.URL+"/api/v1/users/tokens", map[string]any{
+		"username": "ada", "name": "Nope",
+	}, adminCookies, "")
+	if res.StatusCode != http.StatusBadRequest {
+		t.Fatalf("admin self-token: want 400, got %d %v", res.StatusCode, m)
+	}
+}
+
 func TestAdminDoesNotNeedGitHubAndCannotSeePrivateUserData(t *testing.T) {
 	hs, done := newTestServer(t)
 	defer done()

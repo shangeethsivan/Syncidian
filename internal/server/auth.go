@@ -203,9 +203,11 @@ func (s *Server) handleCreateUser(w http.ResponseWriter, r *http.Request, actor 
 		return
 	}
 	var req struct {
-		Username string `json:"username"`
-		Password string `json:"password"`
-		Admin    bool   `json:"admin"`
+		Username    string `json:"username"`
+		Password    string `json:"password"`
+		Admin       bool   `json:"admin"`
+		IssueToken  bool   `json:"issue_token"`
+		TokenName   string `json:"token_name"`
 	}
 	if err := readJSON(r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid json")
@@ -213,6 +215,10 @@ func (s *Server) handleCreateUser(w http.ResponseWriter, r *http.Request, actor 
 	}
 	if strings.TrimSpace(req.Username) == "" || len(req.Password) < 8 {
 		writeError(w, http.StatusBadRequest, "username required and password must be at least 8 characters")
+		return
+	}
+	if req.Admin && req.IssueToken {
+		writeError(w, http.StatusBadRequest, "cannot issue an Obsidian token for an admin account")
 		return
 	}
 	hash, err := hashPassword(req.Password)
@@ -226,7 +232,74 @@ func (s *Server) handleCreateUser(w http.ResponseWriter, r *http.Request, actor 
 		return
 	}
 	_ = s.Store.AddActivity(store.Activity{UserID: actor.ID, Action: "user.create", Detail: u.Username})
-	writeJSON(w, http.StatusCreated, publicUser(u))
+	out := publicUser(u)
+	if req.IssueToken && !u.IsAdmin {
+		raw, prefix, tok, err := s.issueVaultToken(u, req.TokenName)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		out["token"] = raw
+		out["token_id"] = tok.ID
+		out["token_prefix"] = prefix
+		out["token_note"] = "This Obsidian access token is shown only once. Paste it into the plugin."
+		_ = s.Store.AddActivity(store.Activity{UserID: actor.ID, Action: "token.create", Detail: u.Username + ":" + tok.Name})
+	}
+	writeJSON(w, http.StatusCreated, out)
+}
+
+// handleAdminIssueToken mints a one-time sk_sync_ token for a vault user.
+// Admins never list existing tokens or vault files — they only receive the raw
+// value at creation time so they can onboard the Obsidian plugin.
+func (s *Server) handleAdminIssueToken(w http.ResponseWriter, r *http.Request, actor *store.User) {
+	var req struct {
+		Username string `json:"username"`
+		Name     string `json:"name"`
+	}
+	if err := readJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid json")
+		return
+	}
+	req.Username = strings.TrimSpace(req.Username)
+	if req.Username == "" {
+		writeError(w, http.StatusBadRequest, "username required")
+		return
+	}
+	u, err := s.Store.GetUserByUsername(req.Username)
+	if err != nil || u == nil {
+		writeError(w, http.StatusNotFound, "user not found")
+		return
+	}
+	if u.IsAdmin {
+		writeError(w, http.StatusBadRequest, "admins cannot hold vault access tokens — pick a vault user")
+		return
+	}
+	raw, prefix, tok, err := s.issueVaultToken(u, req.Name)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	_ = s.Store.AddActivity(store.Activity{UserID: actor.ID, Action: "token.create", Detail: u.Username + ":" + tok.Name})
+	writeJSON(w, http.StatusCreated, map[string]any{
+		"id":       tok.ID,
+		"name":     tok.Name,
+		"prefix":   prefix,
+		"username": u.Username,
+		"token":    raw,
+		"note":     "This token is shown only once. Store it in the Obsidian plugin settings.",
+	})
+}
+
+func (s *Server) issueVaultToken(u *store.User, name string) (raw, prefix string, tok *store.Token, err error) {
+	if strings.TrimSpace(name) == "" {
+		name = "Obsidian"
+	}
+	raw, prefix, err = randomToken()
+	if err != nil {
+		return "", "", nil, err
+	}
+	tok, err = s.Store.CreateToken(u.ID, name, raw, prefix)
+	return raw, prefix, tok, err
 }
 
 func (s *Server) handleListTokens(w http.ResponseWriter, r *http.Request, u *store.User) {
@@ -254,15 +327,7 @@ func (s *Server) handleCreateToken(w http.ResponseWriter, r *http.Request, u *st
 		Name string `json:"name"`
 	}
 	_ = readJSON(r, &req)
-	if strings.TrimSpace(req.Name) == "" {
-		req.Name = "Obsidian"
-	}
-	raw, prefix, err := randomToken()
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	t, err := s.Store.CreateToken(u.ID, req.Name, raw, prefix)
+	raw, prefix, t, err := s.issueVaultToken(u, req.Name)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -271,7 +336,7 @@ func (s *Server) handleCreateToken(w http.ResponseWriter, r *http.Request, u *st
 	writeJSON(w, http.StatusCreated, map[string]any{
 		"id":     t.ID,
 		"name":   t.Name,
-		"prefix": t.Prefix,
+		"prefix": prefix,
 		"token":  raw,
 		"note":   "This token is shown only once. Store it in the Obsidian plugin settings.",
 	})

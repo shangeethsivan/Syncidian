@@ -38,7 +38,7 @@ cd Syncidian
 docker compose up --build -d
 ```
 
-Open [http://localhost:8080](http://localhost:8080). The public page explains Syncidian and lets people **Sign up using GitHub**. Operators open [`/admin`](http://localhost:8080/admin) to create the first admin and register the GitHub App. Follow [Set up the GitHub App](docs/github-app.md) if you are self-hosting. A **Help** button on `/admin` and the signed-in dashboard walks through the rest. After GitHub sign-in, a regular user connects **one GitHub repository**, then creates an access token (`sk_sync_…`). Copy the token once — it is not shown again.
+Open [http://localhost:8080](http://localhost:8080). The public page explains Syncidian and lets people **Sign up using GitHub**. Operators open [`/admin`](http://localhost:8080/admin) to create the first admin and register the GitHub App. Follow [Set up the GitHub App](docs/github-app.md) if you are self-hosting. A **Help** button on `/admin` and the signed-in dashboard walks through the rest. After GitHub sign-in, a regular user connects **one GitHub repository**, then creates an access token (`sk_sync_…`). Admins can also mint a one-time token for a vault user from **Users** (they still cannot sync as admin). Copy the token once — it is not shown again.
 
 **Without Docker (Go 1.22+):**
 
@@ -456,13 +456,15 @@ Users are isolated from one another.
 
 # 🔑 Access Tokens
 
-Once a user is created, the server generates an access token.
+Once a vault user exists, the server generates an access token.
 
 ```text
 sk_sync_********************************
 ```
 
 The token is used by the Obsidian plugin to authenticate with the Syncidian server.
+
+Create one from the user’s **Tokens** page, or as an admin via **Users → Create Obsidian token** (shown once). Admins cannot use tokens themselves.
 
 The token should provide access only to the user's configured resources.
 
