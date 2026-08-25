@@ -9,6 +9,11 @@ import (
 	"github.com/shangeethsivan/Syncidian/internal/githubapp"
 )
 
+// DefaultContainerDataDir is the image default (Dockerfile ENV SYNCIDIAN_DATA).
+// An attached Railway volume wins over this path so operators do not have to
+// match the mount path exactly.
+const DefaultContainerDataDir = "/data"
+
 type Config struct {
 	Addr               string
 	DataDir            string
@@ -25,7 +30,7 @@ type Config struct {
 func FromEnv() Config {
 	c := Config{
 		Addr:               firstEnv("SYNCIDIAN_ADDR", "PORT"),
-		DataDir:            firstEnv("SYNCIDIAN_DATA", "RAILWAY_VOLUME_MOUNT_PATH"),
+		DataDir:            resolveDataDir(),
 		PublicURL:          publicURL(),
 		GitName:            env("SYNCIDIAN_GIT_NAME", "Syncidian"),
 		GitEmail:           env("SYNCIDIAN_GIT_EMAIL", "syncidian@localhost"),
@@ -42,14 +47,25 @@ func FromEnv() Config {
 	} else if !strings.HasPrefix(c.Addr, ":") && !strings.Contains(c.Addr, ":") {
 		c.Addr = ":" + c.Addr
 	}
-	if c.DataDir == "" {
-		c.DataDir = "./data"
-	}
 	abs, err := filepath.Abs(c.DataDir)
 	if err == nil {
 		c.DataDir = abs
 	}
 	return c
+}
+
+func resolveDataDir() string {
+	explicit := strings.TrimSpace(os.Getenv("SYNCIDIAN_DATA"))
+	volume := strings.TrimSpace(os.Getenv("RAILWAY_VOLUME_MOUNT_PATH"))
+	// The image sets SYNCIDIAN_DATA=/data. That hid Railway volumes mounted at
+	// any other path, so users/vaults/GitHub App config vanished on redeploy.
+	if volume != "" && (explicit == "" || explicit == DefaultContainerDataDir) {
+		return volume
+	}
+	if explicit != "" {
+		return explicit
+	}
+	return "./data"
 }
 
 func publicURL() string {

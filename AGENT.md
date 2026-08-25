@@ -42,6 +42,7 @@ Document and implement these unless a later change explicitly replaces them — 
 4. **Admin user list is public fields only:** `username`, `is_admin`, `created_at` (no `id`, vault, tokens, or GitHub).
 5. Device sync works without GitHub. GitHub is optional durable backup.
 6. **GitHub App only, main branch only.** Backup is authorized by installing a GitHub App with Contents read and write. Personal access tokens and deploy keys are not supported. Syncidian always uses `main`. Sign-in uses the instance App callback, setup, and webhook URLs.
+7. **Persistent data directory.** Users, tokens, GitHub App credentials, and vault files live under `SYNCIDIAN_DATA` (`syncidian.db` + `vaults/`). PaaS deploys wipe the container filesystem unless a volume is mounted at `/data`. Warn on `/admin` when persistence is ephemeral. Do not store that state only in the image layer.
 
 ## How to update diagrams
 
@@ -52,8 +53,8 @@ Document and implement these unless a later change explicitly replaces them — 
 
 ## Tests
 
-When you change auth, GitHub scoping, or admin privacy, extend `internal/server/server_test.go` and `internal/store/store_test.go` rather than only updating prose.
+When you change auth, GitHub scoping, admin privacy, or where data is stored across deploys, extend `internal/server/server_test.go`, `internal/store/store_test.go`, and `internal/config` persistence tests rather than only updating prose.
 
 ## Help walkthrough
 
-The dashboard **Help** button must describe the same workflow as the diagrams: public landing with GitHub sign-in, optional email, admin at `/admin`, register the instance GitHub App (`docs/github-app.md`), then optional per-user GitHub, admin without repo sync.
+The dashboard **Help** button must describe the same workflow as the diagrams: public landing with GitHub sign-in, optional email, admin at `/admin`, persist `/data` so deploys do not wipe users, register the instance GitHub App (`docs/github-app.md`), then optional per-user GitHub, admin without repo sync.

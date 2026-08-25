@@ -146,10 +146,26 @@ func TestHealthAndSetupFlow(t *testing.T) {
 	if res.StatusCode != 200 || m["status"] != "ok" {
 		t.Fatalf("health: %d %v", res.StatusCode, m)
 	}
+	if _, ok := m["persistence"]; !ok {
+		t.Fatalf("health should include persistence: %v", m)
+	}
 
 	res, m = doJSON(t, http.MethodGet, hs.URL+"/api/v1/setup", nil, nil, "")
 	if m["needs_setup"] != true {
 		t.Fatalf("expected needs_setup: %v", m)
+	}
+	pers, _ := m["persistence"].(map[string]any)
+	if pers == nil {
+		t.Fatalf("setup should report persistence: %v", m)
+	}
+	if pers["data_dir"] == "" {
+		t.Fatalf("persistence.data_dir missing: %v", pers)
+	}
+	if _, ok := pers["ok"]; !ok {
+		t.Fatalf("persistence.ok missing: %v", pers)
+	}
+	if pers["kind"] == "" {
+		t.Fatalf("persistence.kind missing: %v", pers)
 	}
 
 	adminCookies := setupAdmin(t, hs)
@@ -210,6 +226,23 @@ func TestHealthAndSetupFlow(t *testing.T) {
 	conflicts, _ := m["conflicts"].([]any)
 	if len(conflicts) != 1 {
 		t.Fatalf("expected conflict, got %v", m)
+	}
+}
+
+func TestSetupReportsEphemeralOnRailwayWithoutVolume(t *testing.T) {
+	t.Setenv("RAILWAY_VOLUME_MOUNT_PATH", "")
+	t.Setenv("RAILWAY_ENVIRONMENT", "production")
+	hs, done := newTestServer(t)
+	defer done()
+
+	_, m := doJSON(t, http.MethodGet, hs.URL+"/api/v1/setup", nil, nil, "")
+	pers, _ := m["persistence"].(map[string]any)
+	if pers["ok"] != false || pers["kind"] != "ephemeral" {
+		t.Fatalf("expected ephemeral persistence on Railway without a volume, got %v", pers)
+	}
+	msg, _ := pers["message"].(string)
+	if !strings.Contains(msg, "Railway") {
+		t.Fatalf("expected Railway warning, got %q", msg)
 	}
 }
 
@@ -466,6 +499,12 @@ func TestDashboardServed(t *testing.T) {
 		`Obsidian on desktop`,
 		`Android`,
 		`iOS`,
+		`id="landing-persist"`,
+		`id="auth-persist"`,
+		`persistWarningHTML`,
+		`persist-banner`,
+		`Data will reset on the next deploy`,
+		`Settings → Volumes`,
 		`id="setup-obsidian"`,
 		`Restricted mode`,
 		`already installed the app earlier`,

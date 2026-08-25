@@ -28,6 +28,8 @@ RUN mkdir -p /data \
     && chmod 0755 /app/docker-entrypoint.sh
 
 # Image defaults. Railway injects PORT (and RAILWAY_* vars) at runtime.
+# SYNCIDIAN_DATA=/data is the image default; an attached Railway volume
+# (RAILWAY_VOLUME_MOUNT_PATH) wins over this path at startup.
 ENV PORT=8080
 ENV SYNCIDIAN_DATA=/data
 ENV HOME=/home/syncidian

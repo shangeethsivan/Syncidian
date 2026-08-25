@@ -143,6 +143,9 @@
     .flash { padding: 10px 12px; border-radius: 10px; margin: 10px 0; }
     .flash.err { background: color-mix(in srgb, var(--danger) 12%, transparent); color: var(--danger); }
     .flash.ok { background: color-mix(in srgb, var(--ok) 12%, transparent); color: var(--ok); }
+    .flash.warn { background: color-mix(in srgb, var(--warn) 12%, transparent); color: var(--warn); }
+    .persist-banner { border-color: color-mix(in srgb, var(--warn) 45%, var(--line)); }
+    .persist-banner p { margin: 8px 0; }
     .token { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--bg); padding: 12px; border-radius: 10px; word-break: break-all; }
     pre { white-space: pre-wrap; background: var(--bg); padding: 12px; border-radius: 10px; overflow: auto; }
     .check { display: flex; gap: 8px; align-items: center; margin: 8px 0; }
@@ -257,6 +260,7 @@
         <p class="eyebrow">Obsidian, privately synced</p>
         <h1>Your vault.<br>On your GitHub.</h1>
         <p class="lede">Notes on every device. One repository you own.</p>
+        <div id="landing-persist" class="landing-flash"></div>
         <div id="landing-flash" class="landing-flash"></div>
         <div class="hero-actions">
           <a class="btn" id="gh-signup" href="/api/v1/auth/github/start?next=install">Continue with GitHub</a>
@@ -295,6 +299,7 @@
       </div>
       <h1 id="auth-title">Admin</h1>
       <p class="muted" id="auth-sub">Operators sign in here. Vault users sign in with GitHub from the public site.</p>
+      <div id="auth-persist"></div>
       <div id="flash"></div>
       <label>Username</label>
       <input id="username" autocomplete="username" />
@@ -389,6 +394,17 @@ async function api(path, opts = {}) {
 function flash(el, msg, kind = "err") {
   el.innerHTML = msg ? `<div class="flash ${kind}">${esc(msg)}</div>` : "";
 }
+function persistWarningHTML() {
+  const p = publicInfo && publicInfo.persistence;
+  if (!p || p.ok) return "";
+  return `<div class="card persist-banner" id="persist-banner">
+    <p><span class="pill warn">Data will reset on the next deploy</span></p>
+    <p>${esc(p.message || "Users, GitHub configuration, and vault files are stored on an ephemeral disk.")}</p>
+    ${p.hint ? `<p class="muted">${esc(p.hint)}</p>` : ""}
+    ${p.data_dir ? `<p class="muted">Data directory: <code>${esc(p.data_dir)}</code></p>` : ""}
+  </div>`;
+}
+
 function asList(v) {
   return Array.isArray(v) ? v : [];
 }
@@ -421,7 +437,13 @@ docker compose up --build -d</pre>
       <h2>Go</h2>
       <pre>go run ./cmd/syncidian serve</pre>
       <p>Then open this dashboard at <code>${esc(location.origin)}</code>.</p>
-      <p class="muted">Data is stored in <code>./data</code> locally, or in a <code>/data</code> volume on Docker or Railway.</p>
+      <p>Users, GitHub App credentials, and vault files live in SQLite under the data directory. That directory is <b>wiped on every new deploy</b> unless it is a persistent volume.</p>
+      <ul>
+        <li><b>Docker Compose</b> already mounts <code>syncidian-data</code> at <code>/data</code>.</li>
+        <li><b>Railway:</b> Settings → Volumes → Add volume, mount path <code>/data</code> <em>before</em> people sign in. <code>railway.json</code> requires that mount so a deploy without a volume fails instead of resetting the instance.</li>
+        <li><b>docker run:</b> <code>-v syncidian-data:/data</code></li>
+      </ul>
+      <p class="muted">Local <code>go run</code> stores data in <code>./data</code>.</p>
     `,
   },
   {
@@ -478,7 +500,7 @@ docker compose up --build -d</pre>
         <li><b>Option A:</b> Sign in as a regular user → <b>Tokens</b> → <b>Create token</b> → copy <code>sk_sync_…</code>.</li>
         <li><b>Option B (admin):</b> On <b>Users</b>, create a vault user with <b>Also create Obsidian access token</b>, or click <b>Create Obsidian token</b> next to an existing vault user. Copy the value once.</li>
       </ol>
-      <p>If Connect says unauthorized, that token is missing from this server — mint a new one. Persist <code>/data</code> on Railway so tokens survive redeploys.</p>
+      <p>If Connect says unauthorized, that token is missing from this server — mint a new one. Attach a <code>/data</code> volume so users, tokens, and GitHub App credentials survive redeploys.</p>
     `,
   },
   {
@@ -637,6 +659,8 @@ function showLanding() {
   $("help-fab").classList.add("hidden");
   $("landing").classList.remove("hidden");
   heroScene.start();
+  const persistBox = $("landing-persist");
+  if (persistBox) persistBox.innerHTML = needsSetup ? persistWarningHTML() : "";
   const q = window.__githubQuery;
   if (q && q.flag === "error") {
     const box = $("landing-flash");
@@ -657,6 +681,8 @@ function showAuth() {
   $("auth-btn").disabled = false;
   $("username").disabled = false;
   $("password").disabled = false;
+  const persistBox = $("auth-persist");
+  if (persistBox) persistBox.innerHTML = persistWarningHTML();
 }
 
 function showApp() {
@@ -735,6 +761,7 @@ async function adminOverview(main) {
   const list = asList(await api("/api/v1/users"));
   const vaultUsers = list.filter((u) => !u.is_admin).length;
   main.innerHTML = `
+    ${persistWarningHTML()}
     <h1>Admin</h1>
     <p class="muted">Admins manage users. They should not see any private info of users — no vaults, tokens, devices, activity, or GitHub credentials.</p>
     <div class="grid">

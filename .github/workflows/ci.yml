@@ -21,6 +21,10 @@ jobs:
             echo "Railway rejects Docker VOLUME; persist /data with a runtime mount instead"
             exit 1
           fi
+      - name: Railway config requires a /data volume
+        run: |
+          grep -q '"requiredMountPath": "/data"' railway.json
+          grep -q '"overlapSeconds": 0' railway.json
       - name: Build server
         run: go build -o syncidian ./cmd/syncidian
       - uses: actions/setup-node@v4

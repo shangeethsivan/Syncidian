@@ -67,7 +67,9 @@ Usage:
 
 Environment:
   SYNCIDIAN_ADDR                 Listen address (default :8080, or $PORT)
-  SYNCIDIAN_DATA                 Data directory (default ./data, or $RAILWAY_VOLUME_MOUNT_PATH)
+  SYNCIDIAN_DATA                 Data directory (default ./data, or $RAILWAY_VOLUME_MOUNT_PATH).
+                                 Persist this path (Docker/Railway volume at /data) or every
+                                 deploy wipes users, GitHub App credentials, and vault files.
   SYNCIDIAN_PUBLIC_URL           Public URL shown in the dashboard
   SYNCIDIAN_BOOTSTRAP_USER       Create this admin on first boot
   SYNCIDIAN_BOOTSTRAP_PASSWORD   Password for the bootstrap admin
@@ -99,7 +101,12 @@ func runServe(log *slog.Logger) error {
 		Handler:           srv.Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
-	log.Info("syncidian listening", "addr", cfg.Addr, "data", cfg.DataDir, "url", cfg.PublicURL)
+	p := config.PersistenceStatus(cfg.DataDir)
+	if !p.OK {
+		log.Error("data directory is not persistent; users, GitHub App credentials, and vault files will be lost on the next deploy",
+			"data", cfg.DataDir, "hint", p.Hint)
+	}
+	log.Info("syncidian listening", "addr", cfg.Addr, "data", cfg.DataDir, "url", cfg.PublicURL, "persistence", p.Kind)
 	return httpSrv.ListenAndServe()
 }
 

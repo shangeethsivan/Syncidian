@@ -46,15 +46,17 @@ Open [http://localhost:8080](http://localhost:8080). The public page explains Sy
 go run ./cmd/syncidian serve
 ```
 
-Data is stored in `./data` by default (`SYNCIDIAN_DATA` to change it). Docker Compose persists it at `/data` via a named volume (not a Dockerfile `VOLUME`, which Railway and some builders reject).
+Data is stored in `./data` by default (`SYNCIDIAN_DATA` to change it). Docker Compose persists it at `/data` via a named volume (not a Dockerfile `VOLUME`, which Railway and some builders reject). **Without that volume, a new deploy starts with an empty database** — no users, no GitHub App, empty vaults.
 
 ### Deploy on Railway
 
+Users, GitHub App credentials, and vault files live in SQLite on disk. Railway’s container filesystem is **empty on every deploy** unless you attach a volume.
+
 1. New project → deploy this GitHub repo. Railway builds the `Dockerfile`.
-2. **Settings → Volumes → Add volume**, mount path **`/data`**.
+2. **Settings → Volumes → Add volume**, mount path **`/data`**. Do this before creating the admin or registering the GitHub App. `railway.json` sets `requiredMountPath` to `/data` so a deploy without a volume fails instead of silently resetting the instance, and `overlapSeconds` to `0` so two replicas do not share SQLite during a rollout.
 3. Generate a public domain. The server listens on Railway’s `PORT` and uses `RAILWAY_PUBLIC_DOMAIN` for the dashboard URL unless you set `SYNCIDIAN_PUBLIC_URL`.
-4. Optional variables: `SYNCIDIAN_BOOTSTRAP_USER`, `SYNCIDIAN_BOOTSTRAP_PASSWORD`.
-5. Open the public URL. Create the admin at `/admin`, then register the GitHub App ([walkthrough](docs/github-app.md)). Let people sign in with GitHub from the public site. Point the plugin at that URL with that user's token.
+4. Optional variables: `SYNCIDIAN_BOOTSTRAP_USER`, `SYNCIDIAN_BOOTSTRAP_PASSWORD`. To keep the GitHub App if the volume is missing, also set `SYNCIDIAN_GITHUB_APP_*` (see [Set up the GitHub App](docs/github-app.md)).
+5. Open the public URL. Create the admin at `/admin`, then register the GitHub App ([walkthrough](docs/github-app.md)). `/admin` warns if the data directory is still ephemeral. Let people sign in with GitHub from the public site. Point the plugin at that URL with that user's token.
 
 Health check: `GET /health`.
 

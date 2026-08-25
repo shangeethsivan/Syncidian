@@ -39,6 +39,8 @@ This posts a GitHub App **manifest**, so permissions and URLs are filled in for 
 5. GitHub opens **Create a new GitHub App**. Review the name if you want, then click **Create GitHub App**.
 6. GitHub redirects back to Syncidian. `/admin` should show the app as **Registered**.
 
+Those credentials are stored in SQLite. Attach a volume at `/data` (or copy them into `SYNCIDIAN_GITHUB_APP_*` env vars — Option B) so the next deploy does not wipe the GitHub App.
+
 People can now use **Sign up using GitHub** / **Log in** / **Connect to your GitHub repository** on `{base}/`.
 
 The manifest requests:

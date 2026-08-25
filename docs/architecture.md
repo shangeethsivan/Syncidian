@@ -457,7 +457,7 @@ Admins can create users and list `adminUserSummary` fields (`username`, `is_admi
 flowchart LR
   subgraph host [Docker host / Railway / VPS]
     C["syncidian container<br/>listen :8080 or $PORT"]
-    V[("Named volume /data<br/>SQLite + vaults")]
+    V[("Required volume /data<br/>SQLite users · GitHub App · vaults")]
     C --> V
   end
 
@@ -467,7 +467,9 @@ flowchart LR
   C -->|"optional"| GH["GitHub"]
 ```
 
-One container. No extra services for the basic install. Railway mounts a volume at `/data`; the Dockerfile does not declare `VOLUME` (that broke some builders).
+One container. No extra services for the basic install. Users, tokens, the instance GitHub App, per-user GitHub installs, and vault files all live under `SYNCIDIAN_DATA` (SQLite `syncidian.db` plus `vaults/`). A new deploy **replaces the container filesystem**, so that directory must be a named volume.
+
+Railway: mount a volume at `/data`. `railway.json` sets `requiredMountPath` to `/data` (deploys without a volume fail instead of wiping the instance) and `overlapSeconds` to `0` (SQLite is not opened by two replicas during a rollout). The image default `SYNCIDIAN_DATA=/data` no longer hides `RAILWAY_VOLUME_MOUNT_PATH` if the volume is mounted somewhere else. The Dockerfile does not declare `VOLUME` (that broke some builders). `/admin` and `GET /api/v1/setup` report when the data directory looks ephemeral.
 
 ---
 
@@ -484,7 +486,7 @@ One container. No extra services for the basic install. Railway mounts a volume 
 | GitHub App self-host setup | [`docs/github-app.md`](github-app.md) |
 | MCP tools | [`internal/mcp/mcp.go`](../internal/mcp/mcp.go) |
 | Live updates | [`internal/server/ws.go`](../internal/server/ws.go) |
-| Persistence | [`internal/store/store.go`](../internal/store/store.go) |
+| Persistence | [`internal/store/store.go`](../internal/store/store.go), [`internal/config/persist.go`](../internal/config/persist.go), [`railway.json`](../railway.json) |
 | Dashboard UI | [`internal/web/static/index.html`](../internal/web/static/index.html) |
 | Obsidian plugin | [`plugin/main.ts`](../plugin/main.ts) |
 | Keep diagrams current | [`AGENT.md`](../AGENT.md) |

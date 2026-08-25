@@ -217,11 +217,17 @@ func (s *Server) authenticate(r *http.Request) (*store.User, error) {
 	return s.Store.GetUser(sess.UserID)
 }
 
+func (s *Server) persistence() config.Persistence {
+	return config.PersistenceStatus(s.Cfg.DataDir)
+}
+
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
+	p := s.persistence()
 	writeJSON(w, http.StatusOK, map[string]any{
-		"status":  "ok",
-		"service": "syncidian",
-		"uptime":  time.Since(s.start).Round(time.Second).String(),
+		"status":      "ok",
+		"service":     "syncidian",
+		"uptime":      time.Since(s.start).Round(time.Second).String(),
+		"persistence": p,
 	})
 }
 

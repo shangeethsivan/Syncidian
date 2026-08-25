@@ -2,14 +2,17 @@
 set -e
 
 # Persist data on a runtime mount, not a Dockerfile VOLUME (Railway forbids it).
-if [ -z "${SYNCIDIAN_DATA}" ]; then
-  if [ -n "${RAILWAY_VOLUME_MOUNT_PATH}" ]; then
+# The image sets SYNCIDIAN_DATA=/data. Prefer an attached Railway volume even
+# when that default is present, otherwise SQLite stays on the ephemeral layer.
+if [ -n "${RAILWAY_VOLUME_MOUNT_PATH}" ]; then
+  if [ -z "${SYNCIDIAN_DATA}" ] || [ "${SYNCIDIAN_DATA}" = "/data" ]; then
     SYNCIDIAN_DATA="${RAILWAY_VOLUME_MOUNT_PATH}"
-  else
-    SYNCIDIAN_DATA=/data
   fi
-  export SYNCIDIAN_DATA
 fi
+if [ -z "${SYNCIDIAN_DATA}" ]; then
+  SYNCIDIAN_DATA=/data
+fi
+export SYNCIDIAN_DATA
 
 mkdir -p "${SYNCIDIAN_DATA}"
 
