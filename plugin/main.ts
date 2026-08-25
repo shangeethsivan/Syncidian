@@ -59,6 +59,10 @@ function b64decode(s: string): Uint8Array {
   return out;
 }
 
+function toArrayBuffer(data: Uint8Array): ArrayBuffer {
+  return data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength) as ArrayBuffer;
+}
+
 export default class SyncidianPlugin extends Plugin {
   settings: SyncidianSettings = DEFAULT_SETTINGS;
   statusEl!: HTMLElement;
@@ -246,23 +250,42 @@ export default class SyncidianPlugin extends Plugin {
       await this.saveSettings();
       return;
     }
-    const bytes = b64decode(remote.content || "");
-    const existing = this.app.vault.getAbstractFileByPath(path);
-    if (existing instanceof TFile) {
-      await this.app.vault.modifyBinary(existing, bytes);
-    } else {
-      const dir = path.split("/").slice(0, -1).join("/");
-      if (dir) await this.ensureFolder(dir);
-      // Recheck: another pull or Obsidian may have created the file while we prepared the folder.
-      const again = this.app.vault.getAbstractFileByPath(path);
-      if (again instanceof TFile) {
-        await this.app.vault.modifyBinary(again, bytes);
-      } else {
-        await this.app.vault.createBinary(path, bytes);
-      }
-    }
+    const bytes = toArrayBuffer(b64decode(remote.content || ""));
+    await this.writeBinary(path, bytes);
     this.settings.hashes[path] = remote.hash;
     await this.saveSettings();
+  }
+
+  /** Write bytes, tolerating vault-index lag vs files already on disk. */
+  async writeBinary(path: string, data: ArrayBuffer) {
+    const existing = this.app.vault.getAbstractFileByPath(path);
+    if (existing instanceof TFile) {
+      await this.app.vault.modifyBinary(existing, data);
+      return;
+    }
+    if (existing) {
+      throw new Error(`Cannot write file; path is a folder: ${path}`);
+    }
+    const dir = path.split("/").slice(0, -1).join("/");
+    if (dir) await this.ensureFolder(dir);
+    const again = this.app.vault.getAbstractFileByPath(path);
+    if (again instanceof TFile) {
+      await this.app.vault.modifyBinary(again, data);
+      return;
+    }
+    try {
+      await this.app.vault.createBinary(path, data);
+    } catch (e) {
+      const msg = (e as Error).message || String(e);
+      if (!/already exists/i.test(msg)) throw e;
+      const raced = this.app.vault.getAbstractFileByPath(path);
+      if (raced instanceof TFile) {
+        await this.app.vault.modifyBinary(raced, data);
+        return;
+      }
+      // On disk but not indexed yet — write through the adapter.
+      await this.app.vault.adapter.writeBinary(path, data);
+    }
   }
 
   async ensureFolder(dir: string) {

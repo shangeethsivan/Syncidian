@@ -57,6 +57,9 @@ function b64decode(s) {
     out[i] = bin.charCodeAt(i);
   return out;
 }
+function toArrayBuffer(data) {
+  return data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength);
+}
 var SyncidianPlugin = class extends import_obsidian.Plugin {
   constructor() {
     super(...arguments);
@@ -253,30 +256,49 @@ var SyncidianPlugin = class extends import_obsidian.Plugin {
   async pullFile(path) {
     const remote = await this.api(`/api/v1/sync/file?path=${encodeURIComponent(path)}`);
     if (remote.deleted) {
-      const existing2 = this.app.vault.getAbstractFileByPath(path);
-      if (existing2)
-        await this.app.vault.delete(existing2);
+      const existing = this.app.vault.getAbstractFileByPath(path);
+      if (existing)
+        await this.app.vault.delete(existing);
       delete this.settings.hashes[path];
       await this.saveSettings();
       return;
     }
-    const bytes = b64decode(remote.content || "");
-    const existing = this.app.vault.getAbstractFileByPath(path);
-    if (existing instanceof import_obsidian.TFile) {
-      await this.app.vault.modifyBinary(existing, bytes);
-    } else {
-      const dir = path.split("/").slice(0, -1).join("/");
-      if (dir)
-        await this.ensureFolder(dir);
-      const again = this.app.vault.getAbstractFileByPath(path);
-      if (again instanceof import_obsidian.TFile) {
-        await this.app.vault.modifyBinary(again, bytes);
-      } else {
-        await this.app.vault.createBinary(path, bytes);
-      }
-    }
+    const bytes = toArrayBuffer(b64decode(remote.content || ""));
+    await this.writeBinary(path, bytes);
     this.settings.hashes[path] = remote.hash;
     await this.saveSettings();
+  }
+  /** Write bytes, tolerating vault-index lag vs files already on disk. */
+  async writeBinary(path, data) {
+    const existing = this.app.vault.getAbstractFileByPath(path);
+    if (existing instanceof import_obsidian.TFile) {
+      await this.app.vault.modifyBinary(existing, data);
+      return;
+    }
+    if (existing) {
+      throw new Error(`Cannot write file; path is a folder: ${path}`);
+    }
+    const dir = path.split("/").slice(0, -1).join("/");
+    if (dir)
+      await this.ensureFolder(dir);
+    const again = this.app.vault.getAbstractFileByPath(path);
+    if (again instanceof import_obsidian.TFile) {
+      await this.app.vault.modifyBinary(again, data);
+      return;
+    }
+    try {
+      await this.app.vault.createBinary(path, data);
+    } catch (e) {
+      const msg = e.message || String(e);
+      if (!/already exists/i.test(msg))
+        throw e;
+      const raced = this.app.vault.getAbstractFileByPath(path);
+      if (raced instanceof import_obsidian.TFile) {
+        await this.app.vault.modifyBinary(raced, data);
+        return;
+      }
+      await this.app.vault.adapter.writeBinary(path, data);
+    }
   }
   async ensureFolder(dir) {
     const parts = dir.split("/").filter(Boolean);
