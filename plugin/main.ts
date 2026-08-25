@@ -167,7 +167,14 @@ export default class SyncidianPlugin extends Plugin {
     if (opts.body && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
     let res: Response;
     try {
-      res = await fetch(this.apiUrl(path), { ...opts, headers });
+      res = await fetch(this.apiUrl(path), {
+        ...opts,
+        method: opts.method || "GET",
+        headers,
+        credentials: "omit",
+        mode: "cors",
+        cache: "no-store",
+      });
     } catch (e) {
       throw new Error(
         `Cannot reach ${this.settings.serverUrl || "(no server URL)"}. Check Server URL. (${(e as Error).message})`

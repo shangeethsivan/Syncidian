@@ -162,7 +162,14 @@ var SyncidianPlugin = class extends import_obsidian.Plugin {
       headers.set("Content-Type", "application/json");
     let res;
     try {
-      res = await fetch(this.apiUrl(path), { ...opts, headers });
+      res = await fetch(this.apiUrl(path), {
+        ...opts,
+        method: opts.method || "GET",
+        headers,
+        credentials: "omit",
+        mode: "cors",
+        cache: "no-store"
+      });
     } catch (e) {
       throw new Error(
         `Cannot reach ${this.settings.serverUrl || "(no server URL)"}. Check Server URL. (${e.message})`
