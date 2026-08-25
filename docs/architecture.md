@@ -489,6 +489,6 @@ Railway: mount a volume at `/data`. `railway.json` sets `requiredMountPath` to `
 | Live updates | [`internal/server/ws.go`](../internal/server/ws.go) |
 | Persistence | [`internal/store/store.go`](../internal/store/store.go), [`internal/store/crypt.go`](../internal/store/crypt.go), [`internal/config/persist.go`](../internal/config/persist.go), [`railway.json`](../railway.json) |
 | Dashboard UI | [`internal/web/static/index.html`](../internal/web/static/index.html) |
-| Obsidian plugin | [`plugin/main.ts`](../plugin/main.ts) |
-| Community plugin listing | Root [`manifest.json`](../manifest.json) (must match [`plugin/manifest.json`](../plugin/manifest.json)); GitHub Release via [`.github/workflows/release.yml`](../.github/workflows/release.yml) |
+| Obsidian plugin (desktop + Android/iOS) | [`plugin/main.ts`](../plugin/main.ts), [`plugin/mobile.ts`](../plugin/mobile.ts), [`plugin/manifest.json`](../plugin/manifest.json) (`isDesktopOnly: false`) |
+| Community plugin listing | Root [`manifest.json`](../manifest.json) (must match [`plugin/manifest.json`](../plugin/manifest.json)); GitHub Release via [`.github/workflows/release.yml`](../.github/workflows/release.yml); mobile notes in [`docs/community-plugin.md`](community-plugin.md) |
 | Keep diagrams current | [`AGENT.md`](../AGENT.md) |
