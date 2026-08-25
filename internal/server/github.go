@@ -29,7 +29,7 @@ func (s *Server) handleGetGitHub(w http.ResponseWriter, r *http.Request, u *stor
 	if inst := s.instanceGitHubApp(); inst.Configured() {
 		out["instance_app"] = true
 		if inst.Slug != "" {
-			out["install_url"] = githubapp.InstallURL(inst.Slug)
+			out["install_url"] = githubapp.InstallURL(inst.Slug, "")
 		}
 	}
 	if cfg == nil {
@@ -44,7 +44,7 @@ func (s *Server) handleGetGitHub(w http.ResponseWriter, r *http.Request, u *stor
 	out["last_pull"] = cfg.LastPull
 	out["last_error"] = cfg.LastError
 	if _, ok := out["install_url"]; !ok && cfg.AppSlug != "" {
-		out["install_url"] = githubapp.InstallURL(cfg.AppSlug)
+		out["install_url"] = githubapp.InstallURL(cfg.AppSlug, "")
 	}
 	if cfg.Configured() {
 		out["configured"] = true

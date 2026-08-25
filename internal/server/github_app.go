@@ -83,9 +83,20 @@ func (s *Server) handleGitHubAppRegisterSave(w http.ResponseWriter, r *http.Requ
 }
 
 func (s *Server) handleGitHubAppStart(w http.ResponseWriter, r *http.Request, u *store.User) {
+	state, err := randomHex(16)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "could not start GitHub App setup")
+		return
+	}
+	s.setGitHubStateCookie(w, r, state)
+	// Mark this browser as waiting for an install return. With
+	// "Request user authorization during installation", GitHub redirects to the
+	// OAuth callback URL (not the setup URL) with installation_id.
+	s.setPendingInstallIntent(w, r)
+
 	if inst := s.instanceGitHubApp(); inst.Configured() && inst.Slug != "" {
 		writeJSON(w, http.StatusOK, map[string]any{
-			"github_url": githubapp.InstallURL(inst.Slug),
+			"github_url": githubapp.InstallURL(inst.Slug, state),
 			"existing":   true,
 			"branch":     GitHubBranch,
 			"urls":       githubapp.AppURLs(s.requestBase(r)),
@@ -94,18 +105,12 @@ func (s *Server) handleGitHubAppStart(w http.ResponseWriter, r *http.Request, u 
 	}
 	if cfg, _ := s.Store.GetGitHub(u.ID); cfg.HasApp() && cfg.AppSlug != "" {
 		writeJSON(w, http.StatusOK, map[string]any{
-			"github_url": githubapp.InstallURL(cfg.AppSlug),
+			"github_url": githubapp.InstallURL(cfg.AppSlug, state),
 			"existing":   true,
 			"branch":     GitHubBranch,
 		})
 		return
 	}
-	state, err := randomHex(16)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "could not start GitHub App setup")
-		return
-	}
-	s.setGitHubStateCookie(w, r, state)
 	base := s.requestBase(r)
 	name := "Syncidian-" + strings.ReplaceAll(u.ID, "-", "")
 	if len(name) > 34 {
@@ -160,7 +165,14 @@ func (s *Server) handleGitHubAppCallback(w http.ResponseWriter, r *http.Request)
 		s.dashboardRedirect(w, r, url.Values{"github": {"error"}, "message": {err.Error()}})
 		return
 	}
-	http.Redirect(w, r, githubapp.InstallURL(creds.Slug), http.StatusFound)
+	installState, err := randomHex(16)
+	if err != nil {
+		s.dashboardRedirect(w, r, url.Values{"github": {"error"}, "message": {"Could not continue to install."}})
+		return
+	}
+	s.setGitHubStateCookie(w, r, installState)
+	s.setPendingInstallIntent(w, r)
+	http.Redirect(w, r, githubapp.InstallURL(creds.Slug, installState), http.StatusFound)
 }
 
 func (s *Server) handleGitHubAppSetup(w http.ResponseWriter, r *http.Request) {
@@ -195,6 +207,7 @@ func (s *Server) handleGitHubAppSetup(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) finishInstallation(w http.ResponseWriter, r *http.Request, u *store.User, installationID int64) {
+	s.clearPendingInstallCookies(w, r)
 	cfg, _ := s.Store.GetGitHub(u.ID)
 	if cfg == nil {
 		cfg = &store.GitHubConfig{UserID: u.ID, Branch: GitHubBranch}
@@ -284,6 +297,43 @@ func (s *Server) setGitHubStateCookie(w http.ResponseWriter, r *http.Request, st
 		Secure:   secure,
 		MaxAge:   600,
 	})
+}
+
+const pendingInstallIntentCookie = "syncidian_install_intent"
+
+func (s *Server) setPendingInstallIntent(w http.ResponseWriter, r *http.Request) {
+	secure := r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https")
+	http.SetCookie(w, &http.Cookie{
+		Name:     pendingInstallIntentCookie,
+		Value:    "1",
+		Path:     "/",
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+		Secure:   secure,
+		MaxAge:   600,
+	})
+}
+
+func (s *Server) hasPendingInstallIntent(r *http.Request) bool {
+	c, err := r.Cookie(pendingInstallIntentCookie)
+	return err == nil && c.Value != ""
+}
+
+func (s *Server) clearPendingInstallCookies(w http.ResponseWriter, r *http.Request) {
+	secure := r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https")
+	expired := func(name string) *http.Cookie {
+		return &http.Cookie{
+			Name:     name,
+			Value:    "",
+			Path:     "/",
+			HttpOnly: true,
+			SameSite: http.SameSiteLaxMode,
+			Secure:   secure,
+			MaxAge:   -1,
+		}
+	}
+	http.SetCookie(w, expired("syncidian_pending_install"))
+	http.SetCookie(w, expired(pendingInstallIntentCookie))
 }
 
 func (s *Server) validGitHubState(r *http.Request, state string) bool {

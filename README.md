@@ -379,8 +379,8 @@ Replace `{base}` with your public URL, for example `https://syncidian.example.co
 
 | GitHub field | URL | Why |
 | --- | --- | --- |
-| **Callback URL** / User authorization callback URL / redirect URI | `{base}/api/v1/auth/github/callback` | GitHub sends people here after **Sign in with GitHub**. |
-| **Setup URL** | `{base}/api/v1/github/app/setup` | GitHub sends people here after they **install** the app. Syncidian binds that installation to their account. |
+| **Callback URL** / User authorization callback URL / redirect URI | `{base}/api/v1/auth/github/callback` | GitHub sends people here after **Sign in with GitHub**, and after **Install & Authorize** when OAuth during installation is enabled. Syncidian binds `installation_id` here in that case. |
+| **Setup URL** | `{base}/api/v1/github/app/setup` | Used when OAuth during installation is off. GitHub sends people here after they **install** the app so Syncidian can bind that installation. |
 | **Webhook URL** | `{base}/api/v1/github/app/webhook` | GitHub requires a webhook URL so it can **ping** the app when you create or update it. Syncidian answers that ping with HTTP 200 even if you do not subscribe to extra events. |
 
 Optional env vars if you prefer not to use the in-dashboard manifest flow: `SYNCIDIAN_GITHUB_APP_ID`, `SYNCIDIAN_GITHUB_APP_SLUG`, `SYNCIDIAN_GITHUB_CLIENT_ID`, `SYNCIDIAN_GITHUB_CLIENT_SECRET`, `SYNCIDIAN_GITHUB_APP_PRIVATE_KEY`. See [docs/github-app.md](docs/github-app.md) for exact GitHub UI fields and Docker examples.
@@ -400,8 +400,11 @@ flowchart LR
   OAuth --> User["store.User"]
   Admin["/admin"] --> Manifest["Create GitHub App"]
   Manifest --> URLs["callback · setup · webhook"]
-  User --> Setup["Setup URL after install"]
-  Setup --> Map["Store installation_id + repo for that user_id"]
+  User --> Install["Install and Authorize"]
+  Install --> Callback["Callback with installation_id"]
+  Install --> Setup["Setup URL when no OAuth-on-install"]
+  Callback --> Map["Store installation_id + repo for that user_id"]
+  Setup --> Map
   Map --> Git["Server git commit / push on main"]
   Git --> Repo["That user's private repo"]
 ```

@@ -453,11 +453,11 @@ docker compose up --build -d</pre>
   {
     title: "5. Connect your GitHub repository",
     html: () => `
-      <p>GitHub backup is <b>per user</b>. One user can set up one GitHub repository on <code>main</code>. Sign in with GitHub, then install the GitHub App with Contents <b>read and write</b>.</p>
+      <p>GitHub backup is <b>per user</b>. One user can set up one GitHub repository on <code>main</code>. Sign in, open <b>GitHub</b>, then click <b>Connect with GitHub</b> and <b>Install &amp; Authorize</b> on one repository.</p>
       <ol>
-        <li>On the public site, click <b>Continue with GitHub</b> or <b>Log in</b>.</li>
-        <li>Authorize Syncidian, then click <b>Install</b> on one repository.</li>
-        <li>If more than one repository was granted, pick the one vault to use.</li>
+        <li>Stay signed in on this dashboard (same browser).</li>
+        <li>Click <b>Connect with GitHub</b>, then <b>Install &amp; Authorize</b> on one repository with Contents read and write.</li>
+        <li>GitHub returns to Syncidian with the installation; if more than one repository was granted, pick the one vault to use.</li>
       </ol>
       <p>The Obsidian plugin never sees GitHub credentials.</p>
     `,
@@ -476,29 +476,41 @@ docker compose up --build -d</pre>
   {
     title: "7. Install the Obsidian plugin",
     html: () => `
-      <p>Syncidian is <b>not</b> in the Community Plugin store yet. Sideload it once per vault.</p>
+      <p>Syncidian is <b>not</b> in the Community Plugin store yet. Sideload it once per vault on each device.</p>
+      <h2>Desktop (Mac, Windows, Linux)</h2>
       <pre>chmod +x scripts/install-plugin.sh
 ./scripts/install-plugin.sh "/path/to/YourVault"</pre>
-      <p>On a Mac this is often:</p>
-      <pre>./scripts/install-plugin.sh "$HOME/Documents/Obsidian/MyVault"</pre>
       <p>Or copy <code>plugin/manifest.json</code>, <code>plugin/main.js</code>, and <code>plugin/styles.css</code> into <code>{Vault}/.obsidian/plugins/syncidian/</code>.</p>
       <ol>
         <li>Settings → Community plugins → turn <b>Restricted mode</b> off.</li>
         <li>Reload plugins or restart Obsidian.</li>
         <li>Enable <b>Syncidian</b>.</li>
       </ol>
+      <h2>Android</h2>
+      <ol>
+        <li>Copy the same three files into your vault’s <code>.obsidian/plugins/syncidian/</code> folder (Files app, Syncthing, USB, or a desktop that already has the vault).</li>
+        <li>In Obsidian mobile: Settings → Community plugins → turn <b>Restricted mode</b> off.</li>
+        <li>Enable <b>Syncidian</b>.</li>
+      </ol>
+      <h2>iOS / iPadOS</h2>
+      <ol>
+        <li>Put the three plugin files in the vault under <code>.obsidian/plugins/syncidian/</code> via the Files app (iCloud vault) or by syncing the vault from a desktop that already has them.</li>
+        <li>Settings → Community plugins → turn <b>Restricted mode</b> off, then enable <b>Syncidian</b>.</li>
+        <li>Your Syncidian server must be reachable over HTTPS from the phone (not <code>localhost</code>).</li>
+      </ol>
     `,
   },
   {
     title: "8. Connect the plugin and sync",
     html: () => `
-      <p>In Obsidian: Settings → Syncidian.</p>
+      <p>In Obsidian (desktop, Android, or iOS): Settings → Syncidian.</p>
       <ol>
         <li>Server URL: <code>${esc(location.origin)}</code></li>
         <li>Access token: the <code>sk_sync_…</code> value from that user’s Tokens page</li>
-        <li>Device name: for example <code>MacBook Pro</code></li>
+        <li>Device name: for example <code>MacBook Pro</code>, <code>Pixel</code>, or <code>iPhone</code></li>
         <li>Click <b>Connect</b></li>
       </ol>
+      <p>Use a separate token (or at least a clear device name) per phone or computer so the Devices page stays readable.</p>
       <p>Optional: point an MCP client at <code>${esc(location.origin)}/mcp</code> with the same token.</p>
     `,
   },
@@ -587,7 +599,7 @@ async function boot() {
   const q = new URLSearchParams(location.search);
   if (q.get("github")) {
     window.__githubQuery = { flag: q.get("github"), message: q.get("message") || "" };
-    if (!isAdminPath() && (q.get("github") === "connected" || q.get("github") === "select" || q.get("github") === "signed_in")) {
+    if (!isAdminPath() && (q.get("github") === "connected" || q.get("github") === "select" || q.get("github") === "signed_in" || q.get("github") === "error")) {
       page = "github";
     }
     history.replaceState({}, "", location.pathname || "/");
@@ -868,12 +880,22 @@ async function overview(main) {
       <h2>Devices</h2>
       ${deviceTable(devices)}
     </div>
-    <div class="card">
+    <div class="card" id="setup-obsidian">
       <h2>Connect Obsidian</h2>
+      <p class="muted">After GitHub (optional), create a token and sideload the plugin on each device. Syncidian is not in the Community Plugin store yet.</p>
+      <h2 style="font-size:16px;margin-top:14px">1. Create an access token</h2>
+      <p>Open the <b>Tokens</b> page, name the token after this device, click <b>Create token</b>, and copy the <code>sk_sync_…</code> value.</p>
+      <h2 style="font-size:16px;margin-top:14px">2. Install the plugin</h2>
+      <p><b>Obsidian on desktop</b> — from a checkout of this repo:</p>
+      <pre>./scripts/install-plugin.sh "/path/to/YourVault"</pre>
+      <p>Or copy <code>plugin/manifest.json</code>, <code>plugin/main.js</code>, and <code>plugin/styles.css</code> into <code>{Vault}/.obsidian/plugins/syncidian/</code>. Then Settings → Community plugins → turn <b>Restricted mode</b> off → enable <b>Syncidian</b>.</p>
+      <p><b>Android</b> — copy those three files into the vault’s <code>.obsidian/plugins/syncidian/</code> folder (Files, Syncthing, or USB), turn Restricted mode off, and enable Syncidian.</p>
+      <p><b>iOS</b> — put the same folder in an iCloud (or synced) vault via the Files app, turn Restricted mode off, and enable Syncidian. The server URL must be HTTPS reachable from the phone (not <code>localhost</code>).</p>
+      <h2 style="font-size:16px;margin-top:14px">3. Connect in Obsidian</h2>
       <ol>
-        <li>Create an access token on the Tokens page.</li>
-        <li>Sideload the plugin from this repository’s <code>plugin/</code> folder (or run <code>scripts/install-plugin.sh</code>, or open <b>Help</b>).</li>
-        <li>In Obsidian: Settings → Syncidian → paste <code>${esc(location.origin)}</code> and the token, then click Connect.</li>
+        <li>Settings → Syncidian</li>
+        <li>Server URL: <code>${esc(location.origin)}</code></li>
+        <li>Paste the access token, set a device name, click <b>Connect</b></li>
       </ol>
       <button class="btn secondary" id="open-help" type="button">Open setup walkthrough</button>
     </div>
@@ -968,8 +990,9 @@ async function github(main) {
         ${gh.instance_app ? `
         <p>Install the Syncidian GitHub App with Contents <b>read and write</b>. Pick one repository. You do not paste a personal access token, and SSH deploy keys are not used.</p>
         <ol>
-          <li>Click <b>Connect with GitHub</b>.</li>
-          <li>Click <b>Install</b> and allow access to one repository (or several, then pick below).</li>
+          <li>Click <b>Connect with GitHub</b> (same browser where you are signed in).</li>
+          <li>Click <b>Install &amp; Authorize</b> and allow access to one repository (or several, then pick below).</li>
+          <li>If you already installed the app earlier, open <b>Connect with GitHub</b> again and confirm the repository so Syncidian can finish linking it.</li>
         </ol>` : `
         <p>This creates a GitHub App for this instance with Contents <b>read and write</b>. You do not paste a personal access token, and SSH deploy keys are not used. If an administrator already registered the app at <code>/admin</code>, you only need to install it.</p>
         <ol>
@@ -1036,6 +1059,11 @@ async function github(main) {
   if (q && q.flag === "connected") flash($("gh-flash"), "GitHub connected. This account now has one repository on main.", "ok");
   if (q && q.flag === "select") flash($("gh-flash"), "GitHub App installed. Select the one repository to use.", "ok");
   if (q && q.flag === "error") flash($("gh-flash"), q.message || "GitHub App setup failed.");
+  if (gh.installed && !gh.configured && !gh.needs_repo) {
+    flash($("gh-flash"), gh.last_error
+      ? ("App install was recorded, but listing repositories failed: " + gh.last_error + " Click Continue GitHub setup, or disconnect and try again.")
+      : "App install was recorded. Click Continue GitHub setup if your repository is not listed yet.", "err");
+  }
 }
 
 async function mcp(main) {

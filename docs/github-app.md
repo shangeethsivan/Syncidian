@@ -125,7 +125,7 @@ Device sync works with no GitHub at all. GitHub is optional backup, one repo per
 4. Syncidian always commits to **`main`**. Other branches are not used.
 5. Create a `sk_sync_…` token on that user’s **Tokens** page and paste it into the Obsidian plugin. The plugin never sees GitHub credentials.
 
-If GitHub sent them to the **Setup URL** after install, Syncidian records the installation and returns them to the dashboard.
+If GitHub sent them back after **Install & Authorize**, Syncidian records the `installation_id` on the **OAuth callback** (`/api/v1/auth/github/callback`). That happens when the app has **Request user authorization (OAuth) during installation** enabled — GitHub then uses the callback URL instead of the Setup URL. The Setup URL still works for installs without that option.
 
 ---
 
@@ -144,6 +144,7 @@ If GitHub sent them to the **Setup URL** after install, Syncidian records the in
 | “This instance has no GitHub App yet” | Finish Option A or B. Confirm `/admin` shows **Registered**, or the `SYNCIDIAN_GITHUB_APP_*` variables are set. |
 | OAuth error / redirect mismatch | Callback URL on the GitHub App must be exactly `{base}/api/v1/auth/github/callback`. `{base}` must be the origin in the address bar (scheme + host + port). |
 | Install succeeds but Syncidian says credentials are missing | Setup URL must be `{base}/api/v1/github/app/setup`. Sign in as a **non-admin** vault user; admins do not connect a repo. |
+| Install & Authorize succeeds but dashboard still says **Not configured** | With OAuth during installation, GitHub redirects to the **Callback URL** with `installation_id`. Syncidian must receive that on `/api/v1/auth/github/callback` while you are signed in. Click **Connect with GitHub** again from the dashboard (do not open the install URL in a private window). Confirm Callback URL is exactly `{base}/api/v1/auth/github/callback`. |
 | Cannot install on someone else’s GitHub account | Make the app installable on **Any account** (public to GitHub users, not the Marketplace). |
 | Push/pull fails | Contents must be **read and write**. The install must include the chosen repo. Branch must be `main`. |
 | Connect with GitHub opens a GitHub 404 (`github.com/apps/https://…`) | `SYNCIDIAN_GITHUB_APP_SLUG` (or the admin slug field) was set to a full URL. Use only the slug (`syncidian`), not `https://github.com/apps/syncidian`. Syncidian now normalizes pasted URLs, but re-save credentials or fix the env var and restart. |
