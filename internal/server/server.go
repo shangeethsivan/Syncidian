@@ -27,14 +27,15 @@ import (
 var errInvalidToken = errors.New("invalid or revoked access token")
 
 type Server struct {
-	Cfg   config.Config
-	Store *store.Store
-	Git   *gitx.Manager
-	MCP   *mcp.Server
-	Log   *slog.Logger
-	hub   *Hub
-	start time.Time
-	gitMu sync.Map // userID -> *sync.Mutex
+	Cfg     config.Config
+	Store   *store.Store
+	Git     *gitx.Manager
+	MCP     *mcp.Server
+	Log     *slog.Logger
+	hub     *Hub
+	start   time.Time
+	gitMu   sync.Map // userID -> *sync.Mutex
+	tickets sync.Map // ticket hash -> wsTicket
 }
 
 func New(cfg config.Config, st *store.Store, log *slog.Logger) *Server {
@@ -66,35 +67,35 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/auth/github/start", s.handleGitHubAuthStart)
 	mux.HandleFunc("GET /api/v1/auth/github/callback", s.handleGitHubAuthCallback)
 	mux.HandleFunc("GET /api/v1/me", s.authed(s.handleMe))
-	mux.HandleFunc("GET /api/v1/stats", s.vaultAuthed(s.handleStats))
+	mux.HandleFunc("GET /api/v1/stats", s.sessionVaultAuthed(s.handleStats))
 
 	mux.HandleFunc("GET /api/v1/users", s.authed(s.handleListUsers))
 	mux.HandleFunc("POST /api/v1/users", s.authed(s.handleCreateUser))
 	mux.HandleFunc("POST /api/v1/users/tokens", s.adminAuthed(s.handleAdminIssueToken))
 
-	mux.HandleFunc("GET /api/v1/tokens", s.vaultAuthed(s.handleListTokens))
-	mux.HandleFunc("POST /api/v1/tokens", s.vaultAuthed(s.handleCreateToken))
-	mux.HandleFunc("POST /api/v1/tokens/{id}/revoke", s.vaultAuthed(s.handleRevokeToken))
+	mux.HandleFunc("GET /api/v1/tokens", s.sessionVaultAuthed(s.handleListTokens))
+	mux.HandleFunc("POST /api/v1/tokens", s.sessionVaultAuthed(s.handleCreateToken))
+	mux.HandleFunc("POST /api/v1/tokens/{id}/revoke", s.sessionVaultAuthed(s.handleRevokeToken))
 
 	mux.HandleFunc("POST /api/v1/devices/register", s.vaultAuthed(s.handleRegisterDevice))
-	mux.HandleFunc("GET /api/v1/devices", s.vaultAuthed(s.handleListDevices))
+	mux.HandleFunc("GET /api/v1/devices", s.sessionVaultAuthed(s.handleListDevices))
 	mux.HandleFunc("POST /api/v1/devices/{id}/heartbeat", s.vaultAuthed(s.handleHeartbeat))
-	mux.HandleFunc("DELETE /api/v1/devices/{id}", s.vaultAuthed(s.handleDeleteDevice))
+	mux.HandleFunc("DELETE /api/v1/devices/{id}", s.sessionVaultAuthed(s.handleDeleteDevice))
 
 	mux.HandleFunc("POST /api/v1/sync/plan", s.vaultAuthed(s.handleSyncPlan))
 	mux.HandleFunc("POST /api/v1/sync/push", s.vaultAuthed(s.handleSyncPush))
 	mux.HandleFunc("GET /api/v1/sync/file", s.vaultAuthed(s.handleSyncFile))
 	mux.HandleFunc("GET /api/v1/sync/manifest", s.vaultAuthed(s.handleManifest))
 
-	mux.HandleFunc("GET /api/v1/conflicts", s.vaultAuthed(s.handleListConflicts))
-	mux.HandleFunc("GET /api/v1/conflicts/{id}", s.vaultAuthed(s.handleGetConflict))
-	mux.HandleFunc("POST /api/v1/conflicts/{id}/resolve", s.vaultAuthed(s.handleResolveConflict))
+	mux.HandleFunc("GET /api/v1/conflicts", s.sessionVaultAuthed(s.handleListConflicts))
+	mux.HandleFunc("GET /api/v1/conflicts/{id}", s.sessionVaultAuthed(s.handleGetConflict))
+	mux.HandleFunc("POST /api/v1/conflicts/{id}/resolve", s.sessionVaultAuthed(s.handleResolveConflict))
 
-	mux.HandleFunc("GET /api/v1/github", s.vaultAuthed(s.handleGetGitHub))
-	mux.HandleFunc("POST /api/v1/github", s.vaultAuthed(s.handleSetGitHub))
-	mux.HandleFunc("DELETE /api/v1/github", s.vaultAuthed(s.handleDeleteGitHub))
-	mux.HandleFunc("POST /api/v1/github/sync", s.vaultAuthed(s.handleGitHubSyncNow))
-	mux.HandleFunc("POST /api/v1/github/app/start", s.vaultAuthed(s.handleGitHubAppStart))
+	mux.HandleFunc("GET /api/v1/github", s.sessionVaultAuthed(s.handleGetGitHub))
+	mux.HandleFunc("POST /api/v1/github", s.sessionVaultAuthed(s.handleSetGitHub))
+	mux.HandleFunc("DELETE /api/v1/github", s.sessionVaultAuthed(s.handleDeleteGitHub))
+	mux.HandleFunc("POST /api/v1/github/sync", s.sessionVaultAuthed(s.handleGitHubSyncNow))
+	mux.HandleFunc("POST /api/v1/github/app/start", s.sessionVaultAuthed(s.handleGitHubAppStart))
 	mux.HandleFunc("POST /api/v1/github/app/register/start", s.adminAuthed(s.handleGitHubAppRegisterStart))
 	mux.HandleFunc("POST /api/v1/github/app/register", s.adminAuthed(s.handleGitHubAppRegisterSave))
 	mux.HandleFunc("GET /api/v1/github/app/callback", s.handleGitHubAppCallback)
@@ -103,13 +104,14 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/github/app/webhook", s.handleGitHubAppWebhook)
 	mux.HandleFunc("GET /api/v1/github/app/urls", s.handleGitHubAppURLs)
 
-	mux.HandleFunc("GET /api/v1/mcp", s.vaultAuthed(s.handleGetMCP))
-	mux.HandleFunc("POST /api/v1/mcp", s.vaultAuthed(s.handleSetMCP))
+	mux.HandleFunc("GET /api/v1/mcp", s.sessionVaultAuthed(s.handleGetMCP))
+	mux.HandleFunc("POST /api/v1/mcp", s.sessionVaultAuthed(s.handleSetMCP))
 	mux.HandleFunc("POST /mcp", s.vaultAuthed(s.handleMCP))
 	mux.HandleFunc("GET /mcp", s.vaultAuthed(s.handleMCPInfo))
 
-	mux.HandleFunc("GET /api/v1/activity", s.vaultAuthed(s.handleActivity))
-	mux.HandleFunc("GET /api/v1/ws", s.vaultAuthed(s.handleWS))
+	mux.HandleFunc("GET /api/v1/activity", s.sessionVaultAuthed(s.handleActivity))
+	mux.HandleFunc("POST /api/v1/ws/ticket", s.vaultAuthed(s.handleWSTicket))
+	mux.HandleFunc("GET /api/v1/ws", s.handleWS)
 
 	static, err := fs.Sub(web.FS, "static")
 	if err != nil {
@@ -134,12 +136,14 @@ func (s *Server) Handler() http.Handler {
 func (s *Server) cors(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		origin := r.Header.Get("Origin")
-		if origin == "" {
-			origin = "*"
+		if origin != "" {
+			w.Header().Set("Access-Control-Allow-Origin", origin)
+			w.Header().Set("Vary", "Origin")
+			if s.originMayUseCookies(origin) {
+				w.Header().Set("Access-Control-Allow-Credentials", "true")
+			}
 		}
-		w.Header().Set("Access-Control-Allow-Origin", origin)
-		w.Header().Set("Access-Control-Allow-Credentials", "true")
-		w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
+		w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Syncidian-Client")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)
@@ -147,6 +151,30 @@ func (s *Server) cors(next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+func (s *Server) originMayUseCookies(origin string) bool {
+	origin = strings.TrimRight(origin, "/")
+	if origin == "" {
+		return false
+	}
+	if strings.HasPrefix(origin, "app://") || strings.HasPrefix(origin, "capacitor://") || strings.HasPrefix(origin, "ionic://") {
+		return true
+	}
+	if s.Cfg.PublicURL != "" && origin == strings.TrimRight(s.Cfg.PublicURL, "/") {
+		return true
+	}
+	host := rHost(origin)
+	return host == "localhost" || strings.HasPrefix(host, "127.0.0.1") || strings.HasPrefix(host, "[::1]")
+}
+
+func rHost(origin string) string {
+	origin = strings.TrimPrefix(origin, "https://")
+	origin = strings.TrimPrefix(origin, "http://")
+	if i := strings.IndexByte(origin, '/'); i >= 0 {
+		origin = origin[:i]
+	}
+	return origin
 }
 
 type ctxKey int
@@ -180,6 +208,23 @@ func (s *Server) vaultAuthed(fn func(http.ResponseWriter, *http.Request, *store.
 	})
 }
 
+// sessionVaultAuthed is dashboard-only. Access tokens cannot manage GitHub,
+// mint more tokens, or change MCP permissions — those bind the private repo.
+func (s *Server) sessionVaultAuthed(fn func(http.ResponseWriter, *http.Request, *store.User)) http.HandlerFunc {
+	return s.vaultAuthed(func(w http.ResponseWriter, r *http.Request, u *store.User) {
+		if bearerRequest(r) {
+			writeError(w, http.StatusForbidden, "access tokens cannot manage GitHub or account settings; sign in on the dashboard")
+			return
+		}
+		fn(w, r, u)
+	})
+}
+
+func bearerRequest(r *http.Request) bool {
+	h := r.Header.Get("Authorization")
+	return strings.HasPrefix(strings.ToLower(h), "bearer ")
+}
+
 func (s *Server) authenticate(r *http.Request) (*store.User, error) {
 	raw := ""
 	if h := r.Header.Get("Authorization"); strings.HasPrefix(strings.ToLower(h), "bearer ") {
@@ -187,9 +232,6 @@ func (s *Server) authenticate(r *http.Request) (*store.User, error) {
 		if i := strings.IndexByte(h, ' '); i >= 0 {
 			raw = strings.TrimSpace(h[i+1:])
 		}
-	}
-	if raw == "" {
-		raw = strings.TrimSpace(r.URL.Query().Get("token"))
 	}
 	if raw != "" {
 		tok, err := s.Store.GetTokenByHash(store.HashToken(raw))
@@ -217,11 +259,17 @@ func (s *Server) authenticate(r *http.Request) (*store.User, error) {
 	return s.Store.GetUser(sess.UserID)
 }
 
+func (s *Server) persistence() config.Persistence {
+	return config.PersistenceStatus(s.Cfg.DataDir)
+}
+
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
+	p := s.persistence()
 	writeJSON(w, http.StatusOK, map[string]any{
-		"status":  "ok",
-		"service": "syncidian",
-		"uptime":  time.Since(s.start).Round(time.Second).String(),
+		"status":      "ok",
+		"service":     "syncidian",
+		"uptime":      time.Since(s.start).Round(time.Second).String(),
+		"persistence": p,
 	})
 }
 

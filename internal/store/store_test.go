@@ -1,6 +1,9 @@
 package store
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 func TestCreateUserAndToken(t *testing.T) {
 	st, err := Open(t.TempDir())
@@ -139,5 +142,35 @@ func TestMarkDeletedPrefix(t *testing.T) {
 	live, err := st.ListFiles(u.ID, false)
 	if err != nil || len(live) != 1 || live[0].Path != "keep.md" {
 		t.Fatalf("live %+v %v", live, err)
+	}
+}
+
+func TestSessionIDIsHashedAtRest(t *testing.T) {
+	st, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	u, err := st.CreateUser("ada", "hash", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sess, err := st.CreateSession(u.ID, time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := st.GetSession(sess.ID)
+	if err != nil || got == nil || got.UserID != u.ID {
+		t.Fatalf("lookup: %+v %v", got, err)
+	}
+	var stored string
+	if err := st.db.QueryRow(`SELECT id FROM sessions`).Scan(&stored); err != nil {
+		t.Fatal(err)
+	}
+	if stored == sess.ID {
+		t.Fatal("session cookie must not be stored in plaintext")
+	}
+	if stored != HashToken(sess.ID) {
+		t.Fatalf("stored session id %q want hash", stored)
 	}
 }

@@ -23,6 +23,7 @@ func (s *Server) handleSetupStatus(w http.ResponseWriter, r *http.Request) {
 		"needs_setup":  n == 0,
 		"public_url":   s.Cfg.PublicURL,
 		"github_login": app.Configured(),
+		"persistence":  s.persistence(),
 		"github_app": map[string]any{
 			"configured": app.Configured(),
 			"slug":       "",
@@ -203,11 +204,11 @@ func (s *Server) handleCreateUser(w http.ResponseWriter, r *http.Request, actor 
 		return
 	}
 	var req struct {
-		Username    string `json:"username"`
-		Password    string `json:"password"`
-		Admin       bool   `json:"admin"`
-		IssueToken  bool   `json:"issue_token"`
-		TokenName   string `json:"token_name"`
+		Username   string `json:"username"`
+		Password   string `json:"password"`
+		Admin      bool   `json:"admin"`
+		IssueToken bool   `json:"issue_token"`
+		TokenName  string `json:"token_name"`
 	}
 	if err := readJSON(r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid json")
