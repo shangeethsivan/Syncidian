@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Syncidian</title>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
   <script>
     (function () {
       var t = localStorage.getItem("syncidian-theme");
@@ -25,6 +26,9 @@
       --warn: #b25000;
       --blue: #0066cc;
       --ok: #248a3d;
+      --obsidian-a: #7852ee;
+      --obsidian-b: #9270ff;
+      --obsidian-c: #086ddd;
     }
     :root[data-theme="dark"] {
       --bg: #000000;
@@ -39,6 +43,9 @@
       --warn: #ffc857;
       --blue: #6cb6ff;
       --ok: #3ee0a4;
+      --obsidian-a: #7852ee;
+      --obsidian-b: #a882ff;
+      --obsidian-c: #027aff;
     }
     * { box-sizing: border-box; }
     html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text); font: 17px/1.47 ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif; }
@@ -84,8 +91,18 @@
     .err { background: color-mix(in srgb, var(--danger) 16%, transparent); color: var(--danger); }
     .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
     .hidden { display: none !important; }
-    .auth { min-height: 100vh; display: grid; place-items: center; padding: 24px; }
-    .auth .card { width: min(440px, 100%); }
+    .auth { min-height: 100vh; display: grid; place-items: center; padding: 24px; position: relative; z-index: 2; }
+    .auth .card {
+      width: min(440px, 100%); position: relative; z-index: 2;
+      backdrop-filter: blur(12px);
+      background: color-mix(in srgb, var(--card) 88%, transparent);
+    }
+    #hero-canvas {
+      position: fixed; inset: 0; width: 100%; height: 100%;
+      pointer-events: none; z-index: 0; display: none;
+    }
+    #hero-canvas.visible { display: block; }
+    #landing { position: relative; z-index: 1; }
     .flash { padding: 10px 12px; border-radius: 10px; margin: 10px 0; }
     .flash.err { background: color-mix(in srgb, var(--danger) 12%, transparent); color: var(--danger); }
     .flash.ok { background: color-mix(in srgb, var(--ok) 12%, transparent); color: var(--ok); }
@@ -161,7 +178,10 @@
       padding: 22px 40px; position: sticky; top: 0; background: color-mix(in srgb, var(--bg) 86%, transparent);
       backdrop-filter: saturate(180%) blur(20px); z-index: 8;
     }
-    .hero { min-height: 82vh; display: grid; place-items: center; text-align: center; padding: 48px 24px 80px; }
+    .hero {
+      min-height: 82vh; display: grid; place-items: center; text-align: center; padding: 48px 24px 80px;
+      position: relative; z-index: 2;
+    }
     .hero h1 {
       font-size: clamp(48px, 9vw, 96px); font-weight: 600; letter-spacing: -.045em; line-height: .98; margin: 0 0 18px;
     }
@@ -187,6 +207,7 @@
   </style>
 </head>
 <body>
+  <canvas id="hero-canvas" aria-hidden="true"></canvas>
   <div id="landing" class="hidden">
     <header class="site-head">
       <a class="brand" href="/"><span class="dot"></span> Syncidian</a>
@@ -322,6 +343,7 @@ function applyTheme(next) {
   document.querySelectorAll(".theme-toggle").forEach((b) => {
     b.textContent = theme === "dark" ? "Light" : "Dark";
   });
+  if (typeof heroScene !== "undefined" && heroScene.applyTheme) heroScene.applyTheme();
 }
 function toggleTheme() {
   applyTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark");
@@ -586,6 +608,7 @@ function showLanding() {
   hideAll();
   $("help-fab").classList.add("hidden");
   $("landing").classList.remove("hidden");
+  heroScene.start();
   const q = window.__githubQuery;
   if (q && q.flag === "error") {
     const box = $("landing-flash");
@@ -597,6 +620,7 @@ function showAuth() {
   hideAll();
   $("help-fab").classList.remove("hidden");
   $("auth").classList.remove("hidden");
+  heroScene.start();
   $("auth-title").textContent = needsSetup ? "Create the first admin" : "Admin sign in";
   $("auth-sub").textContent = needsSetup
     ? "This is /admin. Choose a username and a password of at least 8 characters. Vault users sign in with GitHub on the public site."
@@ -611,6 +635,7 @@ function showApp() {
   hideAll();
   $("help-fab").classList.remove("hidden");
   $("app").classList.remove("hidden");
+  heroScene.stop();
   $("who").textContent = isAdmin() ? me.username + " · admin" : me.username;
   paintNav();
   render();
@@ -1073,8 +1098,182 @@ async function activity(main) {
   </tbody></table></div>`;
 }
 
+const heroScene = (() => {
+  const canvas = $("hero-canvas");
+  if (!canvas || typeof THREE === "undefined") {
+    return { start() {}, stop() {}, applyTheme() {} };
+  }
+
+  const isLight = () => document.documentElement.dataset.theme !== "dark";
+  const readCss = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+
+  let renderer, scene, camera, core, ring, glow, animId = 0, running = false;
+  let target = { x: 0, y: 0 };
+  let current = { x: 0, y: 0 };
+  let time = 0;
+
+  function applyTheme() {
+    const bg = readCss("--bg");
+    const a = readCss("--obsidian-a");
+    const b = readCss("--obsidian-b");
+    const c = readCss("--obsidian-c");
+    if (renderer) renderer.setClearColor(bg, 1);
+    if (core && core.material && core.material.uniforms) {
+      core.material.uniforms.uColorA.value.set(a);
+      core.material.uniforms.uColorB.value.set(b);
+      core.material.uniforms.uColorC.value.set(c);
+      core.material.uniforms.uLight.value = isLight() ? 0.55 : 0.35;
+    }
+    if (ring && ring.material) {
+      ring.material.color.set(b);
+      ring.material.opacity = isLight() ? 0.22 : 0.32;
+    }
+    if (glow && glow.material) {
+      glow.material.color.set(a);
+      glow.material.opacity = isLight() ? 0.08 : 0.14;
+    }
+  }
+
+  function init() {
+    renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false, powerPreference: "high-performance" });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    scene = new THREE.Scene();
+    camera = new THREE.PerspectiveCamera(42, 1, 0.1, 100);
+    camera.position.z = 5.2;
+
+    const vertex = `
+      varying vec3 vNormal;
+      varying vec3 vPos;
+      void main() {
+        vNormal = normalize(normalMatrix * normal);
+        vPos = (modelViewMatrix * vec4(position, 1.0)).xyz;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }
+    `;
+    const fragment = `
+      uniform vec3 uColorA;
+      uniform vec3 uColorB;
+      uniform vec3 uColorC;
+      uniform float uLight;
+      varying vec3 vNormal;
+      varying vec3 vPos;
+      void main() {
+        vec3 n = normalize(vNormal);
+        float fresnel = pow(1.0 - max(dot(n, vec3(0.0, 0.0, 1.0)), 0.0), 2.2);
+        float band = smoothstep(-0.35, 0.85, n.y + fresnel * 0.35);
+        vec3 col = mix(uColorA, uColorB, band);
+        col = mix(col, uColorC, fresnel * 0.55);
+        float rim = pow(fresnel, 1.4);
+        col += rim * uColorB * (0.35 + uLight);
+        gl_FragColor = vec4(col, 0.92);
+      }
+    `;
+
+    const material = new THREE.ShaderMaterial({
+      vertexShader: vertex,
+      fragmentShader: fragment,
+      uniforms: {
+        uColorA: { value: new THREE.Color("#7852ee") },
+        uColorB: { value: new THREE.Color("#a882ff") },
+        uColorC: { value: new THREE.Color("#027aff") },
+        uLight: { value: 0.35 },
+      },
+      transparent: true,
+    });
+
+    core = new THREE.Mesh(new THREE.IcosahedronGeometry(1.15, 1), material);
+    scene.add(core);
+
+    ring = new THREE.Mesh(
+      new THREE.TorusGeometry(1.85, 0.012, 12, 120),
+      new THREE.MeshBasicMaterial({ color: 0xa882ff, transparent: true, opacity: 0.32 })
+    );
+    ring.rotation.x = Math.PI * 0.42;
+    scene.add(ring);
+
+    glow = new THREE.Mesh(
+      new THREE.SphereGeometry(2.05, 32, 32),
+      new THREE.MeshBasicMaterial({ color: 0x7852ee, transparent: true, opacity: 0.12, depthWrite: false })
+    );
+    scene.add(glow);
+
+    const onMove = (e) => {
+      const w = window.innerWidth || 1;
+      const h = window.innerHeight || 1;
+      const x = ("clientX" in e ? e.clientX : (e.touches && e.touches[0]?.clientX) || w / 2) / w;
+      const y = ("clientY" in e ? e.clientY : (e.touches && e.touches[0]?.clientY) || h / 2) / h;
+      target.x = (x - 0.5) * 2;
+      target.y = (y - 0.5) * 2;
+    };
+
+    window.addEventListener("pointermove", onMove, { passive: true });
+    window.addEventListener("touchmove", onMove, { passive: true });
+    window.addEventListener("resize", resize);
+    resize();
+    applyTheme();
+  }
+
+  function resize() {
+    if (!renderer || !camera) return;
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    renderer.setSize(w, h, false);
+    camera.aspect = w / Math.max(h, 1);
+    camera.updateProjectionMatrix();
+  }
+
+  function tick() {
+    if (!running) return;
+    animId = requestAnimationFrame(tick);
+    time += 0.012;
+    current.x += (target.x - current.x) * 0.06;
+    current.y += (target.y - current.y) * 0.06;
+
+    const tiltX = current.y * 0.42;
+    const tiltY = current.x * 0.55;
+    core.rotation.x = tiltX + Math.sin(time * 0.7) * 0.08;
+    core.rotation.y = tiltY + time * 0.35;
+    core.rotation.z = Math.sin(time * 0.45) * 0.06;
+    core.position.x = current.x * 0.28;
+    core.position.y = -current.y * 0.22;
+
+    ring.rotation.z = -time * 0.22 + current.x * 0.25;
+    ring.rotation.x = Math.PI * 0.42 + current.y * 0.18;
+    ring.position.x = core.position.x * 0.5;
+    ring.position.y = core.position.y * 0.5;
+
+    glow.position.copy(core.position);
+    glow.scale.setScalar(1 + Math.sin(time * 1.1) * 0.04);
+
+    camera.position.x = current.x * 0.18;
+    camera.position.y = -current.y * 0.12;
+    camera.lookAt(core.position);
+    renderer.render(scene, camera);
+  }
+
+  init();
+
+  return {
+    start() {
+      if (running) return;
+      running = true;
+      canvas.classList.add("visible");
+      applyTheme();
+      resize();
+      tick();
+    },
+    stop() {
+      running = false;
+      canvas.classList.remove("visible");
+      if (animId) cancelAnimationFrame(animId);
+    },
+    applyTheme,
+  };
+})();
+
 boot().catch((e) => {
   hideAll();
+  heroScene.stop();
   const wrap = document.createElement("div");
   wrap.className = "wrap";
   wrap.innerHTML = `<div class="flash err">${esc(e.message)}</div><p class="muted">Open /admin if this is a new instance.</p>`;
