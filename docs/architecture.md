@@ -301,7 +301,7 @@ flowchart TD
   Merge --> Resolve
   Auto --> Write["Write chosen bytes to vault"]
   Resolve --> Write
-  Write --> Broadcast["WebSocket file_changed"]
+  Write --> Broadcast["WebSocket file_changed<br/>or other device polls manifest"]
   Write --> Commit["Git commit + optional GitHub push"]
 ```
 
@@ -332,7 +332,7 @@ flowchart LR
   subgraph pluginAuth [Plugin and MCP]
     Tokens["Dashboard Tokens<br/>or CLI: syncidian token create"] --> Raw["sk_sync_… shown once"]
     Raw --> Hash["SHA-256 stored in tokens"]
-    Raw --> Header["Authorization: Bearer"]
+    Raw --> Header["Authorization: Bearer<br/>plugin uses requestUrl"]
   end
 
   Cookie --> Authed["authenticate()"]
@@ -461,7 +461,7 @@ flowchart TB
   C --> CV["vaults/C"]
 ```
 
-A regular user only sees their own devices, tokens, vault, conflicts, activity, and one GitHub repository. Admins manage accounts and cannot call vault, token, device, activity, or GitHub APIs. The WebSocket hub broadcasts per `userID`.
+A regular user only sees their own devices, tokens, vault, conflicts, activity, and one GitHub repository. Admins manage accounts and cannot call vault, token, device, activity, or GitHub APIs. The WebSocket hub broadcasts per `userID`. Devices that cannot keep a socket (typical on some phones) poll `GET /api/v1/sync/manifest` instead.
 
 Admins can create users and list `adminUserSummary` fields (`username`, `is_admin`, `created_at`). They do **not** receive another user's GitHub App credentials, repository, vault bytes, tokens, or activity. Admin login does not require `github_config`.
 
