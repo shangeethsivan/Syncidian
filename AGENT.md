@@ -24,7 +24,7 @@ GitHub-rendered Mermaid diagrams are part of the product docs. After an architec
 | App workflow (public landing → GitHub or email → optional per-user repo) | `README.md` (`# 🗺️ App workflow`) and `docs/architecture.md` (section 3b) |
 | System overview | `README.md` (Vision + Architecture) and `docs/architecture.md` §1 |
 | HTTP surface (public vs session vs plugin) | `docs/architecture.md` §3 |
-| Plugin first sync / edit / conflicts | `docs/architecture.md` §4–7 |
+| Plugin first sync / live updates / edit / conflicts | `docs/architecture.md` §4–7 (`requestUrl`, WS ticket, manifest poll) |
 | Authentication | `docs/architecture.md` §8 |
 | MCP | `docs/architecture.md` §9 |
 | Data model (`github_config.user_id`) | `docs/architecture.md` §10 |
