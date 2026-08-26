@@ -235,7 +235,7 @@ flowchart TD
   Role -->|user| UserHome["User dashboard"]
   UserHome --> Repo["Optional: install GitHub App<br/>one repo for this user · main"]
   UserHome --> Tok["Create sk_sync_ token"]
-  Tok --> Plug["Install Obsidian plugin"]
+  Tok --> Plug["Install plugin<br/>Community plugins · desktop · Android · iOS"]
   Plug --> Sync["Devices sync through the server"]
   Repo --> Backup["Server commits/pushes that user's vault"]
 ```
@@ -250,7 +250,7 @@ Syncidian separates the system into four major components. GitHub renders the ch
 
 ```mermaid
 flowchart TB
-  Plugin["Obsidian plugin"] -->|"HTTPS / WebSocket"| SyncSrv
+  Plugin["Obsidian plugin<br/>desktop + Android + iOS"] -->|"requestUrl HTTPS / WS or poll"| SyncSrv
 
   subgraph SyncSrv [Syncidian server]
     Sync[Sync engine]
@@ -585,6 +585,7 @@ flowchart TB
   Srv --> Win["Windows Obsidian"]
   Srv --> Mac["macOS Obsidian"]
   Srv --> And["Android Obsidian"]
+  Srv --> iOS["iOS Obsidian"]
 ```
 
 The server coordinates changes between clients and synchronizes the durable state with GitHub.
