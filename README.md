@@ -600,7 +600,7 @@ When a user edits a note:
 flowchart TD
   Edit[Edit note] --> Plugin[Obsidian plugin]
   Plugin -->|Detect change| Srv[Syncidian server]
-  Srv --> Other[Other devices]
+  Srv --> Other["Other devices<br/>WS or manifest poll"]
   Srv --> GH[GitHub]
   GH --> SoT[Source of truth]
 ```
