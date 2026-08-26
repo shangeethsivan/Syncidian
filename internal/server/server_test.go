@@ -1230,3 +1230,51 @@ func TestWebsocketTicketNotRawToken(t *testing.T) {
 		t.Fatalf("bad ticket: want 401, got %d %v", res.StatusCode, m)
 	}
 }
+
+func TestMCPLoginAndTools(t *testing.T) {
+	hs, done := newTestServer(t)
+	defer done()
+
+	adminCookies := setupAdmin(t, hs)
+	_ = createAndLoginUser(t, hs, adminCookies, "vault1")
+
+	res, m := doJSON(t, http.MethodPost, hs.URL+"/api/v1/mcp/login", map[string]string{
+		"username": "vault1", "password": "password1",
+	}, nil, "")
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("mcp login: %d %v", res.StatusCode, m)
+	}
+	token, _ := m["token"].(string)
+	if !strings.HasPrefix(token, "sk_sync_") {
+		t.Fatalf("expected sk_sync_ token: %v", m)
+	}
+
+	res, m = doJSON(t, http.MethodPost, hs.URL+"/api/v1/mcp/login", map[string]string{
+		"username": "ada", "password": "password1",
+	}, nil, "")
+	if res.StatusCode != http.StatusForbidden {
+		t.Fatalf("admin mcp login: want 403, got %d %v", res.StatusCode, m)
+	}
+
+	body, _ := json.Marshal(map[string]any{
+		"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": map[string]any{},
+	})
+	req, err := http.NewRequest(http.MethodPost, hs.URL+"/mcp", bytes.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if resp.StatusCode != 200 {
+		t.Fatalf("tools/list: %d %s", resp.StatusCode, raw)
+	}
+	if !strings.Contains(string(raw), "search_notes") || !strings.Contains(string(raw), "get_graph") {
+		t.Fatalf("expected graph/search tools: %s", raw)
+	}
+}

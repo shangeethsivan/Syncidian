@@ -91,6 +91,7 @@ flowchart TB
     L["POST /api/v1/auth/login · /auth/signup"]
     GHO["GET /api/v1/auth/github/start · /callback"]
     AppPub["GET /api/v1/github/app/setup · /callback<br/>GET/POST /api/v1/github/app/webhook · /urls"]
+    MCPLogin["POST /api/v1/mcp/login<br/>password → sk_sync_ token"]
   end
 
   subgraph session [Dashboard session cookie — after login]
@@ -334,26 +335,50 @@ GitHub OAuth is how vault users sign in. Admins sign in at `/admin` with usernam
 ```mermaid
 sequenceDiagram
   participant Client as MCP client
+  participant Login as POST /api/v1/mcp/login
   participant API as POST /mcp
   participant MCP as internal/mcp
   participant Perms as mcp_permissions
   participant Vault as User vault
+  participant Hub as WebSocket hub
 
-  Client->>API: Bearer token + JSON-RPC
+  alt Token from password login
+    Client->>Login: username + password
+    Login-->>Client: sk_sync_ Bearer token
+  else Token from dashboard
+    Note over Client: Tokens page or session cookie
+  end
+
+  Client->>API: Bearer token or session cookie + JSON-RPC
   API->>MCP: Handle(user, body)
   MCP->>Perms: GetMCP(user)
 
   alt initialize
     MCP-->>Client: protocolVersion 2024-11-05
   else tools/list
-    MCP-->>Client: search_notes · list_notes · read_note<br/>create_note · update_note (if allowed)
-  else tools/call
-    MCP->>Vault: Search / read / write
+    MCP-->>Client: search · list · read · graph · backlinks<br/>create · update · append · bulk (if allowed)
+  else tools/call write
+    MCP->>Vault: Search / read / write + UpsertFile
+    MCP->>Hub: file_changed
     MCP-->>Client: text result
   end
 ```
 
 Default permissions are **search + read**. Create and modify are off until the dashboard enables them.
+
+**Auth:** MCP accepts the same vault Bearer `sk_sync_…` token as the plugin, or a dashboard `syncidian_session` cookie. `POST /api/v1/mcp/login` exchanges username/password for a one-time Bearer token (vault users only; admins are rejected).
+
+**Tools (permission-gated):**
+
+| Permission | Tools |
+| --- | --- |
+| search | `search_notes`, `list_notes`, `find_related`, `suggest_note_path` |
+| read | `read_note`, `get_outgoing_links`, `get_backlinks`, `get_graph` |
+| create | `create_note` |
+| modify | `update_note`, `add_backlink`, `move_note`, `delete_note`, `bulk_move`, `bulk_add_links` |
+| create or modify | `append_to_note` |
+
+Writes update the `files` index and broadcast `file_changed` so Obsidian clients stay in sync. `get_graph` returns JSON nodes/edges plus a Mermaid diagram for agents to render.
 
 ---
 
@@ -485,7 +510,7 @@ Railway: mount a volume at `/data`. `railway.json` sets `requiredMountPath` to `
 | Git add / modify / rm / mv | [`internal/gitx/repo.go`](../internal/gitx/repo.go) |
 | GitHub backup | [`internal/server/github.go`](../internal/server/github.go), [`internal/server/github_app.go`](../internal/server/github_app.go), [`internal/githubapp`](../internal/githubapp) |
 | GitHub App self-host setup | [`docs/github-app.md`](github-app.md) |
-| MCP tools | [`internal/mcp/mcp.go`](../internal/mcp/mcp.go) |
+| MCP tools | [`internal/mcp/`](../internal/mcp/) (`mcp.go`, `links.go`, `organize.go`) |
 | Live updates | [`internal/server/ws.go`](../internal/server/ws.go) |
 | Persistence | [`internal/store/store.go`](../internal/store/store.go), [`internal/store/crypt.go`](../internal/store/crypt.go), [`internal/config/persist.go`](../internal/config/persist.go), [`railway.json`](../railway.json) |
 | Dashboard UI | [`internal/web/static/index.html`](../internal/web/static/index.html) |

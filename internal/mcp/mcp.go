@@ -1,19 +1,25 @@
 package mcp
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/shangeethsivan/Syncidian/internal/store"
-	"github.com/shangeethsivan/Syncidian/internal/syncengine"
 )
 
+// OnChange notifies listeners after MCP mutates a vault file.
+type OnChange func(userID, path, hash string, deleted bool)
+
 type Server struct {
-	Store *store.Store
+	Store    *store.Store
+	OnChange OnChange
 }
 
 type rpcRequest struct {
@@ -55,6 +61,12 @@ func marshal(v rpcResponse) ([]byte, error) {
 	return json.Marshal(v)
 }
 
+func (s *Server) notify(userID, path, hash string, deleted bool) {
+	if s.OnChange != nil {
+		s.OnChange(userID, path, hash, deleted)
+	}
+}
+
 func (s *Server) dispatch(user *store.User, method string, params json.RawMessage) (any, error) {
 	switch method {
 	case "initialize":
@@ -62,7 +74,7 @@ func (s *Server) dispatch(user *store.User, method string, params json.RawMessag
 			"protocolVersion": "2024-11-05",
 			"serverInfo": map[string]any{
 				"name":    "syncidian",
-				"version": "0.1.0",
+				"version": "0.2.0",
 			},
 			"capabilities": map[string]any{
 				"tools": map[string]any{},
@@ -81,52 +93,154 @@ func (s *Server) dispatch(user *store.User, method string, params json.RawMessag
 	}
 }
 
-func (s *Server) tools(user *store.User) []map[string]any {
-	perms, _ := s.Store.GetMCP(user.ID)
+func (s *Server) perms(userID string) *store.MCPPermissions {
+	perms, _ := s.Store.GetMCP(userID)
 	if perms == nil {
-		perms = &store.MCPPermissions{Search: true, Read: true}
+		return &store.MCPPermissions{Search: true, Read: true}
 	}
+	return perms
+}
+
+func (s *Server) tools(user *store.User) []map[string]any {
+	perms := s.perms(user.ID)
 	var tools []map[string]any
 	if perms.Search {
-		tools = append(tools, tool("search_notes", "Search vault notes by text query.", map[string]any{
-			"type": "object",
-			"properties": map[string]any{
-				"query": map[string]any{"type": "string", "description": "Case-insensitive substring to find"},
-			},
-			"required": []string{"query"},
-		}))
-		tools = append(tools, tool("list_notes", "List markdown notes in the vault.", map[string]any{
-			"type": "object",
-			"properties": map[string]any{
-				"prefix": map[string]any{"type": "string", "description": "Optional path prefix filter"},
-			},
-		}))
+		tools = append(tools,
+			tool("search_notes", "Search vault notes by text query (path and content).", map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"query": map[string]any{"type": "string", "description": "Case-insensitive substring to find"},
+				},
+				"required": []string{"query"},
+			}),
+			tool("list_notes", "List markdown notes in the vault.", map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"prefix": map[string]any{"type": "string", "description": "Optional path prefix filter"},
+				},
+			}),
+			tool("find_related", "Find notes related to a topic or note path via links and text overlap.", map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"query": map[string]any{"type": "string", "description": "Topic text or note path"},
+					"limit": map[string]any{"type": "number", "description": "Max results (default 15)"},
+				},
+				"required": []string{"query"},
+			}),
+			tool("suggest_note_path", "Suggest where to store a new idea/note based on existing vault structure and content.", map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"topic": map[string]any{"type": "string", "description": "Idea or topic to place"},
+					"kind":  map[string]any{"type": "string", "description": "Optional kind: idea, project, meeting, note"},
+				},
+				"required": []string{"topic"},
+			}),
+		)
 	}
 	if perms.Read {
-		tools = append(tools, tool("read_note", "Read a note by vault-relative path.", map[string]any{
-			"type": "object",
-			"properties": map[string]any{
-				"path": map[string]any{"type": "string", "description": "Note path, e.g. Projects/Ideas.md"},
-			},
-			"required": []string{"path"},
-		}))
+		tools = append(tools,
+			tool("read_note", "Read a note by vault-relative path.", map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"path": map[string]any{"type": "string", "description": "Note path, e.g. Projects/Ideas.md"},
+				},
+				"required": []string{"path"},
+			}),
+			tool("get_outgoing_links", "List Obsidian [[wikilinks]] leaving a note.", map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"path": map[string]any{"type": "string"},
+				},
+				"required": []string{"path"},
+			}),
+			tool("get_backlinks", "List notes that link to the given note.", map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"path": map[string]any{"type": "string"},
+				},
+				"required": []string{"path"},
+			}),
+			tool("get_graph", "Return the vault note graph (nodes, edges) plus a Mermaid diagram for visualization.", map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"prefix": map[string]any{"type": "string", "description": "Optional folder prefix to scope the graph"},
+					"format": map[string]any{"type": "string", "description": "json (default) or mermaid"},
+				},
+			}),
+		)
 	}
 	if perms.Create {
-		tools = append(tools, tool("create_note", "Create a new markdown note.", map[string]any{
-			"type": "object",
-			"properties": map[string]any{
-				"path":    map[string]any{"type": "string"},
-				"content": map[string]any{"type": "string"},
-			},
-			"required": []string{"path", "content"},
-		}))
+		tools = append(tools,
+			tool("create_note", "Create a new markdown note.", map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"path":    map[string]any{"type": "string"},
+					"content": map[string]any{"type": "string"},
+				},
+				"required": []string{"path", "content"},
+			}),
+		)
 	}
 	if perms.Modify {
-		tools = append(tools, tool("update_note", "Overwrite an existing note.", map[string]any{
+		tools = append(tools,
+			tool("update_note", "Overwrite an existing note.", map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"path":    map[string]any{"type": "string"},
+					"content": map[string]any{"type": "string"},
+				},
+				"required": []string{"path", "content"},
+			}),
+			tool("add_backlink", "Append a [[wikilink]] from one note to another.", map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"from":  map[string]any{"type": "string", "description": "Note that will contain the link"},
+					"to":    map[string]any{"type": "string", "description": "Note being linked"},
+					"alias": map[string]any{"type": "string", "description": "Optional display alias"},
+				},
+				"required": []string{"from", "to"},
+			}),
+			tool("move_note", "Rename or move a note within the vault.", map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"from": map[string]any{"type": "string"},
+					"to":   map[string]any{"type": "string"},
+				},
+				"required": []string{"from", "to"},
+			}),
+			tool("delete_note", "Delete a note from the vault.", map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"path": map[string]any{"type": "string"},
+				},
+				"required": []string{"path"},
+			}),
+			tool("bulk_move", "Move many notes from one folder prefix to another (organize / clean up).", map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"from_prefix": map[string]any{"type": "string"},
+					"to_prefix":   map[string]any{"type": "string"},
+					"paths":       map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "Optional subset; defaults to all notes under from_prefix"},
+				},
+				"required": []string{"from_prefix", "to_prefix"},
+			}),
+			tool("bulk_add_links", "Add a wikilink to the same target note from many source notes.", map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"link_to": map[string]any{"type": "string"},
+					"paths":   map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
+				},
+				"required": []string{"link_to", "paths"},
+			}),
+		)
+	}
+	if perms.Create || perms.Modify {
+		tools = append(tools, tool("append_to_note", "Append content to a note (creates it if missing and create is allowed).", map[string]any{
 			"type": "object",
 			"properties": map[string]any{
 				"path":    map[string]any{"type": "string"},
 				"content": map[string]any{"type": "string"},
+				"heading": map[string]any{"type": "string", "description": "Optional heading to append under"},
 			},
 			"required": []string{"path", "content"},
 		}))
@@ -153,29 +267,48 @@ func (s *Server) callTool(user *store.User, params json.RawMessage) (any, error)
 	if p.Arguments == nil {
 		p.Arguments = map[string]any{}
 	}
-	perms, _ := s.Store.GetMCP(user.ID)
-	if perms == nil {
-		perms = &store.MCPPermissions{Search: true, Read: true}
-	}
+	perms := s.perms(user.ID)
 	switch p.Name {
 	case "list_notes":
 		if !perms.Search {
 			return nil, fmt.Errorf("permission denied")
 		}
-		prefix, _ := p.Arguments["prefix"].(string)
-		return s.listNotes(user.ID, prefix)
+		return s.listNotes(user.ID, str(p.Arguments["prefix"]))
 	case "search_notes":
 		if !perms.Search {
 			return nil, fmt.Errorf("permission denied")
 		}
-		q, _ := p.Arguments["query"].(string)
-		return s.searchNotes(user.ID, q)
+		return s.searchNotes(user.ID, str(p.Arguments["query"]))
+	case "find_related":
+		if !perms.Search {
+			return nil, fmt.Errorf("permission denied")
+		}
+		return s.findRelated(user.ID, str(p.Arguments["query"]), intArg(p.Arguments["limit"]))
+	case "suggest_note_path":
+		if !perms.Search {
+			return nil, fmt.Errorf("permission denied")
+		}
+		return s.suggestNotePath(user.ID, str(p.Arguments["topic"]), str(p.Arguments["kind"]))
 	case "read_note":
 		if !perms.Read {
 			return nil, fmt.Errorf("permission denied")
 		}
-		path, _ := p.Arguments["path"].(string)
-		return s.readNote(user.ID, path)
+		return s.readNote(user.ID, str(p.Arguments["path"]))
+	case "get_outgoing_links":
+		if !perms.Read {
+			return nil, fmt.Errorf("permission denied")
+		}
+		return s.outgoingLinks(user.ID, str(p.Arguments["path"]))
+	case "get_backlinks":
+		if !perms.Read {
+			return nil, fmt.Errorf("permission denied")
+		}
+		return s.backlinks(user.ID, str(p.Arguments["path"]))
+	case "get_graph":
+		if !perms.Read {
+			return nil, fmt.Errorf("permission denied")
+		}
+		return s.buildGraph(user.ID, str(p.Arguments["prefix"]), str(p.Arguments["format"]))
 	case "create_note":
 		if !perms.Create {
 			return nil, fmt.Errorf("permission denied")
@@ -186,14 +319,91 @@ func (s *Server) callTool(user *store.User, params json.RawMessage) (any, error)
 			return nil, fmt.Errorf("permission denied")
 		}
 		return s.writeNote(user.ID, str(p.Arguments["path"]), str(p.Arguments["content"]), true)
+	case "append_to_note":
+		return s.callAppend(user.ID, perms, str(p.Arguments["path"]), str(p.Arguments["content"]), str(p.Arguments["heading"]))
+	case "add_backlink":
+		if !perms.Modify {
+			return nil, fmt.Errorf("permission denied")
+		}
+		return s.addBacklink(user.ID, str(p.Arguments["from"]), str(p.Arguments["to"]), str(p.Arguments["alias"]))
+	case "move_note":
+		if !perms.Modify {
+			return nil, fmt.Errorf("permission denied")
+		}
+		return s.moveNote(user.ID, str(p.Arguments["from"]), str(p.Arguments["to"]))
+	case "delete_note":
+		if !perms.Modify {
+			return nil, fmt.Errorf("permission denied")
+		}
+		return s.deleteNote(user.ID, str(p.Arguments["path"]))
+	case "bulk_move":
+		if !perms.Modify {
+			return nil, fmt.Errorf("permission denied")
+		}
+		return s.bulkMove(user.ID, str(p.Arguments["from_prefix"]), str(p.Arguments["to_prefix"]), strSlice(p.Arguments["paths"]))
+	case "bulk_add_links":
+		if !perms.Modify {
+			return nil, fmt.Errorf("permission denied")
+		}
+		return s.bulkAddLinks(user.ID, str(p.Arguments["link_to"]), strSlice(p.Arguments["paths"]))
 	default:
 		return nil, fmt.Errorf("unknown tool %s", p.Name)
 	}
 }
 
+func (s *Server) callAppend(userID string, perms *store.MCPPermissions, path, content, heading string) (any, error) {
+	path, ok := vaultRel(ensureMD(path))
+	if !ok {
+		return nil, fmt.Errorf("invalid path")
+	}
+	root := filepath.ToSlash(s.Store.VaultDir(userID))
+	full, ok := vaultJoin(root, path)
+	if !ok {
+		return nil, fmt.Errorf("invalid path")
+	}
+	_, err := os.Stat(filepath.FromSlash(full))
+	exists := err == nil
+	if exists {
+		if !perms.Modify {
+			return nil, fmt.Errorf("permission denied")
+		}
+	} else if !perms.Create {
+		return nil, fmt.Errorf("permission denied")
+	}
+	return s.appendToNote(userID, path, content, heading)
+}
+
 func str(v any) string {
 	s, _ := v.(string)
 	return s
+}
+
+func intArg(v any) int {
+	switch n := v.(type) {
+	case float64:
+		return int(n)
+	case int:
+		return n
+	case json.Number:
+		i, _ := n.Int64()
+		return int(i)
+	default:
+		return 0
+	}
+}
+
+func strSlice(v any) []string {
+	arr, ok := v.([]any)
+	if !ok {
+		return nil
+	}
+	out := make([]string, 0, len(arr))
+	for _, item := range arr {
+		if s, ok := item.(string); ok && s != "" {
+			out = append(out, s)
+		}
+	}
+	return out
 }
 
 func textResult(text string) map[string]any {
@@ -233,20 +443,45 @@ func (s *Server) searchNotes(userID, query string) (any, error) {
 		return nil, err
 	}
 	q := strings.ToLower(query)
-	var hits []string
-	root := s.Store.VaultDir(userID)
+	type hit struct {
+		Path    string `json:"path"`
+		Snippet string `json:"snippet,omitempty"`
+	}
+	var hits []hit
+	root := filepath.ToSlash(s.Store.VaultDir(userID))
 	for _, f := range files {
 		if !strings.HasSuffix(strings.ToLower(f.Path), ".md") {
 			continue
 		}
-		b, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(f.Path)))
+		full, ok := vaultJoin(root, f.Path)
+		if !ok {
+			continue
+		}
+		b, err := os.ReadFile(filepath.FromSlash(full))
 		if err != nil || !utf8.Valid(b) {
 			continue
 		}
 		body := string(b)
-		if strings.Contains(strings.ToLower(f.Path), q) || strings.Contains(strings.ToLower(body), q) {
-			hits = append(hits, f.Path)
+		pathHit := strings.Contains(strings.ToLower(f.Path), q)
+		bodyLower := strings.ToLower(body)
+		bodyHit := strings.Contains(bodyLower, q)
+		if !pathHit && !bodyHit {
+			continue
 		}
+		snippet := ""
+		if bodyHit {
+			idx := strings.Index(bodyLower, q)
+			start := idx - 40
+			if start < 0 {
+				start = 0
+			}
+			end := idx + len(q) + 40
+			if end > len(body) {
+				end = len(body)
+			}
+			snippet = strings.ReplaceAll(body[start:end], "\n", " ")
+		}
+		hits = append(hits, hit{Path: f.Path, Snippet: snippet})
 		if len(hits) >= 50 {
 			break
 		}
@@ -254,42 +489,60 @@ func (s *Server) searchNotes(userID, query string) (any, error) {
 	if len(hits) == 0 {
 		return textResult("No matches."), nil
 	}
-	return textResult(strings.Join(hits, "\n")), nil
+	raw, _ := json.MarshalIndent(hits, "", "  ")
+	return textResult(string(raw)), nil
 }
 
 func (s *Server) readNote(userID, path string) (any, error) {
-	path = strings.TrimPrefix(filepath.ToSlash(path), "/")
-	if syncengine.Ignore(path) {
-		return nil, fmt.Errorf("path is ignored")
-	}
-	b, err := os.ReadFile(filepath.Join(s.Store.VaultDir(userID), filepath.FromSlash(path)))
+	body, err := s.readVaultText(userID, ensureMD(path))
 	if err != nil {
-		return nil, fmt.Errorf("note not found")
+		return nil, err
 	}
-	return textResult(string(b)), nil
+	return textResult(body), nil
 }
 
 func (s *Server) writeNote(userID, path, content string, mustExist bool) (any, error) {
-	path = strings.TrimPrefix(filepath.ToSlash(path), "/")
-	if path == "" || syncengine.Ignore(path) {
+	path, ok := vaultRel(ensureMD(path))
+	if !ok {
 		return nil, fmt.Errorf("invalid path")
 	}
-	if !strings.HasSuffix(strings.ToLower(path), ".md") {
-		path += ".md"
+	root := filepath.ToSlash(s.Store.VaultDir(userID))
+	full, ok := vaultJoin(root, path)
+	if !ok {
+		return nil, fmt.Errorf("invalid path")
 	}
-	full := filepath.Join(s.Store.VaultDir(userID), filepath.FromSlash(path))
+	abs := filepath.FromSlash(full)
 	if mustExist {
-		if _, err := os.Stat(full); err != nil {
+		if _, err := os.Stat(abs); err != nil {
 			return nil, fmt.Errorf("note not found")
 		}
-	} else if _, err := os.Stat(full); err == nil {
+	} else if _, err := os.Stat(abs); err == nil {
 		return nil, fmt.Errorf("note already exists")
 	}
-	if err := os.MkdirAll(filepath.Dir(full), 0o700); err != nil {
+	if err := os.MkdirAll(filepath.Dir(abs), 0o700); err != nil {
 		return nil, err
 	}
-	if err := os.WriteFile(full, []byte(content), 0o600); err != nil {
+	data := []byte(content)
+	if err := os.WriteFile(abs, data, 0o600); err != nil {
 		return nil, err
 	}
+	sum := sha256.Sum256(data)
+	hash := hex.EncodeToString(sum[:])
+	mtime := time.Now().UnixMilli()
+	if err := s.Store.UpsertFile(store.FileMeta{
+		UserID: userID,
+		Path:   path,
+		Hash:   hash,
+		Size:   int64(len(data)),
+		Mtime:  mtime,
+	}); err != nil {
+		return nil, err
+	}
+	s.notify(userID, path, hash, false)
+	action := "mcp.create"
+	if mustExist {
+		action = "mcp.update"
+	}
+	_ = s.Store.AddActivity(store.Activity{UserID: userID, Action: action, Detail: path})
 	return textResult("Wrote " + path), nil
 }

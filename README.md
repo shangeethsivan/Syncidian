@@ -110,6 +110,15 @@ POST http://localhost:8080/mcp
 Authorization: Bearer sk_sync_…
 ```
 
+Create a token on the **Tokens** page, or exchange a password for one:
+
+```text
+POST http://localhost:8080/api/v1/mcp/login
+{"username":"you","password":"…"}
+```
+
+Dashboard session cookies also work on `/mcp`. Tools cover search, graph/backlinks, create/update/append, and bulk organize when permissions allow.
+
 ---
 
 # 📦 Publishing the Obsidian plugin
@@ -737,24 +746,28 @@ The goal is:
 
 Syncidian includes a built-in **Model Context Protocol (MCP) server**.
 
-This provides a controlled interface between your Obsidian knowledge base and AI tools.
+This provides a controlled interface between your Obsidian knowledge base and AI tools (Cursor, Claude, and other MCP clients).
 
 ```mermaid
 flowchart TB
-  Tools["AI tools<br/>Claude · Gemini · agents"] -->|"MCP"| MCP["Syncidian MCP server"]
+  Tools["AI tools<br/>Cursor · Claude · agents"] -->|"Bearer token or login"| MCP["Syncidian MCP server"]
   MCP --> Vault["Obsidian vault"]
+  MCP --> Graph["Wikilink graph"]
 ```
 
-Potential capabilities:
+**Authenticate** with a dashboard access token (`Authorization: Bearer sk_sync_…`), a dashboard session cookie, or `POST /api/v1/mcp/login` with username/password to mint a token.
 
-* Search notes
-* Read notes
-* List notes
-* Find related notes
-* Create notes
-* Update notes
-* Navigate knowledge
-* Provide context to AI agents
+Capabilities:
+
+* Search and list notes
+* Read notes and append under headings
+* Create and update notes
+* Wikilink backlinks and outgoing links
+* Vault graph as JSON + Mermaid for visualization
+* Suggest where to store ideas (`suggest_note_path`) and find related notes
+* Bulk move / bulk link for organizing the vault
+
+Permissions default to search + read. Enable create/modify in **Dashboard → MCP / AI**.
 
 ---
 
@@ -1181,9 +1194,11 @@ The self-hosted version will remain free and open source.
 * [x] Read notes
 * [x] Create notes
 * [x] Update notes
-* [ ] Related-note discovery
+* [x] Related-note discovery
+* [x] Backlinks and vault graph
+* [x] Bulk organize tools
 * [x] Permission management
-* [x] MCP authentication
+* [x] MCP authentication (token + password login)
 
 ## 🧠 AI Conflict Resolution
 

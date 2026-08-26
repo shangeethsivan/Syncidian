@@ -375,6 +375,52 @@ func (s *Server) handleSetMCP(w http.ResponseWriter, r *http.Request, u *store.U
 	writeJSON(w, http.StatusOK, req)
 }
 
+// handleMCPLogin exchanges username/password for a Bearer token usable with POST /mcp.
+// Admins are rejected — MCP is vault-user only.
+func (s *Server) handleMCPLogin(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Username  string `json:"username"`
+		Password  string `json:"password"`
+		TokenName string `json:"token_name"`
+	}
+	if err := readJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid json")
+		return
+	}
+	req.Username = strings.TrimSpace(req.Username)
+	if req.Username == "" || req.Password == "" {
+		writeError(w, http.StatusBadRequest, "username and password required")
+		return
+	}
+	u, err := s.Store.GetUserByUsername(req.Username)
+	if err != nil || u == nil || u.PasswordHash == "" || !checkPassword(u.PasswordHash, req.Password) {
+		writeError(w, http.StatusUnauthorized, "invalid credentials")
+		return
+	}
+	if u.IsAdmin {
+		writeError(w, http.StatusForbidden, "admins cannot use MCP; sign in as a vault user")
+		return
+	}
+	name := strings.TrimSpace(req.TokenName)
+	if name == "" {
+		name = "MCP"
+	}
+	raw, prefix, tok, err := s.issueVaultToken(u, name)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	_ = s.Store.AddActivity(store.Activity{UserID: u.ID, Action: "mcp.login", Detail: name})
+	writeJSON(w, http.StatusOK, map[string]any{
+		"token":    raw,
+		"prefix":   prefix,
+		"id":       tok.ID,
+		"name":     tok.Name,
+		"endpoint": "/mcp",
+		"note":     "Use Authorization: Bearer <token> on POST /mcp. This token is shown only once.",
+	})
+}
+
 func (s *Server) handleMCP(w http.ResponseWriter, r *http.Request, u *store.User) {
 	body, err := io.ReadAll(io.LimitReader(r.Body, 4<<20))
 	if err != nil {
@@ -394,9 +440,14 @@ func (s *Server) handleMCP(w http.ResponseWriter, r *http.Request, u *store.User
 func (s *Server) handleMCPInfo(w http.ResponseWriter, r *http.Request, _ *store.User) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"name":      "syncidian",
-		"version":   "0.1.0",
+		"version":   "0.2.0",
 		"transport": "streamable-http",
 		"endpoint":  "/mcp",
+		"auth": map[string]any{
+			"bearer_token": "Authorization: Bearer sk_sync_… (create via dashboard Tokens or POST /api/v1/mcp/login)",
+			"session":      "Dashboard cookie syncidian_session after POST /api/v1/auth/login",
+			"login":        "POST /api/v1/mcp/login with {username, password} returns a Bearer token",
+		},
 	})
 }
 
