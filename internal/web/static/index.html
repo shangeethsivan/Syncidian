@@ -1112,12 +1112,12 @@ async function mcp(main) {
   const p = await api("/api/v1/mcp");
   main.innerHTML = `
     <h1>MCP / AI</h1>
-    <p class="muted">Least privilege by default. AI tools authenticate with the same access token as Obsidian.</p>
+    <p class="muted">Least privilege by default. AI tools authenticate with a Bearer access token, a dashboard session, or <code>POST /api/v1/mcp/login</code>.</p>
     <div class="card">
-      <div class="check"><input id="m-search" type="checkbox" ${p.Search || p.search ? "checked" : ""} /> Search notes</div>
-      <div class="check"><input id="m-read" type="checkbox" ${p.Read || p.read ? "checked" : ""} /> Read notes</div>
+      <div class="check"><input id="m-search" type="checkbox" ${p.Search || p.search ? "checked" : ""} /> Search notes (includes find related / suggest path)</div>
+      <div class="check"><input id="m-read" type="checkbox" ${p.Read || p.read ? "checked" : ""} /> Read notes (includes backlinks / graph)</div>
       <div class="check"><input id="m-create" type="checkbox" ${p.Create || p.create ? "checked" : ""} /> Create notes</div>
-      <div class="check"><input id="m-modify" type="checkbox" ${p.Modify || p.modify ? "checked" : ""} /> Modify notes</div>
+      <div class="check"><input id="m-modify" type="checkbox" ${p.Modify || p.modify ? "checked" : ""} /> Modify notes (update, backlinks, move, bulk organize)</div>
       <button class="btn" id="m-save" type="button">Save permissions</button>
       <div id="m-flash"></div>
     </div>
@@ -1132,6 +1132,8 @@ async function mcp(main) {
     }
   }
 }</pre>
+      <p class="muted">Password login (returns a one-time token): <code>POST ${esc(location.origin)}/api/v1/mcp/login</code> with <code>{"username","password"}</code>.</p>
+      <p class="muted">Tools include search, read, graph, backlinks, create/update/append, and bulk move/link when permissions allow.</p>
     </div>`;
   $("m-save").onclick = async () => {
     try {

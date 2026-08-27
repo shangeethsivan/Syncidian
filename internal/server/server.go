@@ -51,6 +51,14 @@ func New(cfg config.Config, st *store.Store, log *slog.Logger) *Server {
 		hub:   NewHub(),
 		start: time.Now(),
 	}
+	s.MCP.OnChange = func(userID, path, hash string, deleted bool) {
+		s.hub.Broadcast(userID, "", map[string]any{
+			"type":    "file_changed",
+			"path":    path,
+			"hash":    hash,
+			"deleted": deleted,
+		})
+	}
 	return s
 }
 
@@ -106,6 +114,7 @@ func (s *Server) Handler() http.Handler {
 
 	mux.HandleFunc("GET /api/v1/mcp", s.sessionVaultAuthed(s.handleGetMCP))
 	mux.HandleFunc("POST /api/v1/mcp", s.sessionVaultAuthed(s.handleSetMCP))
+	mux.HandleFunc("POST /api/v1/mcp/login", s.handleMCPLogin)
 	mux.HandleFunc("POST /mcp", s.vaultAuthed(s.handleMCP))
 	mux.HandleFunc("GET /mcp", s.vaultAuthed(s.handleMCPInfo))
 
