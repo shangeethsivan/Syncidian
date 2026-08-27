@@ -112,7 +112,7 @@ func (s *Server) handleSignup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if n == 0 {
-		writeError(w, http.StatusBadRequest, "Create the first admin at /admin before signing up.")
+		writeError(w, http.StatusBadRequest, "Create the first admin before signing up.")
 		return
 	}
 	var req struct {

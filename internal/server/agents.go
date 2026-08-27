@@ -106,6 +106,10 @@ func (s *Server) handleRobots(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(&b, "Sitemap: %s/sitemap.xml\n", origin)
 	fmt.Fprintf(&b, "Agentmap: %s/.well-known/ai-catalog.json\n\n", origin)
 	b.WriteString("User-agent: *\nAllow: /\n")
+	fmt.Fprintf(&b, "Disallow: %s\n", s.adminPath())
+	if s.adminPath() != "/admin" {
+		b.WriteString("Disallow: /admin\n")
+	}
 	b.WriteString("Content-Signal: search=yes, ai-train=yes, ai-input=yes\n\n")
 	for _, bot := range strings.Split(aiBots, ", ") {
 		fmt.Fprintf(&b, "User-agent: %s\nAllow: /\nContent-Signal: search=yes, ai-train=yes, ai-input=yes\n\n", bot)
@@ -115,7 +119,7 @@ func (s *Server) handleRobots(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleSitemap(w http.ResponseWriter, r *http.Request) {
 	origin := s.publicOrigin(r)
-	paths := []string{"/", "/admin", "/auth.md", "/openapi.json", "/.well-known/mcp/server-card.json", "/.well-known/api-catalog", "/assets/obsidian.zip"}
+	paths := []string{"/", "/auth.md", "/openapi.json", "/.well-known/mcp/server-card.json", "/.well-known/api-catalog", "/assets/obsidian.zip"}
 	var b strings.Builder
 	b.WriteString(`<?xml version="1.0" encoding="UTF-8"?>` + "\n")
 	b.WriteString(`<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">` + "\n")

@@ -477,7 +477,9 @@ func TestDashboardServed(t *testing.T) {
 		`id="hero-canvas"`,
 		`snoise`,
 		`id="auth-btn" type="button">Sign in</button`,
-		`href="/admin"`,
+		`id="cinematic-footer"`,
+		`id="nerds-toggle"`,
+		`Stats for Nerds`,
 		`/api/v1/auth/github/callback`,
 		`/api/v1/github/app/setup`,
 		`/api/v1/github/app/webhook`,
@@ -532,6 +534,7 @@ func TestDashboardServed(t *testing.T) {
 		`id="gh-branch"`,
 		`id="gh-token"`,
 		`Personal access token (repo scope)`,
+		`href="/admin">Admin`,
 	} {
 		if bytes.Contains(b, []byte(forbidden)) {
 			t.Fatalf("dashboard still gates login behind GitHub setup: %q", forbidden)
@@ -956,8 +959,8 @@ func TestPublicLandingAdminAndGitHubAppURLs(t *testing.T) {
 		t.Fatalf("github start before setup: %d", redir.StatusCode)
 	}
 	loc := redir.Header.Get("Location")
-	if !strings.HasSuffix(loc, "/admin") {
-		t.Fatalf("github start before setup should send people to /admin, got %q", loc)
+	if !strings.Contains(loc, "github=error") {
+		t.Fatalf("github start before setup should stay on the public site, got %q", loc)
 	}
 
 	adminCookies := setupAdmin(t, hs)
@@ -1086,6 +1089,40 @@ func TestPublicLandingAdminAndGitHubAppURLs(t *testing.T) {
 	loc = redir.Header.Get("Location")
 	if !strings.Contains(loc, "https://github.com/login/oauth/authorize") || !strings.Contains(loc, "client_id=Iv1.xyz") {
 		t.Fatalf("expected GitHub OAuth redirect, got %q", loc)
+	}
+}
+
+func TestCustomAdminPathHidden(t *testing.T) {
+	dir := t.TempDir()
+	st, err := store.Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	srv := New(config.Config{Addr: ":0", DataDir: dir, PublicURL: "http://localhost", AdminPath: "/ops-gate"}, st, nil)
+	hs := httptest.NewServer(srv.Handler())
+	defer hs.Close()
+
+	res, err := http.Get(hs.URL + "/admin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	res.Body.Close()
+	if res.StatusCode != http.StatusNotFound {
+		t.Fatalf("default /admin should 404 when AdminPath is custom, got %d", res.StatusCode)
+	}
+	res, err = http.Get(hs.URL + "/ops-gate")
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, _ := io.ReadAll(res.Body)
+	res.Body.Close()
+	if res.StatusCode != 200 || !bytes.Contains(b, []byte(`isAdminPath`)) {
+		t.Fatalf("custom operator path: %d", res.StatusCode)
+	}
+	res, body := getBody(t, hs.URL+"/robots.txt", "")
+	if res.StatusCode != 200 || !strings.Contains(string(body), "Disallow: /ops-gate") {
+		t.Fatalf("robots should disallow custom operator path:\n%s", body)
 	}
 }
 

@@ -154,7 +154,7 @@ func (s *Server) handleGitHubAppCallback(w http.ResponseWriter, r *http.Request)
 			s.dashboardRedirect(w, r, url.Values{"github": {"error"}, "message": {err.Error()}})
 			return
 		}
-		http.Redirect(w, r, s.requestBase(r)+"/admin?github=app-ready", http.StatusFound)
+		http.Redirect(w, r, s.adminURL(r)+"?github=app-ready", http.StatusFound)
 		return
 	}
 	cfg := &store.GitHubConfig{
@@ -200,7 +200,7 @@ func (s *Server) handleGitHubAppSetup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if user.IsAdmin {
-		http.Redirect(w, r, s.requestBase(r)+"/admin", http.StatusFound)
+		http.Redirect(w, r, s.adminURL(r), http.StatusFound)
 		return
 	}
 	s.finishInstallation(w, r, user, installationID)

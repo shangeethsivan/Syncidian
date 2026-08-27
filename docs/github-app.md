@@ -4,7 +4,7 @@ Anyone running their own Syncidian instance needs **one GitHub App** for that in
 
 Do this after the server is reachable at a URL you will keep (for example `https://syncidian.example.com` or `http://localhost:8080` for a private laptop).
 
-The operator UI is **`/admin`**, not the public landing page.
+The operator UI is **`SYNCIDIAN_ADMIN_PATH`** (default **`/admin`**), not the public landing page. It is not linked from `/`. Enable **Stats for Nerds** on that page to see GitHub App URLs and credential paste.
 
 ---
 
