@@ -101,9 +101,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/sync/file", s.vaultAuthed(s.handleSyncFile))
 	mux.HandleFunc("GET /api/v1/sync/manifest", s.vaultAuthed(s.handleManifest))
 
-	mux.HandleFunc("GET /api/v1/conflicts", s.sessionVaultAuthed(s.handleListConflicts))
-	mux.HandleFunc("GET /api/v1/conflicts/{id}", s.sessionVaultAuthed(s.handleGetConflict))
-	mux.HandleFunc("POST /api/v1/conflicts/{id}/resolve", s.sessionVaultAuthed(s.handleResolveConflict))
+	mux.HandleFunc("GET /api/v1/conflicts", s.vaultAuthed(s.handleListConflicts))
+	mux.HandleFunc("GET /api/v1/conflicts/{id}", s.vaultAuthed(s.handleGetConflict))
+	mux.HandleFunc("POST /api/v1/conflicts/{id}/resolve", s.vaultAuthed(s.handleResolveConflict))
 
 	mux.HandleFunc("GET /api/v1/github", s.sessionVaultAuthed(s.handleGetGitHub))
 	mux.HandleFunc("POST /api/v1/github", s.sessionVaultAuthed(s.handleSetGitHub))
