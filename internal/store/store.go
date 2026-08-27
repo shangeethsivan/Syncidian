@@ -809,7 +809,200 @@ func (s *Store) Stats(userID string) (Stats, error) {
 	var last sql.NullString
 	_ = s.db.QueryRow(`SELECT MAX(last_sync_at) FROM devices WHERE user_id = ?`, userID).Scan(&last)
 	st.LastSync = parseTimePtr(last)
+	usage, err := s.MCPUsage(userID)
+	if err == nil {
+		st.MCPClientCount = usage.ClientCount
+		st.MCPActive = usage.ActiveClients
+		st.MCPTotalCalls = usage.TotalCalls
+		st.MCPCalls7d = usage.Calls7d
+		st.LastMCPCall = usage.LastCallAt
+	}
 	return st, nil
+}
+
+const mcpActiveWindow = 15 * time.Minute
+
+func mcpClientKey(name, userAgent, tokenID string) string {
+	if tokenID != "" {
+		return "token:" + tokenID
+	}
+	n := strings.ToLower(strings.TrimSpace(name))
+	if n != "" {
+		return "name:" + n
+	}
+	if label := mcpUserAgentLabel(userAgent); label != "" {
+		return "ua:" + strings.ToLower(label)
+	}
+	return "unknown"
+}
+
+func mcpUserAgentLabel(ua string) string {
+	ua = strings.TrimSpace(ua)
+	if ua == "" {
+		return ""
+	}
+	lower := strings.ToLower(ua)
+	known := []string{
+		"claude-code", "claude", "cursor", "windsurf", "cline", "continue",
+		"copilot", "gemini", "goose", "chatgpt", "openai", "anthropic",
+		"vscode", "zed",
+	}
+	for _, k := range known {
+		if strings.Contains(lower, k) {
+			return k
+		}
+	}
+	if i := strings.IndexAny(ua, "/ \t"); i > 0 {
+		return ua[:i]
+	}
+	if len(ua) > 48 {
+		return ua[:48]
+	}
+	return ua
+}
+
+func (s *Store) RecordMCPEvent(e MCPEvent) error {
+	if e.UserID == "" {
+		return nil
+	}
+	method := strings.TrimSpace(e.Method)
+	if method == "" {
+		return nil
+	}
+	name := strings.TrimSpace(e.Name)
+	version := strings.TrimSpace(e.Version)
+	ua := strings.TrimSpace(e.UserAgent)
+	key := mcpClientKey(name, ua, e.TokenID)
+	display := strings.TrimSpace(name)
+	if display == "" {
+		display = mcpUserAgentLabel(ua)
+	}
+	tool := strings.TrimSpace(e.Tool)
+	initInc := 0
+	callInc := 0
+	switch method {
+	case "initialize":
+		initInc = 1
+	case "tools/call":
+		callInc = 1
+	}
+	nowStr := now()
+	_, err := s.db.Exec(`
+INSERT INTO mcp_clients (
+  id, user_id, client_key, name, version, user_agent, token_id, token_name, token_prefix,
+  first_seen_at, last_seen_at, initialize_count, call_count, last_tool
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT(user_id, client_key) DO UPDATE SET
+  name = CASE WHEN excluded.name != '' THEN excluded.name ELSE mcp_clients.name END,
+  version = CASE WHEN excluded.version != '' THEN excluded.version ELSE mcp_clients.version END,
+  user_agent = CASE WHEN excluded.user_agent != '' THEN excluded.user_agent ELSE mcp_clients.user_agent END,
+  token_id = CASE WHEN excluded.token_id != '' THEN excluded.token_id ELSE mcp_clients.token_id END,
+  token_name = CASE WHEN excluded.token_name != '' THEN excluded.token_name ELSE mcp_clients.token_name END,
+  token_prefix = CASE WHEN excluded.token_prefix != '' THEN excluded.token_prefix ELSE mcp_clients.token_prefix END,
+  last_seen_at = excluded.last_seen_at,
+  initialize_count = mcp_clients.initialize_count + excluded.initialize_count,
+  call_count = mcp_clients.call_count + excluded.call_count,
+  last_tool = CASE WHEN excluded.last_tool != '' THEN excluded.last_tool ELSE mcp_clients.last_tool END
+`, NewID(), e.UserID, key, display, version, ua, e.TokenID, e.TokenName, e.TokenPrefix,
+		nowStr, nowStr, initInc, callInc, tool)
+	if err != nil {
+		return err
+	}
+	var clientID string
+	if err := s.db.QueryRow(`SELECT id FROM mcp_clients WHERE user_id = ? AND client_key = ?`, e.UserID, key).Scan(&clientID); err != nil {
+		return err
+	}
+	if method == "initialize" || method == "tools/call" {
+		if _, err := s.db.Exec(
+			`INSERT INTO mcp_calls (id, user_id, client_id, tool, method, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
+			NewID(), e.UserID, clientID, tool, method, nowStr,
+		); err != nil {
+			return err
+		}
+		cutoff := time.Now().UTC().Add(-90 * 24 * time.Hour).Format(time.RFC3339Nano)
+		_, _ = s.db.Exec(`DELETE FROM mcp_calls WHERE user_id = ? AND created_at < ?`, e.UserID, cutoff)
+	}
+	if method == "tools/call" && tool != "" {
+		_, err = s.db.Exec(`
+INSERT INTO mcp_tool_stats (user_id, tool, call_count, last_called_at) VALUES (?, ?, 1, ?)
+ON CONFLICT(user_id, tool) DO UPDATE SET
+  call_count = mcp_tool_stats.call_count + 1,
+  last_called_at = excluded.last_called_at
+`, e.UserID, tool, nowStr)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *Store) MCPUsage(userID string) (MCPUsage, error) {
+	u := MCPUsage{Clients: []MCPClient{}, Tools: []MCPToolStat{}}
+	_ = s.db.QueryRow(`SELECT COUNT(*), COALESCE(SUM(call_count),0) FROM mcp_clients WHERE user_id = ?`, userID).
+		Scan(&u.ClientCount, &u.TotalCalls)
+	activeCutoff := time.Now().UTC().Add(-mcpActiveWindow).Format(time.RFC3339Nano)
+	_ = s.db.QueryRow(`SELECT COUNT(*) FROM mcp_clients WHERE user_id = ? AND last_seen_at >= ?`, userID, activeCutoff).
+		Scan(&u.ActiveClients)
+	dayAgo := time.Now().UTC().Add(-24 * time.Hour).Format(time.RFC3339Nano)
+	weekAgo := time.Now().UTC().Add(-7 * 24 * time.Hour).Format(time.RFC3339Nano)
+	_ = s.db.QueryRow(`SELECT COUNT(*) FROM mcp_calls WHERE user_id = ? AND method = 'tools/call' AND created_at >= ?`, userID, dayAgo).
+		Scan(&u.Calls24h)
+	_ = s.db.QueryRow(`SELECT COUNT(*) FROM mcp_calls WHERE user_id = ? AND method = 'tools/call' AND created_at >= ?`, userID, weekAgo).
+		Scan(&u.Calls7d)
+	var last sql.NullString
+	_ = s.db.QueryRow(`SELECT MAX(created_at) FROM mcp_calls WHERE user_id = ? AND method = 'tools/call'`, userID).Scan(&last)
+	u.LastCallAt = parseTimePtr(last)
+
+	rows, err := s.db.Query(`
+SELECT id, user_id, client_key, name, version, user_agent, token_name, token_prefix,
+  first_seen_at, last_seen_at, initialize_count, call_count, last_tool
+FROM mcp_clients WHERE user_id = ? ORDER BY last_seen_at DESC
+`, userID)
+	if err != nil {
+		return u, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		c := MCPClient{}
+		var first, lastSeen string
+		if err := rows.Scan(
+			&c.ID, &c.UserID, &c.ClientKey, &c.Name, &c.Version, &c.UserAgent, &c.TokenName, &c.TokenPrefix,
+			&first, &lastSeen, &c.InitializeCount, &c.CallCount, &c.LastTool,
+		); err != nil {
+			return u, err
+		}
+		c.FirstSeenAt = parseTime(first)
+		c.LastSeenAt = parseTime(lastSeen)
+		c.Status = "idle"
+		if time.Since(c.LastSeenAt) < mcpActiveWindow {
+			c.Status = "active"
+		}
+		if c.Name == "" {
+			c.Name = "Unknown client"
+		}
+		u.Clients = append(u.Clients, c)
+	}
+	if err := rows.Err(); err != nil {
+		return u, err
+	}
+
+	trows, err := s.db.Query(`
+SELECT tool, call_count, last_called_at FROM mcp_tool_stats WHERE user_id = ? ORDER BY call_count DESC, tool ASC
+`, userID)
+	if err != nil {
+		return u, err
+	}
+	defer trows.Close()
+	for trows.Next() {
+		ts := MCPToolStat{}
+		var lastCalled sql.NullString
+		if err := trows.Scan(&ts.Tool, &ts.CallCount, &lastCalled); err != nil {
+			return u, err
+		}
+		ts.LastCalledAt = parseTimePtr(lastCalled)
+		u.Tools = append(u.Tools, ts)
+	}
+	return u, trows.Err()
 }
 
 func (s *Store) VaultDir(userID string) string {

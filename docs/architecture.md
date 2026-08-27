@@ -104,7 +104,7 @@ flowchart TB
     Conf["conflicts list · get · resolve"]
     GH["GET/POST /api/v1/github<br/>POST /api/v1/github/app/start"]
     AppAdm["POST /api/v1/github/app/register<br/>admin: instance App"]
-    MCPCfg["GET/POST /api/v1/mcp"]
+    MCPCfg["GET/POST /api/v1/mcp<br/>GET includes usage"]
     Act["GET /api/v1/activity"]
   end
 
@@ -354,7 +354,8 @@ sequenceDiagram
   participant API as POST /mcp
   participant MCP as internal/mcp
   participant Perms as mcp_permissions
-  participant Vault as User vault
+  participant Usage as mcp_clients · mcp_calls
+  participant Git as GitHub repo main
   participant Hub as WebSocket hub
 
   alt Token from password login
@@ -365,7 +366,7 @@ sequenceDiagram
   end
 
   Client->>API: Bearer token or session cookie + JSON-RPC
-  API->>MCP: Handle(user, body)
+  API->>MCP: Handle(user, body, client meta)
   MCP->>Perms: GetMCP(user)
 
   alt initialize
@@ -373,13 +374,14 @@ sequenceDiagram
   else tools/list
     MCP-->>Client: search · list · read · graph · backlinks<br/>create · update · append · bulk (if allowed)
   else tools/call write
-    MCP->>Vault: Search / read / write + UpsertFile
-    MCP->>Hub: file_changed
+    MCP->>Git: Contents API create/update/delete on main
+    MCP->>Hub: file_changed (includes note body)
     MCP-->>Client: text result
   end
+  MCP->>Usage: Record client · tool · last seen
 ```
 
-Default permissions are **search + read**. Create and modify are off until the dashboard enables them.
+Default permissions are **search + read**. Create and modify are off until the dashboard enables them. `POST /mcp` records the client (`clientInfo` or User-Agent, grouped by access token) and tool-call counts. Overview and **MCP / AI** show connected clients, 24h/7d/all-time call volume, and per-tool usage. Admins never see this.
 
 **Auth:** MCP accepts the same vault Bearer `sk_sync_…` token as the plugin, or a dashboard `syncidian_session` cookie. `POST /api/v1/mcp/login` exchanges username/password for a one-time Bearer token (vault users only; admins are rejected).
 
@@ -393,7 +395,7 @@ Default permissions are **search + read**. Create and modify are off until the d
 | modify | `update_note`, `add_backlink`, `move_note`, `delete_note`, `bulk_move`, `bulk_add_links` |
 | create or modify | `append_to_note` |
 
-Writes update the `files` index and broadcast `file_changed` so Obsidian clients stay in sync. `get_graph` returns JSON nodes/edges plus a Mermaid diagram for agents to render.
+Writes go to the user’s GitHub repository (Contents API on `main`), not the server working copy. Connected Obsidian clients receive `file_changed` with the note body. `get_graph` returns JSON nodes/edges plus a Mermaid diagram for agents to render. MCP create/update fails until GitHub backup is connected.
 
 ---
 
@@ -409,6 +411,9 @@ erDiagram
   users ||--o{ activity : logs
   users ||--o| github_config : backup
   users ||--o| mcp_permissions : grants
+  users ||--o{ mcp_clients : connects
+  users ||--o{ mcp_tool_stats : uses
+  users ||--o{ mcp_calls : logs
 
   users {
     text id PK
@@ -459,9 +464,16 @@ erDiagram
     text slug
     text client_id
   }
+  mcp_clients {
+    text id PK
+    text user_id FK
+    text name
+    int call_count
+    text last_seen_at
+  }
 ```
 
-Vault bytes live on disk at `data/vaults/<userId>/` as the working copy (markdown, not encrypted — they are the notes). SQLite (`data/syncidian.db`) stores metadata, auth, devices, conflicts, activity, GitHub config, the instance GitHub App, and MCP permissions. Passwords are bcrypt. Access tokens and session IDs are stored hashed. GitHub App PEM, OAuth client secrets, and installation tokens are AES-256-GCM sealed in those columns.
+Vault bytes live on disk at `data/vaults/<userId>/` as the working copy (markdown, not encrypted — they are the notes). SQLite (`data/syncidian.db`) stores metadata, auth, devices, conflicts, activity, GitHub config, the instance GitHub App, MCP permissions, connected MCP clients, and MCP call stats. Passwords are bcrypt. Access tokens and session IDs are stored hashed. GitHub App PEM, OAuth client secrets, and installation tokens are AES-256-GCM sealed in those columns.
 
 ---
 
@@ -477,6 +489,7 @@ flowchart TB
   A --> AD["Devices: Win · Mac · Android"]
   A --> AV["vaults/A + files where user_id=A"]
   A --> AG["GitHub repo A"]
+  A --> AM["MCP clients + usage"]
 
   B --> BD["Devices: Win · iOS"]
   B --> BV["vaults/B"]
@@ -486,7 +499,7 @@ flowchart TB
   C --> CV["vaults/C"]
 ```
 
-A regular user only sees their own devices, tokens, vault, conflicts, activity, and one GitHub repository. Admins manage accounts and cannot call vault, token, device, activity, or GitHub APIs. The WebSocket hub broadcasts per `userID`. Devices that cannot keep a socket (typical on some phones) poll `GET /api/v1/sync/manifest` instead.
+A regular user only sees their own devices, tokens, vault, conflicts, activity, MCP usage, and one GitHub repository. Admins manage accounts and cannot call vault, token, device, activity, MCP, or GitHub APIs. The WebSocket hub broadcasts per `userID`. Devices that cannot keep a socket (typical on some phones) poll `GET /api/v1/sync/manifest` instead.
 
 Admins can create users and list `adminUserSummary` fields (`username`, `is_admin`, `created_at`). They do **not** receive another user's GitHub App credentials, repository, vault bytes, tokens, or activity. Admin login does not require `github_config`.
 

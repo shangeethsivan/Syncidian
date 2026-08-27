@@ -204,8 +204,12 @@ func (s *Server) handleSyncFile(w http.ResponseWriter, r *http.Request, u *store
 	}
 	b, err := os.ReadFile(full)
 	if err != nil {
-		writeError(w, http.StatusNotFound, "file not found")
-		return
+		if gh, ghErr := s.fetchNoteFromGitHub(u.ID, p); ghErr == nil {
+			b = gh
+		} else {
+			writeError(w, http.StatusNotFound, "file not found")
+			return
+		}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"path":    p,

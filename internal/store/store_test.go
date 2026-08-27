@@ -174,3 +174,57 @@ func TestSessionIDIsHashedAtRest(t *testing.T) {
 		t.Fatalf("stored session id %q want hash", stored)
 	}
 }
+
+func TestMCPUsageRecording(t *testing.T) {
+	st, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	bob, err := st.CreateUser("bob", "hash", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tok, err := st.CreateToken(bob.ID, "Claude", "sk_sync_mcp", "sk_sync_mcp…")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.RecordMCPEvent(MCPEvent{
+		UserID: bob.ID, Name: "claude-code", Version: "1.0", TokenID: tok.ID,
+		TokenName: tok.Name, TokenPrefix: tok.Prefix, Method: "initialize",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.RecordMCPEvent(MCPEvent{
+		UserID: bob.ID, TokenID: tok.ID, TokenName: tok.Name, Method: "tools/call", Tool: "read_note",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.RecordMCPEvent(MCPEvent{
+		UserID: bob.ID, TokenID: tok.ID, Method: "tools/call", Tool: "read_note",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	usage, err := st.MCPUsage(bob.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if usage.ClientCount != 1 || usage.TotalCalls != 2 || usage.Calls24h != 2 {
+		t.Fatalf("usage totals: %+v", usage)
+	}
+	if len(usage.Clients) != 1 || usage.Clients[0].Name != "claude-code" || usage.Clients[0].CallCount != 2 {
+		t.Fatalf("clients: %+v", usage.Clients)
+	}
+	if usage.Clients[0].Status != "active" {
+		t.Fatalf("expected active client, got %q", usage.Clients[0].Status)
+	}
+	if len(usage.Tools) != 1 || usage.Tools[0].Tool != "read_note" || usage.Tools[0].CallCount != 2 {
+		t.Fatalf("tools: %+v", usage.Tools)
+	}
+	stStats, err := st.Stats(bob.ID)
+	if err != nil || stStats.MCPClientCount != 1 || stStats.MCPTotalCalls != 2 {
+		t.Fatalf("stats: %+v %v", stStats, err)
+	}
+}

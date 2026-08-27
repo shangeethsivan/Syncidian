@@ -370,7 +370,7 @@ func do(method, url, auth string, payload any) ([]byte, error) {
 		return nil, err
 	}
 	defer resp.Body.Close()
-	body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
 	if resp.StatusCode >= 300 {
 		msg := strings.TrimSpace(string(body))
 		var parsed struct {

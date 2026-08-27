@@ -5,8 +5,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -15,11 +13,27 @@ import (
 )
 
 // OnChange notifies listeners after MCP mutates a vault file.
-type OnChange func(userID, path, hash string, deleted bool)
+// content is the new note body (nil when deleted). It is not stored on the server.
+type OnChange func(userID, path, hash string, deleted bool, content []byte)
+
+type ClientMeta struct {
+	UserAgent   string
+	TokenID     string
+	TokenName   string
+	TokenPrefix string
+}
 
 type Server struct {
 	Store    *store.Store
+	Notes    Notes
 	OnChange OnChange
+}
+
+func (s *Server) notes() Notes {
+	if s.Notes != nil {
+		return s.Notes
+	}
+	return NewMemoryNotes()
 }
 
 type rpcRequest struct {
@@ -41,7 +55,7 @@ type rpcError struct {
 	Message string `json:"message"`
 }
 
-func (s *Server) Handle(user *store.User, body []byte) ([]byte, error) {
+func (s *Server) Handle(user *store.User, body []byte, meta ClientMeta) ([]byte, error) {
 	var req rpcRequest
 	if err := json.Unmarshal(body, &req); err != nil {
 		return marshal(rpcResponse{JSONRPC: "2.0", Error: &rpcError{Code: -32700, Message: "parse error"}})
@@ -50,7 +64,7 @@ func (s *Server) Handle(user *store.User, body []byte) ([]byte, error) {
 	if len(req.ID) > 0 {
 		_ = json.Unmarshal(req.ID, &id)
 	}
-	result, err := s.dispatch(user, req.Method, req.Params)
+	result, err := s.dispatch(user, req.Method, req.Params, meta)
 	if err != nil {
 		return marshal(rpcResponse{JSONRPC: "2.0", ID: id, Error: &rpcError{Code: -32000, Message: err.Error()}})
 	}
@@ -61,13 +75,19 @@ func marshal(v rpcResponse) ([]byte, error) {
 	return json.Marshal(v)
 }
 
-func (s *Server) notify(userID, path, hash string, deleted bool) {
+func (s *Server) notify(userID, path, hash string, deleted bool, content []byte) {
 	if s.OnChange != nil {
-		s.OnChange(userID, path, hash, deleted)
+		s.OnChange(userID, path, hash, deleted, content)
 	}
 }
 
-func (s *Server) dispatch(user *store.User, method string, params json.RawMessage) (any, error) {
+func (s *Server) dispatch(user *store.User, method string, params json.RawMessage, meta ClientMeta) (any, error) {
+	name, version := clientInfo(params)
+	tool := ""
+	if method == "tools/call" {
+		tool = toolName(params)
+	}
+	s.record(user, method, tool, name, version, meta)
 	switch method {
 	case "initialize":
 		return map[string]any{
@@ -91,6 +111,50 @@ func (s *Server) dispatch(user *store.User, method string, params json.RawMessag
 	default:
 		return nil, fmt.Errorf("unknown method %s", method)
 	}
+}
+
+func (s *Server) record(user *store.User, method, tool, name, version string, meta ClientMeta) {
+	if s.Store == nil || user == nil {
+		return
+	}
+	switch method {
+	case "initialize", "tools/list", "tools/call":
+	default:
+		return
+	}
+	_ = s.Store.RecordMCPEvent(store.MCPEvent{
+		UserID:      user.ID,
+		Name:        name,
+		Version:     version,
+		UserAgent:   meta.UserAgent,
+		TokenID:     meta.TokenID,
+		TokenName:   meta.TokenName,
+		TokenPrefix: meta.TokenPrefix,
+		Method:      method,
+		Tool:        tool,
+	})
+}
+
+func clientInfo(params json.RawMessage) (name, version string) {
+	if len(params) == 0 {
+		return "", ""
+	}
+	var p struct {
+		ClientInfo struct {
+			Name    string `json:"name"`
+			Version string `json:"version"`
+		} `json:"clientInfo"`
+	}
+	_ = json.Unmarshal(params, &p)
+	return strings.TrimSpace(p.ClientInfo.Name), strings.TrimSpace(p.ClientInfo.Version)
+}
+
+func toolName(params json.RawMessage) string {
+	var p struct {
+		Name string `json:"name"`
+	}
+	_ = json.Unmarshal(params, &p)
+	return strings.TrimSpace(p.Name)
 }
 
 func (s *Server) perms(userID string) *store.MCPPermissions {
@@ -356,13 +420,7 @@ func (s *Server) callAppend(userID string, perms *store.MCPPermissions, path, co
 	if !ok {
 		return nil, fmt.Errorf("invalid path")
 	}
-	root := filepath.ToSlash(s.Store.VaultDir(userID))
-	full, ok := vaultJoin(root, path)
-	if !ok {
-		return nil, fmt.Errorf("invalid path")
-	}
-	_, err := os.Stat(filepath.FromSlash(full))
-	exists := err == nil
+	exists := s.noteExists(userID, path)
 	if exists {
 		if !perms.Modify {
 			return nil, fmt.Errorf("permission denied")
@@ -413,20 +471,11 @@ func textResult(text string) map[string]any {
 }
 
 func (s *Server) listNotes(userID, prefix string) (any, error) {
-	files, err := s.Store.ListFiles(userID, false)
+	paths, err := s.notes().List(userID)
 	if err != nil {
-		return nil, err
+		return nil, noteErr(err)
 	}
-	var lines []string
-	for _, f := range files {
-		if !strings.HasSuffix(strings.ToLower(f.Path), ".md") {
-			continue
-		}
-		if prefix != "" && !strings.HasPrefix(f.Path, prefix) {
-			continue
-		}
-		lines = append(lines, f.Path)
-	}
+	lines := mdPaths(paths, prefix)
 	if len(lines) == 0 {
 		return textResult("(no notes)"), nil
 	}
@@ -438,9 +487,9 @@ func (s *Server) searchNotes(userID, query string) (any, error) {
 	if query == "" {
 		return textResult("query is required"), nil
 	}
-	files, err := s.Store.ListFiles(userID, false)
+	paths, err := s.notes().List(userID)
 	if err != nil {
-		return nil, err
+		return nil, noteErr(err)
 	}
 	q := strings.ToLower(query)
 	type hit struct {
@@ -448,21 +497,13 @@ func (s *Server) searchNotes(userID, query string) (any, error) {
 		Snippet string `json:"snippet,omitempty"`
 	}
 	var hits []hit
-	root := filepath.ToSlash(s.Store.VaultDir(userID))
-	for _, f := range files {
-		if !strings.HasSuffix(strings.ToLower(f.Path), ".md") {
-			continue
-		}
-		full, ok := vaultJoin(root, f.Path)
-		if !ok {
-			continue
-		}
-		b, err := os.ReadFile(filepath.FromSlash(full))
+	for _, p := range mdPaths(paths, "") {
+		b, err := s.notes().Get(userID, p)
 		if err != nil || !utf8.Valid(b) {
 			continue
 		}
 		body := string(b)
-		pathHit := strings.Contains(strings.ToLower(f.Path), q)
+		pathHit := strings.Contains(strings.ToLower(p), q)
 		bodyLower := strings.ToLower(body)
 		bodyHit := strings.Contains(bodyLower, q)
 		if !pathHit && !bodyHit {
@@ -481,7 +522,7 @@ func (s *Server) searchNotes(userID, query string) (any, error) {
 			}
 			snippet = strings.ReplaceAll(body[start:end], "\n", " ")
 		}
-		hits = append(hits, hit{Path: f.Path, Snippet: snippet})
+		hits = append(hits, hit{Path: p, Snippet: snippet})
 		if len(hits) >= 50 {
 			break
 		}
@@ -506,25 +547,9 @@ func (s *Server) writeNote(userID, path, content string, mustExist bool) (any, e
 	if !ok {
 		return nil, fmt.Errorf("invalid path")
 	}
-	root := filepath.ToSlash(s.Store.VaultDir(userID))
-	full, ok := vaultJoin(root, path)
-	if !ok {
-		return nil, fmt.Errorf("invalid path")
-	}
-	abs := filepath.FromSlash(full)
-	if mustExist {
-		if _, err := os.Stat(abs); err != nil {
-			return nil, fmt.Errorf("note not found")
-		}
-	} else if _, err := os.Stat(abs); err == nil {
-		return nil, fmt.Errorf("note already exists")
-	}
-	if err := os.MkdirAll(filepath.Dir(abs), 0o700); err != nil {
-		return nil, err
-	}
 	data := []byte(content)
-	if err := os.WriteFile(abs, data, 0o600); err != nil {
-		return nil, err
+	if err := s.notes().Put(userID, path, data, mustExist); err != nil {
+		return nil, noteErr(err)
 	}
 	sum := sha256.Sum256(data)
 	hash := hex.EncodeToString(sum[:])
@@ -538,7 +563,7 @@ func (s *Server) writeNote(userID, path, content string, mustExist bool) (any, e
 	}); err != nil {
 		return nil, err
 	}
-	s.notify(userID, path, hash, false)
+	s.notify(userID, path, hash, false, data)
 	action := "mcp.create"
 	if mustExist {
 		action = "mcp.update"

@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -51,13 +52,18 @@ func New(cfg config.Config, st *store.Store, log *slog.Logger) *Server {
 		hub:   NewHub(),
 		start: time.Now(),
 	}
-	s.MCP.OnChange = func(userID, path, hash string, deleted bool) {
-		s.hub.Broadcast(userID, "", map[string]any{
+	s.MCP.Notes = &githubNotes{s: s}
+	s.MCP.OnChange = func(userID, path, hash string, deleted bool, content []byte) {
+		msg := map[string]any{
 			"type":    "file_changed",
 			"path":    path,
 			"hash":    hash,
 			"deleted": deleted,
-		})
+		}
+		if len(content) > 0 && !deleted {
+			msg["content"] = base64.StdEncoding.EncodeToString(content)
+		}
+		s.hub.Broadcast(userID, "", msg)
 	}
 	return s
 }

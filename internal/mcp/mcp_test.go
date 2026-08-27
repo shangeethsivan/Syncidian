@@ -22,7 +22,7 @@ func setupMCP(t *testing.T) (*Server, *store.User) {
 		t.Fatal(err)
 	}
 	_ = st.SetMCP(store.MCPPermissions{UserID: u.ID, Search: true, Read: true, Create: true, Modify: true})
-	return &Server{Store: st}, u
+	return &Server{Store: st, Notes: NewMemoryNotes()}, u
 }
 
 func call(t *testing.T, s *Server, u *store.User, name string, args map[string]any) string {
@@ -34,7 +34,7 @@ func call(t *testing.T, s *Server, u *store.User, name string, args map[string]a
 		"method":  "tools/call",
 		"params":  json.RawMessage(params),
 	})
-	resp, err := s.Handle(u, body)
+	resp, err := s.Handle(u, body, ClientMeta{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -139,8 +139,7 @@ func TestBulkMove(t *testing.T) {
 	if !strings.Contains(listed, "Archive/One.md") || !strings.Contains(listed, "Archive/Two.md") {
 		t.Fatalf("list after move: %s", listed)
 	}
-	root := s.Store.VaultDir(u.ID)
-	if _, err := os.Stat(filepath.Join(root, "Inbox", "One.md")); !os.IsNotExist(err) {
+	if _, err := s.Notes.Get(u.ID, "Inbox/One.md"); err == nil {
 		t.Fatal("old path still exists")
 	}
 }
@@ -151,11 +150,11 @@ func TestPermissionsGateWrites(t *testing.T) {
 	body, _ := json.Marshal(map[string]any{
 		"jsonrpc": "2.0", "id": 1, "method": "tools/call",
 		"params": map[string]any{
-			"name": "create_note",
+			"name":      "create_note",
 			"arguments": map[string]any{"path": "X.md", "content": "hi"},
 		},
 	})
-	resp, err := s.Handle(u, body)
+	resp, err := s.Handle(u, body, ClientMeta{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -169,11 +168,11 @@ func TestPathTraversalRejected(t *testing.T) {
 	body, _ := json.Marshal(map[string]any{
 		"jsonrpc": "2.0", "id": 1, "method": "tools/call",
 		"params": map[string]any{
-			"name": "create_note",
+			"name":      "create_note",
 			"arguments": map[string]any{"path": "../escape.md", "content": "nope"},
 		},
 	})
-	resp, err := s.Handle(u, body)
+	resp, err := s.Handle(u, body, ClientMeta{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -195,5 +194,20 @@ func TestVaultRel(t *testing.T) {
 	}
 	if p, ok := vaultRel("a/b.md"); !ok || p != "a/b.md" {
 		t.Fatalf("got %q %v", p, ok)
+	}
+}
+
+func TestCreateDoesNotWriteServerDisk(t *testing.T) {
+	s, u := setupMCP(t)
+	_ = call(t, s, u, "create_note", map[string]any{
+		"path": "Weekly Focus.md", "content": "# Weekly Focus\n",
+	})
+	root := s.Store.VaultDir(u.ID)
+	if _, err := os.Stat(filepath.Join(root, "Weekly Focus.md")); err == nil {
+		t.Fatal("MCP must not write notes onto the server working copy")
+	}
+	got, err := s.Notes.Get(u.ID, "Weekly Focus.md")
+	if err != nil || !strings.Contains(string(got), "Weekly Focus") {
+		t.Fatalf("note should live in the notes backend: %s %v", got, err)
 	}
 }
