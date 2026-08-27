@@ -48,6 +48,11 @@ func ensureMD(p string) string {
 	return p
 }
 
+// basenameHasDot is true for photo.png, .gitignore, Weekly Focus.md — not Inbox.
+func basenameHasDot(p string) bool {
+	return strings.Contains(path.Base(p), ".")
+}
+
 func noteStem(p string) string {
 	p = path.Base(p)
 	if strings.HasSuffix(strings.ToLower(p), ".md") {

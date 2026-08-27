@@ -143,10 +143,12 @@ func (s *Server) handleGitHubSyncNow(w http.ResponseWriter, r *http.Request, u *
 
 func (s *Server) reindexVault(userID string) error {
 	root := s.Store.VaultDir(userID)
-	return walkVault(root, func(rel string, b []byte, mtime int64) error {
+	seen := map[string]struct{}{}
+	if err := walkVault(root, func(rel string, b []byte, mtime int64) error {
 		if syncengine.Ignore(rel) {
 			return nil
 		}
+		seen[rel] = struct{}{}
 		return s.Store.UpsertFile(store.FileMeta{
 			UserID: userID,
 			Path:   rel,
@@ -154,7 +156,28 @@ func (s *Server) reindexVault(userID string) error {
 			Size:   int64(len(b)),
 			Mtime:  mtime,
 		})
-	})
+	}); err != nil {
+		return err
+	}
+	live, err := s.Store.ListFiles(userID, false)
+	if err != nil {
+		return err
+	}
+	now := time.Now().Unix()
+	for _, f := range live {
+		if _, ok := seen[f.Path]; ok {
+			continue
+		}
+		if syncengine.Ignore(f.Path) {
+			continue
+		}
+		if err := s.Store.UpsertFile(store.FileMeta{
+			UserID: userID, Path: f.Path, Deleted: true, Mtime: now,
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *Server) gitAccessToken(cfg *store.GitHubConfig) (string, error) {

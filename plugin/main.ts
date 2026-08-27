@@ -8,6 +8,7 @@ import {
   Setting,
   TAbstractFile,
   TFile,
+  TFolder,
   normalizePath,
   requestUrl,
 } from "obsidian";
@@ -169,6 +170,16 @@ export default class SyncidianPlugin extends Plugin {
       error: "Syncidian • error",
     };
     const text = extra ? `${labels[kind]} ${extra}` : labels[kind];
+    this.statusEl?.removeClass(
+      "is-offline",
+      "is-connecting",
+      "is-syncing",
+      "is-pending",
+      "is-ok",
+      "is-conflict",
+      "is-error"
+    );
+    this.statusEl?.addClass(`is-${kind}`);
     this.statusEl?.setText(text);
     this.ribbonEl?.setAttribute("aria-label", text);
     this.ribbonEl?.setAttribute("title", `${text} — tap to sync now`);
@@ -366,8 +377,7 @@ export default class SyncidianPlugin extends Plugin {
   async pullFile(path: string) {
     const remote = await this.api(`/api/v1/sync/file?path=${encodeURIComponent(path)}`);
     if (remote.deleted) {
-      const existing = this.app.vault.getAbstractFileByPath(path);
-      if (existing) await this.app.vault.delete(existing);
+      await this.removeLocalPath(path);
       delete this.settings.hashes[path];
       await this.saveSettings();
       return;
@@ -376,6 +386,31 @@ export default class SyncidianPlugin extends Plugin {
     await this.writeBinary(path, bytes);
     this.settings.hashes[path] = remote.hash;
     await this.saveSettings();
+  }
+
+  async removeLocalPath(path: string) {
+    path = normalizePath(path);
+    const existing = this.app.vault.getAbstractFileByPath(path);
+    if (existing) await this.app.vault.delete(existing);
+    await this.pruneEmptyParents(path);
+  }
+
+  async pruneEmptyParents(filePath: string) {
+    const parts = normalizePath(filePath).split("/").filter(Boolean);
+    parts.pop();
+    while (parts.length) {
+      const dir = parts.join("/");
+      const af = this.app.vault.getAbstractFileByPath(dir);
+      if (!af || af instanceof TFile) return;
+      const folder = af as TFolder;
+      if (folder.children && folder.children.length > 0) return;
+      try {
+        await this.app.vault.delete(folder);
+      } catch {
+        return;
+      }
+      parts.pop();
+    }
   }
 
   /** Write bytes, tolerating vault-index lag vs files already on disk. */
@@ -761,8 +796,7 @@ export default class SyncidianPlugin extends Plugin {
             this.applyingRemote++;
             try {
               if (msg.deleted) {
-                const f = this.app.vault.getAbstractFileByPath(msg.path);
-                if (f) await this.app.vault.delete(f);
+                await this.removeLocalPath(msg.path);
                 delete this.settings.hashes[msg.path];
                 await this.saveSettings();
               } else if (msg.content) {

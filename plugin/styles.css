@@ -4,6 +4,19 @@
   gap: 6px;
 }
 
+.syncidian-status.is-ok,
+.syncidian-status.is-pending,
+.syncidian-status.is-syncing,
+.syncidian-status.is-connecting {
+  color: var(--text-muted);
+}
+
+.syncidian-status.is-conflict,
+.syncidian-status.is-error,
+.syncidian-status.is-offline {
+  color: var(--text-error);
+}
+
 .syncidian-modal textarea {
   width: 100%;
   min-height: 180px;

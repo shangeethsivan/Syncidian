@@ -138,7 +138,7 @@ POST http://localhost:8080/api/v1/mcp/login
 {"username":"you","password":"…"}
 ```
 
-Dashboard session cookies also work on `/mcp`. **MCP does not save notes on the Syncidian server.** Create/update/delete write to your connected GitHub repository on `main` and notify live Obsidian clients. Connect GitHub before using write tools. Tools cover search, graph/backlinks, create/update/append, and bulk organize when permissions allow.
+Dashboard session cookies also work on `/mcp`. **MCP does not save notes on the Syncidian server.** Create/update/delete write to your connected GitHub repository on `main` and notify live Obsidian clients. Connect GitHub before using write tools. Tools cover search, graph/backlinks, create/update/append, moving any vault file type (including images), and bulk organize when permissions allow.
 
 ---
 

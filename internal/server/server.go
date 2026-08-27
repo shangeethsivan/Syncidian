@@ -60,10 +60,15 @@ func New(cfg config.Config, st *store.Store, log *slog.Logger) *Server {
 			"hash":    hash,
 			"deleted": deleted,
 		}
-		if len(content) > 0 && !deleted {
+		// Large binaries (images) are pulled over HTTP instead of the WebSocket.
+		const maxLiveContent = 256 * 1024
+		if len(content) > 0 && !deleted && len(content) <= maxLiveContent {
 			msg["content"] = base64.StdEncoding.EncodeToString(content)
 		}
 		s.hub.Broadcast(userID, "", msg)
+	}
+	s.MCP.OnBatch = func(userID string) {
+		s.hub.Broadcast(userID, "", map[string]any{"type": "github_synced"})
 	}
 	return s
 }

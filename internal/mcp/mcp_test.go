@@ -195,6 +195,51 @@ func TestVaultRel(t *testing.T) {
 	if p, ok := vaultRel("a/b.md"); !ok || p != "a/b.md" {
 		t.Fatalf("got %q %v", p, ok)
 	}
+	if p, ok := vaultRel("Content/pic.png"); !ok || p != "Content/pic.png" {
+		t.Fatalf("png path: %q %v", p, ok)
+	}
+}
+
+func TestMoveAnyFileType(t *testing.T) {
+	s, u := setupMCP(t)
+	png := []byte{0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a}
+	if err := s.Notes.Put(u.ID, "Inbox/shot.png", png, false); err != nil {
+		t.Fatal(err)
+	}
+	out := call(t, s, u, "move_note", map[string]any{
+		"from": "Inbox/shot.png", "to": "Content/shot.png",
+	})
+	if !strings.Contains(out, "Content/shot.png") {
+		t.Fatalf("move: %s", out)
+	}
+	if _, err := s.Notes.Get(u.ID, "Inbox/shot.png"); err == nil {
+		t.Fatal("old image path still exists")
+	}
+	got, err := s.Notes.Get(u.ID, "Content/shot.png")
+	if err != nil || string(got) != string(png) {
+		t.Fatalf("new image: %v %v", got, err)
+	}
+	listed := call(t, s, u, "list_files", map[string]any{"ext": "png"})
+	if !strings.Contains(listed, "Content/shot.png") {
+		t.Fatalf("list_files: %s", listed)
+	}
+}
+
+func TestBulkMoveIncludesAttachments(t *testing.T) {
+	s, u := setupMCP(t)
+	_ = call(t, s, u, "create_note", map[string]any{"path": "Inbox/One.md", "content": "1\n"})
+	if err := s.Notes.Put(u.ID, "Inbox/shot.png", []byte("img"), false); err != nil {
+		t.Fatal(err)
+	}
+	out := call(t, s, u, "bulk_move", map[string]any{
+		"from_prefix": "Inbox", "to_prefix": "Archive",
+	})
+	if !strings.Contains(out, `"count": 2`) && !strings.Contains(out, `"count":2`) {
+		t.Fatalf("bulk move: %s", out)
+	}
+	if _, err := s.Notes.Get(u.ID, "Archive/shot.png"); err != nil {
+		t.Fatalf("png not moved: %v", err)
+	}
 }
 
 func TestCreateDoesNotWriteServerDisk(t *testing.T) {

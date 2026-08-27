@@ -83,13 +83,15 @@ func PlanSync(client, server, base map[string]string) Plan {
 			continue
 		}
 		if sh == "" {
-			// Server tombstone: pull the delete if this device still has the last synced bytes.
+			// Server tombstone: remove the local copy unless this device edited it
+			// after the last sync. An empty base still pulls — local-only files are
+			// absent from `server`, not stored as tombstones.
 			bh := base[p]
-			if bh != "" && bh == ch {
+			if bh == "" || bh == ch {
 				plan.Pull = append(plan.Pull, p)
 				continue
 			}
-			plan.Push = append(plan.Push, p)
+			plan.Conflicts = append(plan.Conflicts, p)
 			continue
 		}
 		if ch == sh {
