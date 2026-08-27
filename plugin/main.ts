@@ -61,6 +61,14 @@ function ignored(path: string): boolean {
   return IGNORE.some((re) => re.test(path));
 }
 
+function listedConflictId(c: { id?: string; ID?: string }): string {
+  return c.id || c.ID || "";
+}
+
+function listedConflictPath(c: { path?: string; Path?: string }): string {
+  return c.path || c.Path || "";
+}
+
 export default class SyncidianPlugin extends Plugin {
   settings: SyncidianSettings = DEFAULT_SETTINGS;
   statusEl: HTMLElement | null = null;
@@ -74,6 +82,8 @@ export default class SyncidianPlugin extends Plugin {
   idleTimer: number | null = null;
   applyingRemote = 0;
   lastResumeSync = 0;
+  conflictQueue: { id: string; path: string }[] = [];
+  activeConflictId: string | null = null;
 
   async onload() {
     await this.loadSettings();
@@ -83,6 +93,10 @@ export default class SyncidianPlugin extends Plugin {
     // Status bar is desktop-only; the ribbon is the mobile-visible control.
     this.statusEl = this.addStatusBarItem();
     this.statusEl.addClass("syncidian-status");
+    this.statusEl.addClass("mod-clickable");
+    this.registerDomEvent(this.statusEl, "click", () => {
+      void this.onStatusClick();
+    });
     this.ribbonEl = this.addRibbonIcon("sync", "Syncidian: sync now", () => {
       void this.fullSync();
     });
@@ -325,10 +339,8 @@ export default class SyncidianPlugin extends Plugin {
       if ((plan.Delete || []).length || (plan.Push || []).length) {
         await this.pushBatch(plan.Delete || [], plan.Push || []);
       }
-      for (const path of plan.Conflicts || []) {
-        await this.raiseConflict(path);
-      }
-      this.setStatus((plan.Conflicts || []).length ? "conflict" : "ok");
+      await this.resolvePlanConflicts(plan.Conflicts || []);
+      if (!this.activeConflictId && !this.conflictQueue.length) this.setStatus("ok");
       return true;
     } catch (e) {
       this.setStatus("error");
@@ -487,9 +499,84 @@ export default class SyncidianPlugin extends Plugin {
     for (const old of movedAway) delete this.settings.hashes[old];
     await this.saveSettings();
     for (const c of res.conflicts || []) {
-      new ConflictModal(this.app, this, c.id, c.path).open();
-      this.setStatus("conflict");
+      this.enqueueConflict(c.id, c.path);
     }
+  }
+
+  async onStatusClick() {
+    if (await this.openStoredConflicts()) return;
+    void this.fullSync();
+  }
+
+  async listOpenConflicts(): Promise<{ id?: string; ID?: string; path?: string; Path?: string }[]> {
+    try {
+      const res = await this.api("/api/v1/conflicts");
+      return Array.isArray(res) ? res : [];
+    } catch {
+      return [];
+    }
+  }
+
+  async openStoredConflicts(): Promise<boolean> {
+    const items = await this.listOpenConflicts();
+    if (!items.length) return false;
+    for (const c of items) {
+      const id = listedConflictId(c);
+      if (id) this.enqueueConflict(id, listedConflictPath(c));
+    }
+    return true;
+  }
+
+  /** Full sync reports conflict paths without ids; open a stored conflict or push to create one. */
+  async resolvePlanConflicts(paths: string[]) {
+    if (!paths.length) return;
+    const stored = await this.listOpenConflicts();
+    const remaining: string[] = [];
+    for (const path of paths) {
+      const hit = stored.find((c) => listedConflictPath(c) === path);
+      const id = hit ? listedConflictId(hit) : "";
+      if (id) this.enqueueConflict(id, path);
+      else remaining.push(path);
+    }
+    if (!remaining.length) return;
+    const deletes: string[] = [];
+    const upserts: string[] = [];
+    for (const path of remaining) {
+      if (this.app.vault.getAbstractFileByPath(path) instanceof TFile) upserts.push(path);
+      else deletes.push(path);
+    }
+    await this.pushBatch(deletes, upserts);
+  }
+
+  enqueueConflict(id: string, path: string) {
+    if (!id) return;
+    if (this.activeConflictId === id) return;
+    if (this.conflictQueue.some((c) => c.id === id)) return;
+    if (this.activeConflictId) {
+      this.conflictQueue.push({ id, path });
+      return;
+    }
+    this.presentConflict(id, path);
+  }
+
+  presentConflict(id: string, path: string) {
+    this.activeConflictId = id;
+    this.setStatus("conflict", path);
+    new ConflictModal(this.app, this, id, path).open();
+  }
+
+  onConflictResolved() {
+    this.activeConflictId = null;
+    const next = this.conflictQueue.shift();
+    if (next) this.presentConflict(next.id, next.path);
+    else this.setStatus("ok");
+  }
+
+  onConflictModalClosed(id: string) {
+    if (this.activeConflictId !== id) return;
+    this.activeConflictId = null;
+    const next = this.conflictQueue.shift();
+    if (next) this.presentConflict(next.id, next.path);
   }
 
   async raiseConflict(path: string) {
@@ -783,6 +870,8 @@ export default class SyncidianPlugin extends Plugin {
 }
 
 class ConflictModal extends Modal {
+  private resolved = false;
+
   constructor(
     app: App,
     private plugin: SyncidianPlugin,
@@ -835,12 +924,14 @@ class ConflictModal extends Modal {
     });
     await this.plugin.pullFile(this.path);
     new Notice(`Resolved ${this.path}`);
+    this.resolved = true;
+    this.plugin.onConflictResolved();
     this.close();
-    this.plugin.setStatus("ok");
   }
 
   onClose() {
     this.contentEl.empty();
+    if (!this.resolved) this.plugin.onConflictModalClosed(this.id);
   }
 }
 
