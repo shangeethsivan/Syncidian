@@ -45,6 +45,7 @@ jobs:
             if (!/^[0-9]+\.[0-9]+\.[0-9]+$/.test(m.version)) throw new Error("version must be x.y.z");
             if (m.version !== p.version) throw new Error("package.json version must match manifest.json");
             if (v[m.version] !== m.minAppVersion) throw new Error("versions.json must map this version to minAppVersion");
+            if (m.isDesktopOnly !== false) throw new Error("isDesktopOnly must be false so Android and iOS can install Syncidian");
           '
 
       - name: Build plugin
@@ -52,3 +53,15 @@ jobs:
         run: |
           npm ci
           npm run build
+      - name: Plugin bundle is mobile-safe
+        run: |
+          python3 - <<'PY'
+          import pathlib, re, sys
+          js = pathlib.Path("plugin/main.js").read_text()
+          if "requestUrl" not in js:
+              sys.exit("plugin/main.js must use Obsidian requestUrl so HTTP works on mobile")
+          banned = re.compile(r"""require\(["'](fs|path|os|child_process|electron|net|tls|dgram|cluster|worker_threads)["']\)""")
+          if banned.search(js):
+              sys.exit("plugin/main.js must not require Node.js or Electron modules (mobile would crash)")
+          print("plugin mobile bundle checks ok")
+          PY

@@ -2,7 +2,7 @@
 
 This document describes the **current MVP** as implemented in this repository. GitHub renders the Mermaid diagrams below — open this file on GitHub to visualize them.
 
-The plugin is the client. The Go server is the coordination layer. A per-user vault on disk plus SQLite metadata is the working copy. GitHub is an **optional, per-user** durable source of truth — people sign in with GitHub on the public landing, then install the App on one repository. Operators use `/admin`. MCP is the AI bridge.
+The plugin is the client (Windows, macOS, Linux, Android, and iOS — `isDesktopOnly` is false). HTTP from the plugin uses Obsidian `requestUrl`. The Go server is the coordination layer. A per-user vault on disk plus SQLite metadata is the working copy. GitHub is an **optional, per-user** durable source of truth — people sign in with GitHub on the public landing, then install the App on one repository. Operators use `/admin`. MCP is the AI bridge.
 
 When you change this architecture, update the Mermaid diagrams in this file and in `README.md`. See [`AGENT.md`](../AGENT.md).
 
@@ -38,9 +38,9 @@ flowchart TB
 
   GH["Per-user private GitHub repo<br/>optional · after login"]
 
-  Win -->|"HTTPS + WebSocket"| API
+  Win -->|"requestUrl HTTPS + WS"| API
   Mac --> API
-  And --> API
+  And -->|"requestUrl HTTPS<br/>WS or manifest poll"| API
   iOS --> API
   Dash -->|"session cookie"| API
   AI -->|"Bearer token"| MCP
@@ -58,6 +58,8 @@ flowchart TB
   Git --> Vault
   Git -->|"GitHub App installation token"| GH
 ```
+
+The plugin does not use Node.js or Electron, so the same client runs on phones. Android and iOS call the API with `requestUrl`. If the WebSocket cannot open, they poll `GET /api/v1/sync/manifest`.
 
 ---
 
@@ -111,7 +113,7 @@ flowchart TB
     Plan["POST /api/v1/sync/plan"]
     Push["POST /api/v1/sync/push"]
     File["GET /api/v1/sync/file"]
-    Man["GET /api/v1/sync/manifest"]
+    Man["GET /api/v1/sync/manifest<br/>also poll if WS down"]
     Ticket["POST /api/v1/ws/ticket"]
     Sock["GET /api/v1/ws?ticket="]
     MCP["POST /mcp"]
@@ -121,7 +123,7 @@ flowchart TB
   session --- plugin
 ```
 
-Both the dashboard cookie (`syncidian_session`) and the plugin/MCP Bearer token go through `authenticate()`. Raw `sk_sync_…` values are shown once and stored as SHA-256 hashes. Session cookies are stored hashed too. GitHub App PEM, client secrets, and installation tokens are encrypted at rest (`enc:v1:` AES-256-GCM) with `SYNCIDIAN_DATA_KEY` or `data/secret.key`. Access tokens **cannot** call GitHub connect/disconnect/sync-now or mint more tokens — those require a dashboard session. The plugin identifies itself with `X-Syncidian-Client`; that header is not a security boundary (it is spoofable). Tokens are not accepted in query strings. `GET/POST /api/v1/github` is never public. GitHub App **callback**, **setup**, and **webhook** URLs are public so GitHub can redirect and ping.
+Both the dashboard cookie (`syncidian_session`) and the plugin/MCP Bearer token go through `authenticate()`. The Obsidian plugin calls the HTTP API with **`requestUrl`** (not browser `fetch`) so Android (`http://localhost` origin) and iOS (`capacitor://localhost`) are not blocked by CORS. Live updates use a WebSocket after `POST /api/v1/ws/ticket`; if the socket cannot connect (cleartext HTTP, iOS ATS), the plugin polls `GET /api/v1/sync/manifest`. Raw `sk_sync_…` values are shown once and stored as SHA-256 hashes. Session cookies are stored hashed too. GitHub App PEM, client secrets, and installation tokens are encrypted at rest (`enc:v1:` AES-256-GCM) with `SYNCIDIAN_DATA_KEY` or `data/secret.key`. Access tokens **cannot** call GitHub connect/disconnect/sync-now or mint more tokens — those require a dashboard session. The plugin identifies itself with `X-Syncidian-Client`; that header is not a security boundary (it is spoofable). Tokens are not accepted in query strings. `GET/POST /api/v1/github` is never public. GitHub App **callback**, **setup**, and **webhook** URLs are public so GitHub can redirect and ping.
 
 ---
 
@@ -147,6 +149,8 @@ flowchart TD
   OAuth --> User["Regular user session"]
   Email --> User
   User --> Own["Own vault, devices, tokens, activity"]
+  Own --> Plug["Install plugin<br/>Community plugins · desktop · Android · iOS"]
+  Plug --> Sync["Devices sync through the server"]
   Own --> Backup{"User wants backup?"}
   Backup -->|yes| One["Install GitHub App<br/>one repo for this user_id · main only"]
   Backup -->|no| SyncOnly["Device sync still works"]
@@ -166,6 +170,7 @@ sequenceDiagram
 
   User->>Obsidian: Open vault
   Obsidian->>Plugin: onload + layout ready
+  Note over Plugin,API: HTTP uses Obsidian requestUrl so CORS does not block Android/iOS
   Plugin->>API: POST /api/v1/devices/register
   API->>DB: UpsertDevice
   API-->>Plugin: device id
@@ -193,8 +198,17 @@ sequenceDiagram
     API-->>Plugin: accepted + conflicts
   end
 
-  Plugin->>API: WebSocket /api/v1/ws
-  Note over Plugin,API: Live file_changed and github_synced events
+  Plugin->>API: POST /api/v1/ws/ticket
+  API-->>Plugin: wst_ ticket
+  alt WebSocket connects
+    Plugin->>API: GET /api/v1/ws?ticket=
+    Note over Plugin,API: Live file_changed and github_synced
+  else WS blocked on the phone
+    loop every 15s
+      Plugin->>API: GET /api/v1/sync/manifest
+      Plugin->>Plugin: fullSync if hashes differ
+    end
+  end
 ```
 
 After the first plan/push, the plugin keeps a local `hashes` map (last-known server hash per path). That map is the `base_hash` used on later syncs. Locally deleted files that are still in `hashes` are sent as tombstones so a resync deletes them on the server instead of restoring them.
@@ -223,6 +237,7 @@ sequenceDiagram
     API->>API: Write, RemoveAll, or os.Rename + UpsertFile
     API->>Hub: Broadcast file_changed (skip sender)
     Hub->>Other: pullFile or local delete
+    Note over Other: If WS is down, the other device polls GET /api/v1/sync/manifest
     API->>Git: CommitAll (add / modify / rm / mv)
     opt GitHub configured
       Git->>GH: Push
@@ -287,7 +302,7 @@ flowchart TD
   Merge --> Resolve
   Auto --> Write["Write chosen bytes to vault"]
   Resolve --> Write
-  Write --> Broadcast["WebSocket file_changed"]
+  Write --> Broadcast["WebSocket file_changed<br/>or other device polls manifest"]
   Write --> Commit["Git commit + optional GitHub push"]
 ```
 
@@ -318,7 +333,7 @@ flowchart LR
   subgraph pluginAuth [Plugin and MCP]
     Tokens["Dashboard Tokens<br/>or CLI: syncidian token create"] --> Raw["sk_sync_… shown once"]
     Raw --> Hash["SHA-256 stored in tokens"]
-    Raw --> Header["Authorization: Bearer"]
+    Raw --> Header["Authorization: Bearer<br/>plugin uses requestUrl"]
   end
 
   Cookie --> Authed["authenticate()"]
@@ -471,7 +486,7 @@ flowchart TB
   C --> CV["vaults/C"]
 ```
 
-A regular user only sees their own devices, tokens, vault, conflicts, activity, and one GitHub repository. Admins manage accounts and cannot call vault, token, device, activity, or GitHub APIs. The WebSocket hub broadcasts per `userID`.
+A regular user only sees their own devices, tokens, vault, conflicts, activity, and one GitHub repository. Admins manage accounts and cannot call vault, token, device, activity, or GitHub APIs. The WebSocket hub broadcasts per `userID`. Devices that cannot keep a socket (typical on some phones) poll `GET /api/v1/sync/manifest` instead.
 
 Admins can create users and list `adminUserSummary` fields (`username`, `is_admin`, `created_at`). They do **not** receive another user's GitHub App credentials, repository, vault bytes, tokens, or activity. Admin login does not require `github_config`.
 
@@ -488,7 +503,7 @@ flowchart LR
   end
 
   Browser["Browser dashboard"] --> C
-  Plugin["Obsidian plugin"] --> C
+  Plugin["Obsidian plugin<br/>desktop + Android + iOS"] --> C
   MCP["MCP client"] --> C
   C -->|"optional"| GH["GitHub"]
 ```
@@ -514,6 +529,6 @@ Railway: mount a volume at `/data`. `railway.json` sets `requiredMountPath` to `
 | Live updates | [`internal/server/ws.go`](../internal/server/ws.go) |
 | Persistence | [`internal/store/store.go`](../internal/store/store.go), [`internal/store/crypt.go`](../internal/store/crypt.go), [`internal/config/persist.go`](../internal/config/persist.go), [`railway.json`](../railway.json) |
 | Dashboard UI | [`internal/web/static/index.html`](../internal/web/static/index.html) |
-| Obsidian plugin | [`plugin/main.ts`](../plugin/main.ts) |
-| Community plugin listing | Root [`manifest.json`](../manifest.json) (must match [`plugin/manifest.json`](../plugin/manifest.json)); GitHub Release via [`.github/workflows/release.yml`](../.github/workflows/release.yml) |
+| Obsidian plugin (desktop + Android/iOS) | [`plugin/main.ts`](../plugin/main.ts), [`plugin/mobile.ts`](../plugin/mobile.ts), [`plugin/manifest.json`](../plugin/manifest.json) (`isDesktopOnly: false`) |
+| Community plugin listing | Root [`manifest.json`](../manifest.json) (must match [`plugin/manifest.json`](../plugin/manifest.json)); GitHub Release **Assets** (`main.js`, `manifest.json`, `styles.css`) via [`.github/workflows/release.yml`](../.github/workflows/release.yml); phone enable steps [`docs/install-mobile.md`](install-mobile.md); packaging notes [`docs/community-plugin.md`](community-plugin.md) |
 | Keep diagrams current | [`AGENT.md`](../AGENT.md) |

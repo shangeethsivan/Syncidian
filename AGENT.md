@@ -11,6 +11,7 @@ If you change any of the following, **update the docs in the same change**:
 * Admin vs regular-user capabilities and privacy
 * HTTP routes, data model, sync plan, MCP, or deployment topology
 * Multi-user isolation or token/session behavior
+* Whether the Obsidian plugin is desktop-only or mobile-capable (`isDesktopOnly`)
 
 Do not ship a behavioral change that leaves `README.md`, `docs/github-app.md`, or `docs/architecture.md` describing the old flow.
 
@@ -23,7 +24,7 @@ GitHub-rendered Mermaid diagrams are part of the product docs. After an architec
 | App workflow (public landing → GitHub or email → optional per-user repo) | `README.md` (`# 🗺️ App workflow`) and `docs/architecture.md` (section 3b) |
 | System overview | `README.md` (Vision + Architecture) and `docs/architecture.md` §1 |
 | HTTP surface (public vs session vs plugin) | `docs/architecture.md` §3 |
-| Plugin first sync / edit / conflicts | `docs/architecture.md` §4–7 |
+| Plugin first sync / live updates / edit / conflicts | `docs/architecture.md` §4–7 (`requestUrl`, WS ticket, manifest poll) |
 | Authentication | `docs/architecture.md` §8 |
 | MCP | `docs/architecture.md` §9 |
 | Data model (`github_config.user_id`) | `docs/architecture.md` §10 |
@@ -44,6 +45,7 @@ Document and implement these unless a later change explicitly replaces them — 
 6. **GitHub App only, main branch only.** Backup is authorized by installing a GitHub App with Contents read and write. Personal access tokens and deploy keys are not supported. Syncidian always uses `main`. Sign-in uses the instance App callback, setup, and webhook URLs.
 7. **Persistent data directory.** Users, tokens, GitHub App credentials, and vault files live under `SYNCIDIAN_DATA` (`syncidian.db` + `vaults/`). PaaS deploys wipe the container filesystem unless a volume is mounted at `/data`. Warn on `/admin` when persistence is ephemeral. Do not store that state only in the image layer.
 8. **Secrets at rest.** Access tokens and session IDs are hashed. GitHub App PEM, client secrets, and installation tokens are encrypted (`enc:v1:`). Bearer `sk_sync_` tokens cannot manage GitHub or mint more tokens. Do not accept access tokens in query strings. `X-Syncidian-Client` identifies the plugin; it is not an auth check.
+9. **Obsidian plugin is mobile-capable.** `plugin/manifest.json` `isDesktopOnly` stays `false`. Do not import Node.js or Electron APIs. HTTP from the plugin uses `requestUrl`. Root `manifest.json` must match `plugin/manifest.json` (`make plugin-manifest`). GitHub Release **Assets** are `main.js`, `manifest.json`, and `styles.css` (not a tests folder). `.github/workflows/release.yml` skips attestations on private repos so those files still upload. Phone enable steps: `docs/install-mobile.md`. Packaging notes: `docs/community-plugin.md`.
 
 ## How to update diagrams
 

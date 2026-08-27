@@ -2,12 +2,25 @@ import {
   App,
   Modal,
   Notice,
+  Platform,
   Plugin,
   PluginSettingTab,
   Setting,
   TAbstractFile,
   TFile,
+  normalizePath,
+  requestUrl,
 } from "obsidian";
+import { b64decode, b64encode, toArrayBuffer } from "./codec";
+import { sha256 } from "./hash";
+import {
+  devicePlatform,
+  guessDeviceName,
+  isInsecureHttp,
+  isLoopbackUrl,
+  isMobileApp,
+  pushBatchSize,
+} from "./mobile";
 
 interface SyncidianSettings {
   serverUrl: string;
@@ -46,36 +59,14 @@ function ignored(path: string): boolean {
   return IGNORE.some((re) => re.test(path));
 }
 
-async function sha256(data: ArrayBuffer): Promise<string> {
-  const buf = await crypto.subtle.digest("SHA-256", data);
-  return Array.from(new Uint8Array(buf))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
-}
-
-function b64encode(bytes: Uint8Array): string {
-  let bin = "";
-  bytes.forEach((b) => (bin += String.fromCharCode(b)));
-  return btoa(bin);
-}
-
-function b64decode(s: string): Uint8Array {
-  const bin = atob(s);
-  const out = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
-  return out;
-}
-
-function toArrayBuffer(data: Uint8Array): ArrayBuffer {
-  return data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength) as ArrayBuffer;
-}
-
 export default class SyncidianPlugin extends Plugin {
   settings: SyncidianSettings = DEFAULT_SETTINGS;
-  statusEl!: HTMLElement;
+  statusEl: HTMLElement | null = null;
+  ribbonEl: HTMLElement | null = null;
   connected = false;
   syncing = false;
   ws: WebSocket | null = null;
+  wsConnecting = false;
   pending = new Map<string, PendingOp>();
   idleTimer: number | null = null;
   applyingRemote = 0;
@@ -83,19 +74,31 @@ export default class SyncidianPlugin extends Plugin {
   async onload() {
     await this.loadSettings();
     if (!this.settings.deviceName || this.settings.deviceName === "Obsidian") {
-      this.settings.deviceName = this.guessDeviceName();
+      this.settings.deviceName = guessDeviceName();
     }
+    // Status bar is desktop-only; the ribbon is the mobile-visible control.
     this.statusEl = this.addStatusBarItem();
-    this.setStatus("offline");
-    this.addSettingTab(new SyncidianSettingTab(this.app, this));
-    this.addRibbonIcon("sync", "Syncidian: sync now", () => {
+    this.statusEl.addClass("syncidian-status");
+    this.ribbonEl = this.addRibbonIcon("sync", "Syncidian: sync now", () => {
       void this.fullSync();
     });
+    this.setStatus("offline");
+    this.addSettingTab(new SyncidianSettingTab(this.app, this));
     this.addCommand({
       id: "syncidian-sync-now",
       name: "Sync now",
       callback: () => void this.fullSync(),
     });
+    this.registerInterval(
+      window.setInterval(() => {
+        if (this.connected && !this.ws && !this.wsConnecting) void this.openSocket();
+      }, 8000)
+    );
+    this.registerInterval(
+      window.setInterval(() => {
+        if (this.connected && !this.ws && !this.syncing) void this.pollRemote();
+      }, 15000)
+    );
 
     this.registerEvent(this.app.vault.on("create", (f) => this.queueChange(f, false)));
     this.registerEvent(this.app.vault.on("modify", (f) => this.queueChange(f, false)));
@@ -115,26 +118,11 @@ export default class SyncidianPlugin extends Plugin {
     this.clearIdleTimer();
     this.ws?.close();
     this.ws = null;
-  }
-
-  guessDeviceName(): string {
-    const ua = navigator.userAgent;
-    if (/Android/i.test(ua)) return "Android";
-    if (/iPhone|iPad|iOS/i.test(ua)) return "iOS";
-    if (/Mac/i.test(ua)) return "macOS";
-    if (/Win/i.test(ua)) return "Windows";
-    if (/Linux/i.test(ua)) return "Linux";
-    return "Obsidian";
+    this.wsConnecting = false;
   }
 
   platform(): string {
-    const ua = navigator.userAgent;
-    if (/Android/i.test(ua)) return "Android";
-    if (/iPhone|iPad|iOS/i.test(ua)) return "iOS";
-    if (/Mac/i.test(ua)) return "macOS";
-    if (/Win/i.test(ua)) return "Windows";
-    if (/Linux/i.test(ua)) return "Linux";
-    return "unknown";
+    return devicePlatform();
   }
 
   setStatus(kind: "offline" | "connecting" | "syncing" | "pending" | "ok" | "conflict" | "error", extra = "") {
@@ -147,7 +135,10 @@ export default class SyncidianPlugin extends Plugin {
       conflict: "Syncidian • conflict",
       error: "Syncidian • error",
     };
-    this.statusEl.setText(extra ? `${labels[kind]} ${extra}` : labels[kind]);
+    const text = extra ? `${labels[kind]} ${extra}` : labels[kind];
+    this.statusEl?.setText(text);
+    this.ribbonEl?.setAttribute("aria-label", text);
+    this.ribbonEl?.setAttribute("title", `${text} — tap to sync now`);
   }
 
   apiUrl(path: string): string {
@@ -162,41 +153,63 @@ export default class SyncidianPlugin extends Plugin {
 
   async api(path: string, opts: RequestInit = {}): Promise<any> {
     this.normalizeCredentials();
-    const headers = new Headers(opts.headers || {});
-    headers.set("Authorization", `Bearer ${this.settings.token}`);
-    headers.set("X-Syncidian-Client", "obsidian-plugin/0.1.0");
-    if (opts.body && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
-    let res: Response;
+    const headers: Record<string, string> = {
+      Authorization: `Bearer ${this.settings.token}`,
+      "X-Syncidian-Client": `obsidian-plugin/${this.manifest.version}`,
+    };
+    const body = typeof opts.body === "string" ? opts.body : undefined;
+    if (body) headers["Content-Type"] = "application/json";
+    const method = (opts.method || "GET").toString().toUpperCase();
+    let status = 0;
+    let text = "";
     try {
-      res = await fetch(this.apiUrl(path), { ...opts, headers });
+      // requestUrl bypasses CORS and mixed-content blocks in the Android/iOS WebView.
+      // Plain fetch() is what makes community plugins like Git fail or get blocked on mobile.
+      const res = await requestUrl({
+        url: this.apiUrl(path),
+        method,
+        headers,
+        contentType: body ? "application/json" : undefined,
+        body,
+        throw: false,
+      });
+      status = res.status;
+      text = res.text;
     } catch (e) {
       throw new Error(
-        `Cannot reach ${this.settings.serverUrl || "(no server URL)"}. Check Server URL. (${(e as Error).message})`
+        `Cannot reach ${this.settings.serverUrl || "(no server URL)"}. On a phone, use a public HTTPS URL, not localhost. (${(e as Error).message})`
       );
     }
-    const text = await res.text();
     let data: any = null;
     try {
       data = text ? JSON.parse(text) : null;
     } catch {
       data = { error: text };
     }
-    if (!res.ok) {
-      if (res.status === 401) {
+    if (status < 200 || status >= 300) {
+      if (status === 401) {
         throw new Error(
           data?.error ||
             "Invalid or revoked access token. In the dashboard, sign in as a vault user (not admin), open Tokens, create a new sk_sync_ token, and paste it here."
         );
       }
-      if (res.status === 403) {
+      if (status === 403) {
         throw new Error(
           data?.error ||
             "Forbidden. Admins cannot sync a vault — use a non-admin user token from the Tokens page."
         );
       }
-      throw new Error(data?.error || res.statusText);
+      throw new Error(data?.error || `HTTP ${status}`);
     }
     return data;
+  }
+
+  mobileUrlError(): string | null {
+    if (!isMobileApp()) return null;
+    if (isLoopbackUrl(this.settings.serverUrl)) {
+      return "On Android and iOS, localhost is this device, not your computer. Set Server URL to your public HTTPS address (for example your Railway domain).";
+    }
+    return null;
   }
 
   async startup(): Promise<boolean> {
@@ -210,6 +223,15 @@ export default class SyncidianPlugin extends Plugin {
       this.setStatus("error");
       new Notice("Syncidian: access token must start with sk_sync_");
       return false;
+    }
+    const mobileErr = this.mobileUrlError();
+    if (mobileErr) {
+      this.setStatus("error");
+      new Notice(`Syncidian: ${mobileErr}`);
+      return false;
+    }
+    if (isMobileApp() && isInsecureHttp(this.settings.serverUrl) && Platform.isIosApp) {
+      new Notice("Syncidian: iOS often blocks plain HTTP. Prefer an https:// server URL.");
     }
     try {
       await this.connect();
@@ -295,8 +317,8 @@ export default class SyncidianPlugin extends Plugin {
 
   async localManifest(): Promise<Record<string, string>> {
     const out: Record<string, string> = {};
-    for (const file of this.app.vault.getAllLoadedFiles()) {
-      if (!(file instanceof TFile)) continue;
+    // getFiles() is complete on mobile; getAllLoadedFiles() can miss vault files that are not in the editor cache.
+    for (const file of this.app.vault.getFiles()) {
       if (ignored(file.path)) continue;
       const data = await this.app.vault.readBinary(file);
       out[file.path] = await sha256(data);
@@ -321,6 +343,7 @@ export default class SyncidianPlugin extends Plugin {
 
   /** Write bytes, tolerating vault-index lag vs files already on disk. */
   async writeBinary(path: string, data: ArrayBuffer) {
+    path = normalizePath(path);
     const existing = this.app.vault.getAbstractFileByPath(path);
     if (existing instanceof TFile) {
       await this.app.vault.modifyBinary(existing, data);
@@ -406,6 +429,26 @@ export default class SyncidianPlugin extends Plugin {
       });
     }
     if (!files.length) return;
+    const chunk = pushBatchSize();
+    for (let i = 0; i < files.length; i += chunk) {
+      const slice = files.slice(i, i + chunk);
+      const last = i + chunk >= files.length;
+      await this.sendPush(slice, last ? movedAway : new Set());
+    }
+  }
+
+  async sendPush(
+    files: {
+      path: string;
+      hash: string;
+      deleted: boolean;
+      renamed_from: string;
+      base_hash: string;
+      mtime: number;
+      content: string;
+    }[],
+    movedAway: Set<string>
+  ) {
     const res = await this.api("/api/v1/sync/push", {
       method: "POST",
       body: JSON.stringify({ device_id: this.settings.deviceId, files }),
@@ -499,8 +542,8 @@ export default class SyncidianPlugin extends Plugin {
       this.pending.set(p, { deleted: true });
       this.pending.set(np, { deleted: false, renamedFrom: p });
     }
-    for (const f of this.app.vault.getAllLoadedFiles()) {
-      if (!(f instanceof TFile) || ignored(f.path)) continue;
+    for (const f of this.app.vault.getFiles()) {
+      if (ignored(f.path)) continue;
       if (f.path !== newFolder && !f.path.startsWith(newFolder + "/")) continue;
       const rel = f.path === newFolder ? "" : f.path.slice(newFolder.length + 1);
       const oldP = rel ? `${oldFolder}/${rel}` : oldFolder;
@@ -562,7 +605,8 @@ export default class SyncidianPlugin extends Plugin {
   }
 
   async openSocket() {
-    this.ws?.close();
+    if (this.wsConnecting || this.ws) return;
+    this.wsConnecting = true;
     this.normalizeCredentials();
     const base = this.settings.serverUrl.replace(/\/$/, "");
     let ticket = "";
@@ -570,17 +614,33 @@ export default class SyncidianPlugin extends Plugin {
       const t = await this.api("/api/v1/ws/ticket", { method: "POST", body: "{}" });
       ticket = t?.ticket || "";
     } catch {
+      this.wsConnecting = false;
       return;
     }
-    if (!ticket) return;
+    if (!ticket) {
+      this.wsConnecting = false;
+      return;
+    }
     const wsUrl =
       base.replace(/^http/, "ws") +
       `/api/v1/ws?device_id=${encodeURIComponent(this.settings.deviceId)}&ticket=${encodeURIComponent(ticket)}`;
     try {
       this.ws = new WebSocket(wsUrl);
     } catch {
+      this.wsConnecting = false;
       return;
     }
+    this.ws.onopen = () => {
+      this.wsConnecting = false;
+    };
+    this.ws.onerror = () => {
+      this.wsConnecting = false;
+      try {
+        this.ws?.close();
+      } catch {
+        /* ignore */
+      }
+    };
     this.ws.onmessage = (ev) => {
       void (async () => {
         try {
@@ -610,16 +670,44 @@ export default class SyncidianPlugin extends Plugin {
     };
     this.ws.onclose = () => {
       this.ws = null;
-      window.setTimeout(() => {
-        if (this.connected) void this.openSocket();
-      }, 4000);
+      this.wsConnecting = false;
     };
+  }
+
+  /** HTTP fallback when the mobile WebView blocks WebSockets (cleartext, ATS, captive Wi-Fi). */
+  async pollRemote() {
+    try {
+      const man = await this.api("/api/v1/sync/manifest");
+      const remote = new Map<string, string>();
+      for (const f of man.files || []) remote.set(f.path, f.hash);
+      let need = false;
+      for (const [path, hash] of remote) {
+        if (this.settings.hashes[path] !== hash) {
+          need = true;
+          break;
+        }
+      }
+      if (!need) {
+        for (const path of Object.keys(this.settings.hashes)) {
+          if (!remote.has(path)) {
+            need = true;
+            break;
+          }
+        }
+      }
+      if (need) await this.fullSync();
+    } catch (e) {
+      console.error(e);
+    }
   }
 
   async loadSettings() {
     this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
     if (!this.settings.hashes) this.settings.hashes = {};
     this.normalizeCredentials();
+    if (isMobileApp() && isLoopbackUrl(this.settings.serverUrl)) {
+      this.settings.serverUrl = "";
+    }
   }
 
   async saveSettings() {
@@ -641,6 +729,7 @@ class ConflictModal extends Modal {
   async onOpen() {
     const { contentEl } = this;
     contentEl.addClass("syncidian-modal");
+    if (isMobileApp()) contentEl.addClass("syncidian-modal-mobile");
     contentEl.createEl("h2", { text: "Sync conflict" });
     contentEl.createEl("p", { text: `${this.path} was modified on more than one device.` });
     let data: any = {};
@@ -698,22 +787,34 @@ class SyncidianSettingTab extends PluginSettingTab {
   display() {
     const { containerEl } = this;
     containerEl.empty();
-    containerEl.createEl("h2", { text: "Syncidian" });
     containerEl.createEl("p", {
-      text: "Install from Community plugins (or BRAT). Point this vault at your Syncidian server. GitHub is configured per user in the dashboard, not here.",
+      text: "Install from Community plugins (or BRAT). Point this vault at your Syncidian server. GitHub is configured per user in the dashboard, not here. Unlike Git plugins, this one uses only the Obsidian API and works on Android and iOS.",
     });
+    if (isMobileApp()) {
+      new Setting(containerEl)
+        .setName("Mobile")
+        .setDesc(
+          "Use a public HTTPS server URL. localhost is this phone or tablet, not your computer. iOS often blocks plain http://."
+        );
+    }
     let urlInput: HTMLInputElement | null = null;
     let tokenInput: HTMLInputElement | null = null;
     let nameInput: HTMLInputElement | null = null;
     new Setting(containerEl)
       .setName("Server URL")
-      .setDesc("Example: http://localhost:8080 or https://sync.example.com")
+      .setDesc(
+        isMobileApp()
+          ? "HTTPS address of your Syncidian server, for example https://sync.example.com"
+          : "Example: http://localhost:8080 or https://sync.example.com"
+      )
       .addText((t) => {
         urlInput = t.inputEl;
-        t.setPlaceholder("http://localhost:8080").setValue(this.plugin.settings.serverUrl).onChange(async (v) => {
-          this.plugin.settings.serverUrl = v.trim();
-          await this.plugin.saveSettings();
-        });
+        t.setPlaceholder(isMobileApp() ? "https://sync.example.com" : "http://localhost:8080")
+          .setValue(this.plugin.settings.serverUrl)
+          .onChange(async (v) => {
+            this.plugin.settings.serverUrl = v.trim();
+            await this.plugin.saveSettings();
+          });
       });
     new Setting(containerEl)
       .setName("Access token")
@@ -748,6 +849,11 @@ class SyncidianSettingTab extends PluginSettingTab {
           if (tokenInput) this.plugin.settings.token = tokenInput.value.trim().replace(/\s+/g, "");
           if (nameInput) this.plugin.settings.deviceName = nameInput.value.trim() || "Obsidian";
           await this.plugin.saveSettings();
+          const mobileErr = this.plugin.mobileUrlError();
+          if (mobileErr) {
+            new Notice(`Syncidian: ${mobileErr}`);
+            return;
+          }
           const ok = await this.plugin.startup();
           if (ok) new Notice("Syncidian connected");
         })
