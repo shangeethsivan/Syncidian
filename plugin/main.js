@@ -252,6 +252,7 @@ var DEFAULT_SETTINGS = {
   hashes: {}
 };
 var IDLE_SYNC_MS = 3e3;
+var RESUME_SYNC_MIN_MS = 2e3;
 var IGNORE = [
   /^\.obsidian\/workspace(-mobile)?\.json$/,
   /^\.obsidian\/workspace-/,
@@ -271,11 +272,13 @@ var SyncidianPlugin = class extends import_obsidian2.Plugin {
     this.ribbonEl = null;
     this.connected = false;
     this.syncing = false;
+    this.booting = false;
     this.ws = null;
     this.wsConnecting = false;
     this.pending = /* @__PURE__ */ new Map();
     this.idleTimer = null;
     this.applyingRemote = 0;
+    this.lastResumeSync = 0;
   }
   async onload() {
     await this.loadSettings();
@@ -306,6 +309,19 @@ var SyncidianPlugin = class extends import_obsidian2.Plugin {
           void this.pollRemote();
       }, 15e3)
     );
+    this.registerDomEvent(document, "visibilitychange", () => {
+      if (document.visibilityState === "visible")
+        void this.onForeground();
+    });
+    this.registerDomEvent(window, "focus", () => {
+      void this.onForeground();
+    });
+    this.registerDomEvent(window, "online", () => {
+      void this.onForeground();
+    });
+    const onCapacitorResume = () => void this.onForeground();
+    document.addEventListener("resume", onCapacitorResume);
+    this.register(() => document.removeEventListener("resume", onCapacitorResume));
     this.registerEvent(this.app.vault.on("create", (f) => this.queueChange(f, false)));
     this.registerEvent(this.app.vault.on("modify", (f) => this.queueChange(f, false)));
     this.registerEvent(this.app.vault.on("delete", (f) => this.queueChange(f, true)));
@@ -410,38 +426,45 @@ var SyncidianPlugin = class extends import_obsidian2.Plugin {
     return null;
   }
   async startup() {
-    this.normalizeCredentials();
-    if (!this.settings.token || !this.settings.serverUrl) {
-      this.setStatus("offline");
-      new import_obsidian2.Notice("Syncidian: set Server URL and access token first");
+    if (this.booting)
       return false;
-    }
-    if (!this.settings.token.startsWith("sk_sync_")) {
-      this.setStatus("error");
-      new import_obsidian2.Notice("Syncidian: access token must start with sk_sync_");
-      return false;
-    }
-    const mobileErr = this.mobileUrlError();
-    if (mobileErr) {
-      this.setStatus("error");
-      new import_obsidian2.Notice(`Syncidian: ${mobileErr}`);
-      return false;
-    }
-    if (isMobileApp() && isInsecureHttp(this.settings.serverUrl) && import_obsidian2.Platform.isIosApp) {
-      new import_obsidian2.Notice("Syncidian: iOS often blocks plain HTTP. Prefer an https:// server URL.");
-    }
+    this.booting = true;
     try {
-      await this.connect();
-      const ok = await this.fullSync();
-      if (!ok)
+      this.normalizeCredentials();
+      if (!this.settings.token || !this.settings.serverUrl) {
+        this.setStatus("offline");
+        new import_obsidian2.Notice("Syncidian: set Server URL and access token first");
         return false;
-      await this.openSocket();
-      return true;
-    } catch (e) {
-      console.error(e);
-      this.setStatus("error");
-      new import_obsidian2.Notice(`Syncidian: ${e.message}`);
-      return false;
+      }
+      if (!this.settings.token.startsWith("sk_sync_")) {
+        this.setStatus("error");
+        new import_obsidian2.Notice("Syncidian: access token must start with sk_sync_");
+        return false;
+      }
+      const mobileErr = this.mobileUrlError();
+      if (mobileErr) {
+        this.setStatus("error");
+        new import_obsidian2.Notice(`Syncidian: ${mobileErr}`);
+        return false;
+      }
+      if (isMobileApp() && isInsecureHttp(this.settings.serverUrl) && import_obsidian2.Platform.isIosApp) {
+        new import_obsidian2.Notice("Syncidian: iOS often blocks plain HTTP. Prefer an https:// server URL.");
+      }
+      try {
+        await this.connect();
+        const ok = await this.fullSync();
+        if (!ok)
+          return false;
+        await this.openSocket();
+        return true;
+      } catch (e) {
+        console.error(e);
+        this.setStatus("error");
+        new import_obsidian2.Notice(`Syncidian: ${e.message}`);
+        return false;
+      }
+    } finally {
+      this.booting = false;
     }
   }
   async connect() {
@@ -885,6 +908,45 @@ var SyncidianPlugin = class extends import_obsidian2.Plugin {
       this.ws = null;
       this.wsConnecting = false;
     };
+  }
+  /**
+   * Pull remote changes after the user returns to Obsidian (desktop window
+   * focus, or Android/iOS coming out of the background). A live WebSocket is
+   * not enough: Electron and mobile WebViews often keep a stale OPEN socket
+   * that delivered no file_changed events while the app was asleep.
+   */
+  async onForeground() {
+    const now = Date.now();
+    if (now - this.lastResumeSync < RESUME_SYNC_MIN_MS)
+      return;
+    this.lastResumeSync = now;
+    this.normalizeCredentials();
+    if (!this.settings.token || !this.settings.serverUrl)
+      return;
+    if (this.mobileUrlError())
+      return;
+    if (!this.connected) {
+      if (!this.booting)
+        void this.startup();
+      return;
+    }
+    this.reconnectSocketIfNeeded();
+    if (!this.syncing && !this.booting)
+      void this.pollRemote();
+  }
+  reconnectSocketIfNeeded() {
+    const ws = this.ws;
+    if (ws && ws.readyState === WebSocket.OPEN)
+      return;
+    if (ws) {
+      try {
+        ws.close();
+      } catch (e) {
+      }
+      this.ws = null;
+    }
+    this.wsConnecting = false;
+    void this.openSocket();
   }
   /** HTTP fallback when the mobile WebView blocks WebSockets (cleartext, ATS, captive Wi-Fi). */
   async pollRemote() {

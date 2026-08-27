@@ -656,6 +656,8 @@ Fetch / Merge / Sync
 Vault Ready
 ```
 
+Coming back to an already-open vault (switching apps, focusing the window, or bringing the phone app to the foreground) also polls the server and pulls any notes that arrived while Obsidian was in the background.
+
 The goal is:
 
 > **Open Obsidian and start working.**
