@@ -76,7 +76,7 @@ You still run a Syncidian server (step 1). The plugin is only the Obsidian clien
    * Device name: e.g. `MacBook Pro`
 4. Click **Connect**.
 
-**If it is not listed yet**, install [BRAT](https://github.com/TfTHacker/obsidian42-brat), then add `shangeethsivan/Syncidian` (needs a GitHub Release whose tag matches `manifest.json` `version`).
+**If it is not listed yet**, install [BRAT](https://github.com/TfTHacker/obsidian42-brat), then add `shangeethsivan/Syncidian`. BRAT needs a GitHub Release whose **tag** matches `manifest.json` `version` **and** whose **Assets** list includes `main.js`, `manifest.json`, and `styles.css` (not only the automatic source zip). See [Publishing](#-publishing-the-obsidian-plugin).
 
 **Sideload** from this repo (desktop, or copy the same folder onto a phone):
 
@@ -106,11 +106,9 @@ Repeat the token (and install, if you sideloaded) on each device (Windows, Mac, 
 
 ### Android and iOS
 
-The plugin is **not desktop-only**. Unlike Git community plugins, it does not use Node.js, Electron, or a local `git` binary, so it loads on phones.
+Step-by-step (Restricted mode, Community plugins / BRAT / copying files, then Connect): **[Enable on Android and iOS](docs/install-mobile.md)**.
 
-Copy the same three files into the vault on the device (Files app, iCloud, USB, Syncthing, or a vault that already has them from desktop), or install from Community plugins / BRAT on the phone. Turn Restricted mode off and enable **Syncidian**.
-
-On a phone, **Server URL must be a public `https://` address** (your Railway domain or similar). `http://localhost:8080` is the phone itself, not your computer. iOS often blocks plain `http://`. Details: [`plugin/README.md`](plugin/README.md).
+On a phone, **Server URL must be a public `https://` address** (your Railway domain or similar). `http://localhost:8080` is the phone itself, not your computer. iOS often blocks plain `http://`.
 
 ## 3. Optional: GitHub backup (per user)
 
@@ -131,9 +129,19 @@ Authorization: Bearer sk_sync_…
 
 # 📦 Publishing the Obsidian plugin
 
-Obsidian’s community directory reads **`manifest.json` at the repository root** (kept in sync with `plugin/manifest.json`). Users install `main.js`, `manifest.json`, and `styles.css` from a GitHub Release whose **tag matches** that `version` exactly (`0.1.0`, not `v0.1.0`).
+There are **two** places plugin metadata lives. Neither is a `tests/` folder (a test only *checks* the root files exist).
 
-This repo is set up for that:
+1. **Git repo (community directory crawler):** `manifest.json` and `versions.json` at the **repository root**, kept identical to `plugin/manifest.json` and `plugin/versions.json` with `make plugin-manifest`. Obsidian reads these at HEAD of the default branch.
+2. **GitHub Release Assets (what BRAT and in-app install actually download):** three **attached files** on the release whose tag equals `version` (`0.1.0`, not `v0.1.0`):
+   * `main.js`
+   * `manifest.json`
+   * `styles.css`
+
+“Assets” here means that downloadable list on the release page. Creating a tag or clicking **Create release** in the GitHub UI does **not** attach those files by itself. `.github/workflows/release.yml` builds the plugin and uploads them.
+
+If a previous run left a release with no plugin files (for example attestation failed on a **private** repo before upload), merge this workflow, then **Actions → Release Obsidian plugin → Run workflow** and enter the existing tag. That uploads or overwrites the three files. You can also attach `plugin/main.js`, `plugin/manifest.json`, and `plugin/styles.css` by hand on the release page.
+
+Publish:
 
 1. Edit the plugin under `plugin/`. After a version bump, copy metadata to the root:
 
@@ -141,18 +149,20 @@ This repo is set up for that:
    make plugin-manifest
    ```
 
-2. Push an annotated tag matching `plugin/manifest.json` `version`. `.github/workflows/release.yml` builds the plugin, attests the artifacts, and publishes the three files on a GitHub Release:
+2. Push an annotated tag matching `plugin/manifest.json` `version`:
 
    ```bash
    git tag -a 0.1.0 -m "0.1.0"
    git push origin 0.1.0
    ```
 
+   The workflow skips GitHub attestations on private repositories (that feature is not available there) so the three files still upload.
+
 3. Submit (or update) the listing at [community.obsidian.md](https://community.obsidian.md): sign in with your Obsidian account, link GitHub, and add this repository (`shangeethsivan/Syncidian`). The directory uses the root `manifest.json` on the default branch; the `id` is `syncidian`.
 
 4. Address automated review feedback, then bump the version and tag again. After approval, people install from Community plugins → Browse → **Syncidian**.
 
-Until that listing is live, testers can use [BRAT](https://github.com/TfTHacker/obsidian42-brat) pointed at this GitHub repo (after the first tagged release) or `scripts/install-plugin.sh`. Keep `isDesktopOnly` **false** so Android and iOS can install it. Mobile review notes: [`docs/community-plugin.md`](docs/community-plugin.md).
+Until that listing is live, testers can use [BRAT](https://github.com/TfTHacker/obsidian42-brat) pointed at this GitHub repo **after the three files are on the Release**, or `scripts/install-plugin.sh`. Keep `isDesktopOnly` **false** so Android and iOS can install it. Mobile install: [`docs/install-mobile.md`](docs/install-mobile.md). Packaging notes: [`docs/community-plugin.md`](docs/community-plugin.md).
 
 Rebuilding the plugin after TypeScript changes:
 
@@ -298,7 +308,7 @@ Syncidian is designed to work wherever Obsidian plugins are supported.
 * 🤖 Android
 * 📱 iOS
 
-The plugin is **not** desktop-only. It uses the Obsidian Vault API and `requestUrl` so it loads on phones; Git community plugins that depend on Node or a local `git` binary cannot. On Android and iOS, point the plugin at a public HTTPS server URL (not `localhost`).
+The plugin is **not** desktop-only. It uses the Obsidian Vault API and `requestUrl` so it loads on phones; Git community plugins that depend on Node or a local `git` binary cannot. On Android and iOS, point the plugin at a public HTTPS server URL (not `localhost`). Enable steps: [`docs/install-mobile.md`](docs/install-mobile.md).
 
 The goal is to maintain one consistent synchronization experience across all supported platforms.
 

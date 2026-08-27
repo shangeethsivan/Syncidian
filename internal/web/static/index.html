@@ -506,12 +506,13 @@ docker compose up --build -d</pre>
   {
     title: "7. Install the Obsidian plugin",
     html: () => `
-      <p>Install <b>Syncidian</b> from Community plugins when it is listed. Until then, use BRAT or sideload from this repo. The plugin is <b>not desktop-only</b> — unlike Git community plugins, it uses the Obsidian API only, so it runs on Android and iOS. You still need a token from this dashboard.</p>
+      <p>Install <b>Syncidian</b> from Community plugins when it is listed. Until then, use BRAT or copy three files into the vault. The plugin is <b>not desktop-only</b> — unlike Git community plugins, it uses the Obsidian API only, so it runs on Android and iOS. You still need a token from this dashboard. Full phone steps: the repo file <code>docs/install-mobile.md</code>.</p>
+      <p>Obsidian will not show any community plugin until <b>Restricted mode</b> is off: Settings → Community plugins → <b>Turn off restricted mode</b>.</p>
       <h2>Community plugins</h2>
       <ol>
-        <li>Settings → Community plugins → turn <b>Restricted mode</b> off.</li>
+        <li>Restricted mode off.</li>
         <li>Browse → search <b>Syncidian</b> → Install → Enable.</li>
-        <li>If it is not listed yet, install the BRAT community plugin and add <code>shangeethsivan/Syncidian</code>.</li>
+        <li>If it is not listed yet, install the BRAT community plugin and add <code>shangeethsivan/Syncidian</code>. BRAT needs a GitHub Release that has <code>main.js</code>, <code>manifest.json</code>, and <code>styles.css</code> under <b>Assets</b> (not only the source zip). Those files are not in a <code>tests/</code> folder.</li>
       </ol>
       <h2>Desktop sideload (Mac, Windows, Linux)</h2>
       <pre>chmod +x scripts/install-plugin.sh
@@ -524,16 +525,17 @@ docker compose up --build -d</pre>
       </ol>
       <h2>Android</h2>
       <ol>
-        <li>Prefer Community plugins or BRAT on the phone. Otherwise copy the same three files into your vault’s <code>.obsidian/plugins/syncidian/</code> folder (Files app, Syncthing, USB, or a desktop that already has the vault).</li>
-        <li>In Obsidian mobile: Settings → Community plugins → turn <b>Restricted mode</b> off.</li>
-        <li>Enable <b>Syncidian</b>.</li>
-        <li>Server URL must be a public <code>https://</code> address. <code>localhost</code> is this phone, not your computer.</li>
+        <li>Open the vault in Obsidian. Settings → Community plugins → <b>Turn off restricted mode</b>.</li>
+        <li>Prefer Browse → <b>Syncidian</b>, or BRAT as above. To copy files: put <code>manifest.json</code>, <code>main.js</code>, and <code>styles.css</code> in the vault’s <code>.obsidian/plugins/syncidian/</code> folder (Files app with hidden files on, USB, Syncthing, or a desktop that already has the vault). Folder name must be <code>syncidian</code>.</li>
+        <li>Enable <b>Syncidian</b> on the installed plugins list.</li>
+        <li>Settings → Syncidian: Server URL must be a public <code>https://</code> address (this page’s origin). <code>localhost</code> is this phone, not your computer. Paste a <code>sk_sync_…</code> token, tap <b>Connect</b>.</li>
       </ol>
       <h2>iOS / iPadOS</h2>
       <ol>
-        <li>Prefer Community plugins or BRAT. Otherwise put the three plugin files in the vault under <code>.obsidian/plugins/syncidian/</code> via the Files app (iCloud vault) or by syncing the vault from a desktop that already has them.</li>
-        <li>Settings → Community plugins → turn <b>Restricted mode</b> off, then enable <b>Syncidian</b>.</li>
-        <li>Your Syncidian server must be reachable over HTTPS from the phone (not <code>localhost</code>, and often not plain <code>http://</code>).</li>
+        <li>Settings → Community plugins → <b>Turn off restricted mode</b>.</li>
+        <li>Prefer Community plugins or BRAT. Otherwise put the three files in <code>.obsidian/plugins/syncidian/</code> via the Files app (iCloud Drive → Obsidian → your vault) or by copying from a Mac into the same iCloud vault, then reopen Obsidian.</li>
+        <li>Enable <b>Syncidian</b>.</li>
+        <li>Server URL must be HTTPS reachable from the phone (this page’s origin — not <code>localhost</code>, and often not plain <code>http://</code>). Paste the token, tap <b>Connect</b>.</li>
       </ol>
     `,
   },
@@ -928,12 +930,13 @@ async function overview(main) {
       <h2 style="font-size:16px;margin-top:14px">1. Create an access token</h2>
       <p>Open the <b>Tokens</b> page, name the token after this device, click <b>Create token</b>, and copy the <code>sk_sync_…</code> value.</p>
       <h2 style="font-size:16px;margin-top:14px">2. Install the plugin</h2>
-      <p><b>Community plugins</b> — Settings → Community plugins → turn <b>Restricted mode</b> off → Browse → search <b>Syncidian</b> → Install → Enable. If it is not listed yet, install BRAT and add <code>shangeethsivan/Syncidian</code>.</p>
+      <p><b>Every device:</b> Settings → Community plugins → <b>Turn off restricted mode</b>, then enable <b>Syncidian</b>.</p>
+      <p><b>Community plugins</b> — Browse → search <b>Syncidian</b> → Install → Enable. If it is not listed yet, install BRAT and add <code>shangeethsivan/Syncidian</code> (needs a GitHub Release with <code>main.js</code>, <code>manifest.json</code>, and <code>styles.css</code> under Assets).</p>
       <p><b>Obsidian on desktop</b> sideload — from a checkout of this repo:</p>
       <pre>./scripts/install-plugin.sh "/path/to/YourVault"</pre>
-      <p>Or copy <code>plugin/manifest.json</code>, <code>plugin/main.js</code>, and <code>plugin/styles.css</code> into <code>{Vault}/.obsidian/plugins/syncidian/</code>. Then Settings → Community plugins → turn <b>Restricted mode</b> off → enable <b>Syncidian</b>.</p>
-      <p><b>Android</b> — prefer Community plugins or BRAT. Otherwise copy those three files into the vault’s <code>.obsidian/plugins/syncidian/</code> folder (Files, Syncthing, or USB), turn Restricted mode off, and enable Syncidian. Use a public HTTPS server URL; <code>localhost</code> is the phone.</p>
-      <p><b>iOS</b> — prefer Community plugins or BRAT. Otherwise put the same folder in an iCloud (or synced) vault via the Files app, turn Restricted mode off, and enable Syncidian. The server URL must be HTTPS reachable from the phone (not <code>localhost</code>).</p>
+      <p>Or copy <code>plugin/manifest.json</code>, <code>plugin/main.js</code>, and <code>plugin/styles.css</code> into <code>{Vault}/.obsidian/plugins/syncidian/</code> (those files live in <code>plugin/</code>, not in <code>tests/</code>).</p>
+      <p><b>Android</b> — same Restricted mode step, then Community plugins, BRAT, or copy the three files into <code>.obsidian/plugins/syncidian/</code> (show hidden files in the Files app). Server URL: <code>${esc(location.origin)}</code> — not <code>localhost</code>.</p>
+      <p><b>iOS</b> — Restricted mode off, then Community plugins, BRAT, or drop the same folder into the iCloud vault via the Files app. Server URL must be HTTPS from the phone (<code>${esc(location.origin)}</code>).</p>
       <h2 style="font-size:16px;margin-top:14px">3. Connect in Obsidian</h2>
       <ol>
         <li>Settings → Syncidian</li>

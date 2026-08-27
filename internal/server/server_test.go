@@ -1208,6 +1208,8 @@ func TestAccessTokenRejectedInQueryString(t *testing.T) {
 	}
 }
 
+// TestCommunityPluginManifestAtRepoRoot checks git-root copies of plugin metadata.
+// It does not write files into tests/; BRAT downloads GitHub Release attachments instead.
 func TestCommunityPluginManifestAtRepoRoot(t *testing.T) {
 	root := repoRoot(t)
 	rootManifest := filepath.Join(root, "manifest.json")
