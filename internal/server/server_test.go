@@ -499,6 +499,7 @@ func TestDashboardServed(t *testing.T) {
 		`Register the GitHub App`,
 		`docs/github-app.md`,
 		`Obsidian on desktop`,
+		`/assets/obsidian.zip`,
 		`Android`,
 		`iOS`,
 		`id="landing-persist"`,
@@ -515,6 +516,8 @@ func TestDashboardServed(t *testing.T) {
 		`Connected MCP clients`,
 		`MCP calls (7d)`,
 		`mcpClientTable`,
+		`rel="ai-catalog"`,
+		`navigator.modelContext`,
 	} {
 		if !bytes.Contains(b, []byte(needle)) {
 			t.Fatalf("dashboard missing required markup %q", needle)

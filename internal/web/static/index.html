@@ -4,11 +4,45 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Syncidian</title>
+  <meta name="description" content="Self-hosted Obsidian sync and MCP. Notes on every device. One GitHub repository you own." />
+  <link rel="api-catalog" href="/.well-known/api-catalog" type="application/linkset+json" />
+  <link rel="ai-catalog" href="/.well-known/ai-catalog.json" type="application/json" />
+  <link rel="describedby" href="/.well-known/mcp/server-card.json" type="application/json" />
+  <link rel="sitemap" href="/sitemap.xml" type="application/xml" />
+  <link rel="alternate" type="text/markdown" href="/" />
   <script>
     (function () {
       var t = localStorage.getItem("syncidian-theme");
       if (!t) t = matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
       document.documentElement.dataset.theme = t;
+    })();
+  </script>
+  <script>
+    (function () {
+      var tools = [{
+        name: "syncidian_get_started",
+        description: "How to sign in to Syncidian, connect GitHub, mint a Bearer token, and call POST /mcp.",
+        inputSchema: { type: "object", properties: {} },
+        execute: async function () {
+          var origin = location.origin;
+          return {
+            content: [{
+              type: "text",
+              text: "Agents: Authorization Bearer sk_sync_ on POST " + origin + "/mcp. Mint via dashboard Tokens or POST " + origin + "/api/v1/mcp/login. Humans: GitHub at " + origin + "/api/v1/auth/github/start. Docs: " + origin + "/auth.md"
+            }]
+          };
+        }
+      }];
+      function register() {
+        var ctx = navigator.modelContext;
+        if (!ctx) return false;
+        if (typeof ctx.provideContext === "function") { ctx.provideContext({ tools: tools }); return true; }
+        if (typeof ctx.registerTool === "function") { tools.forEach(function (t) { ctx.registerTool(t); }); return true; }
+        return false;
+      }
+      if (!register()) {
+        document.addEventListener("DOMContentLoaded", register);
+      }
     })();
   </script>
   <style>
@@ -514,9 +548,13 @@ docker compose up --build -d</pre>
         <li>Browse → search <b>Syncidian</b> → Install → Enable.</li>
         <li>If it is not listed yet, install the BRAT community plugin and add <code>shangeethsivan/Syncidian</code>. BRAT needs a GitHub Release that has <code>main.js</code>, <code>manifest.json</code>, and <code>styles.css</code> under <b>Assets</b> (not only the source zip). Those files are not in a <code>tests/</code> folder.</li>
       </ol>
+      <h2>From this server (no git clone)</h2>
+      <p>Download <a href="/assets/obsidian.zip"><code>obsidian.zip</code></a> or <a href="/assets/obsidian/main.js"><code>main.js</code></a>, <a href="/assets/obsidian/manifest.json"><code>manifest.json</code></a>, and <a href="/assets/obsidian/styles.css"><code>styles.css</code></a>. Put them in <code>{Vault}/.obsidian/plugins/syncidian/</code>. After you deploy a plugin change, download again and replace those files.</p>
       <h2>Desktop sideload (Mac, Windows, Linux)</h2>
       <pre>chmod +x scripts/install-plugin.sh
-./scripts/install-plugin.sh "/path/to/YourVault"</pre>
+./scripts/install-plugin.sh "/path/to/YourVault"
+# or, from this instance:
+./scripts/install-plugin.sh "/path/to/YourVault" "${esc(location.origin)}"</pre>
       <p>Or copy <code>plugin/manifest.json</code>, <code>plugin/main.js</code>, and <code>plugin/styles.css</code> into <code>{Vault}/.obsidian/plugins/syncidian/</code>.</p>
       <ol>
         <li>Settings → Community plugins → turn <b>Restricted mode</b> off.</li>
@@ -950,7 +988,8 @@ async function overview(main) {
       <h2 style="font-size:16px;margin-top:14px">2. Install the plugin</h2>
       <p><b>Every device:</b> Settings → Community plugins → <b>Turn off restricted mode</b>, then enable <b>Syncidian</b>.</p>
       <p><b>Community plugins</b> — Browse → search <b>Syncidian</b> → Install → Enable. If it is not listed yet, install BRAT and add <code>shangeethsivan/Syncidian</code> (needs a GitHub Release with <code>main.js</code>, <code>manifest.json</code>, and <code>styles.css</code> under Assets).</p>
-      <p><b>Obsidian on desktop</b> sideload — from a checkout of this repo:</p>
+      <p><b>From this server</b> (no git clone) — download <a href="/assets/obsidian.zip"><code>obsidian.zip</code></a> or the three files: <a href="/assets/obsidian/main.js"><code>main.js</code></a>, <a href="/assets/obsidian/manifest.json"><code>manifest.json</code></a>, <a href="/assets/obsidian/styles.css"><code>styles.css</code></a>. Unzip or copy them into <code>{Vault}/.obsidian/plugins/syncidian/</code>. To refresh after a server deploy: download again and replace those files, then reload the plugin in Obsidian.</p>
+      <p><b>Obsidian on desktop</b> from a checkout of this repo:</p>
       <pre>./scripts/install-plugin.sh "/path/to/YourVault"</pre>
       <p>Or copy <code>plugin/manifest.json</code>, <code>plugin/main.js</code>, and <code>plugin/styles.css</code> into <code>{Vault}/.obsidian/plugins/syncidian/</code> (those files live in <code>plugin/</code>, not in <code>tests/</code>).</p>
       <p><b>Android</b> — same Restricted mode step, then Community plugins, BRAT, or copy the three files into <code>.obsidian/plugins/syncidian/</code> (show hidden files in the Files app). Server URL: <code>${esc(location.origin)}</code> — not <code>localhost</code>.</p>

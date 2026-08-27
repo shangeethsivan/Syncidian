@@ -38,7 +38,7 @@ The release **tag** must match `manifest.json` `version` exactly (`0.1.0`, not `
 
 ## Option C — Copy the three plugin files into the vault
 
-Use this when Community plugins and BRAT are not available yet, or when you want the files from a git checkout.
+Use this when Community plugins and BRAT are not available yet, or when you want the files from a running Syncidian server (no git clone).
 
 Obsidian loads **exactly these three files** from:
 
@@ -48,7 +48,16 @@ Obsidian loads **exactly these three files** from:
 {Vault}/.obsidian/plugins/syncidian/styles.css
 ```
 
-Get them from `plugin/` in this repository (after `cd plugin && npm run build` if you changed TypeScript). They are **not** generated into a `tests/` folder. A Go test only *checks* that `manifest.json` and `versions.json` also exist at the **repository root** for Obsidian’s community directory.
+On a computer, download them from your instance:
+
+- Zip: `https://your-syncidian.example/assets/obsidian.zip`
+- Files: `https://your-syncidian.example/assets/obsidian/main.js` (and `manifest.json`, `styles.css`)
+
+```bash
+./scripts/install-plugin.sh "/path/to/YourVault" "https://your-syncidian.example"
+```
+
+Or get them from `plugin/` in this repository (after `cd plugin && npm run build` if you changed TypeScript). They are **not** generated into a `tests/` folder. A Go test checks that `manifest.json` and `versions.json` also exist at the **repository root**, and that `internal/web/static/assets/obsidian/` matches `plugin/` (`make plugin-manifest`).
 
 `.obsidian` is a hidden folder. Turn on **Show hidden files** in the Files app if you cannot see it.
 

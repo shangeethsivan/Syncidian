@@ -14,6 +14,7 @@ Nothing is generated into `tests/`. `internal/server/server_test.go` (`TestCommu
 | --- | --- | --- |
 | Community-directory metadata | **`manifest.json` and `versions.json` at the git repo root** (copies of `plugin/manifest.json` and `plugin/versions.json`, via `make plugin-manifest`) | Obsidian’s **community.obsidian.md** crawler, at HEAD of the default branch |
 | Plugin source and the files you sideload | **`plugin/`** (`main.ts`, compiled `main.js`, `manifest.json`, `styles.css`) | You, `scripts/install-plugin.sh`, and the release workflow |
+| Running server copies | **`internal/web/static/assets/obsidian/`** (same three files, via `make plugin-manifest`) | `GET /assets/obsidian/` and `GET /assets/obsidian.zip` so you can update a vault without cloning the repo |
 | GitHub Release **Assets** | Attachments on the release whose **tag equals** `version` (`0.1.0`, no `v` prefix) | **BRAT** and in-app Community plugins. Exactly three files: `main.js`, `manifest.json`, `styles.css` |
 
 **“Assets” on a GitHub Release** means the downloadable files listed under the release title (not git LFS, not the source zip GitHub always adds). If that list has only “Source code (zip)” and no `main.js`, BRAT has nothing to install.

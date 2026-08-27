@@ -87,8 +87,12 @@ flowchart LR
 flowchart TB
   subgraph public [Unauthenticated — public site]
     H["GET /health · /ready"]
-    UI["GET /  → one-page landing"]
+    UI["GET /  HTML or text/markdown"]
     AdminUI["GET /admin → admin sign-in / first setup"]
+    Robots["GET /robots.txt · /sitemap.xml · /auth.md"]
+    Discover["GET /.well-known/api-catalog · mcp/server-card.json<br/>oauth-protected-resource · agent-skills · ai-catalog"]
+    OpenAPI["GET /openapi.json"]
+    PlugDL["GET /assets/obsidian.zip · /assets/obsidian/*"]
     S1["GET/POST /api/v1/setup"]
     L["POST /api/v1/auth/login · /auth/signup"]
     GHO["GET /api/v1/auth/github/start · /callback"]
@@ -123,7 +127,7 @@ flowchart TB
   session --- plugin
 ```
 
-Both the dashboard cookie (`syncidian_session`) and the plugin/MCP Bearer token go through `authenticate()`. The Obsidian plugin calls the HTTP API with **`requestUrl`** (not browser `fetch`) so Android (`http://localhost` origin) and iOS (`capacitor://localhost`) are not blocked by CORS. Live updates use a WebSocket after `POST /api/v1/ws/ticket`; if the socket cannot connect (cleartext HTTP, iOS ATS), the plugin polls `GET /api/v1/sync/manifest`. The same poll runs when the vault window is focused again so a sleeping desktop or phone socket does not miss notes. Raw `sk_sync_…` values are shown once and stored as SHA-256 hashes. Session cookies are stored hashed too. GitHub App PEM, client secrets, and installation tokens are encrypted at rest (`enc:v1:` AES-256-GCM) with `SYNCIDIAN_DATA_KEY` or `data/secret.key`. Access tokens **cannot** call GitHub connect/disconnect/sync-now or mint more tokens — those require a dashboard session. The plugin identifies itself with `X-Syncidian-Client`; that header is not a security boundary (it is spoofable). Tokens are not accepted in query strings. `GET/POST /api/v1/github` is never public. GitHub App **callback**, **setup**, and **webhook** URLs are public so GitHub can redirect and ping.
+Both the dashboard cookie (`syncidian_session`) and the plugin/MCP Bearer token go through `authenticate()`. The public site also advertises itself to AI agents: `GET /` returns markdown when `Accept: text/markdown`, `GET /robots.txt` declares crawl and Content-Signal rules, and `/.well-known/` hosts an API catalog, MCP Server Card, OAuth protected-resource metadata, agent skill index, and ARD `ai-catalog.json`. `GET /auth.md` explains Bearer tokens. Unauthenticated `GET /assets/obsidian/` and `GET /assets/obsidian.zip` serve the three Obsidian sideload files so you can update a local plugin without cloning the repository. DNS-AID records (`_mcp._agents…`) are optional at the DNS host; the app cannot publish them. If Cloudflare AI Crawl Control serves a managed `robots.txt`, disable that override so origin rules are visible. The Obsidian plugin calls the HTTP API with **`requestUrl`** (not browser `fetch`) so Android (`http://localhost` origin) and iOS (`capacitor://localhost`) are not blocked by CORS. Live updates use a WebSocket after `POST /api/v1/ws/ticket`; if the socket cannot connect (cleartext HTTP, iOS ATS), the plugin polls `GET /api/v1/sync/manifest`. The same poll runs when the vault window is focused again so a sleeping desktop or phone socket does not miss notes. Raw `sk_sync_…` values are shown once and stored as SHA-256 hashes. Session cookies are stored hashed too. GitHub App PEM, client secrets, and installation tokens are encrypted at rest (`enc:v1:` AES-256-GCM) with `SYNCIDIAN_DATA_KEY` or `data/secret.key`. Access tokens **cannot** call GitHub connect/disconnect/sync-now or mint more tokens — those require a dashboard session. The plugin identifies itself with `X-Syncidian-Client`; that header is not a security boundary (it is spoofable). Tokens are not accepted in query strings. `GET/POST /api/v1/github` is never public. GitHub App **callback**, **setup**, and **webhook** URLs are public so GitHub can redirect and ping.
 
 ---
 
@@ -536,6 +540,7 @@ Railway: mount a volume at `/data`. `railway.json` sets `requiredMountPath` to `
 | --- | --- |
 | Process entry | [`cmd/syncidian/main.go`](../cmd/syncidian/main.go) |
 | HTTP routes + auth | [`internal/server/server.go`](../internal/server/server.go), [`internal/server/auth.go`](../internal/server/auth.go), [`internal/server/auth_github.go`](../internal/server/auth_github.go) |
+| Agent discovery | [`internal/server/agents.go`](../internal/server/agents.go) (`/robots.txt`, `/auth.md`, `/.well-known/…`) |
 | Plan / push / devices | [`internal/server/sync.go`](../internal/server/sync.go) |
 | Sync decisions | [`internal/syncengine/plan.go`](../internal/syncengine/plan.go), [`internal/syncengine/merge.go`](../internal/syncengine/merge.go) |
 | Git add / modify / rm / mv | [`internal/gitx/repo.go`](../internal/gitx/repo.go) |
@@ -545,6 +550,7 @@ Railway: mount a volume at `/data`. `railway.json` sets `requiredMountPath` to `
 | Live updates | [`internal/server/ws.go`](../internal/server/ws.go) |
 | Persistence | [`internal/store/store.go`](../internal/store/store.go), [`internal/store/crypt.go`](../internal/store/crypt.go), [`internal/config/persist.go`](../internal/config/persist.go), [`railway.json`](../railway.json) |
 | Dashboard UI | [`internal/web/static/index.html`](../internal/web/static/index.html) |
+| Sideload plugin from the server | [`internal/web/static/assets/obsidian/`](../internal/web/static/assets/obsidian/) (`GET /assets/obsidian/`, `GET /assets/obsidian.zip`) |
 | Obsidian plugin (desktop + Android/iOS) | [`plugin/main.ts`](../plugin/main.ts), [`plugin/mobile.ts`](../plugin/mobile.ts), [`plugin/manifest.json`](../plugin/manifest.json) (`isDesktopOnly: false`) |
 | Community plugin listing | Root [`manifest.json`](../manifest.json) (must match [`plugin/manifest.json`](../plugin/manifest.json)); GitHub Release **Assets** (`main.js`, `manifest.json`, `styles.css`) via [`.github/workflows/release.yml`](../.github/workflows/release.yml); phone enable steps [`docs/install-mobile.md`](install-mobile.md); packaging notes [`docs/community-plugin.md`](community-plugin.md) |
 | Keep diagrams current | [`AGENT.md`](../AGENT.md) |

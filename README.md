@@ -60,7 +60,7 @@ Users, GitHub App credentials, and vault files live in SQLite on disk. Railway�
 4. Optional variables: `SYNCIDIAN_BOOTSTRAP_USER`, `SYNCIDIAN_BOOTSTRAP_PASSWORD`. To keep the GitHub App if the volume is missing, also set `SYNCIDIAN_GITHUB_APP_*` (see [Set up the GitHub App](docs/github-app.md)). Set `SYNCIDIAN_DATA_KEY` (32-byte hex) so GitHub App secrets stay encrypted even if `syncidian.db` is copied off the volume.
 5. Open the public URL. Create the admin at `/admin`, then register the GitHub App ([walkthrough](docs/github-app.md)). `/admin` warns if the data directory is still ephemeral. Let people sign in with GitHub from the public site. Point the plugin at that URL with that user's token.
 
-Health check: `GET /health`.
+Health check: `GET /health`. Agents can also fetch `/robots.txt`, `/auth.md`, `/.well-known/mcp/server-card.json`, and markdown for `GET /` (`Accept: text/markdown`). If a CDN (Cloudflare AI Crawl Control) injects its own `robots.txt`, turn that off so the origin file is what crawlers see.
 
 ## 2. Install the Obsidian plugin
 
@@ -78,9 +78,15 @@ You still run a Syncidian server (step 1). The plugin is only the Obsidian clien
 
 **If it is not listed yet**, install [BRAT](https://github.com/TfTHacker/obsidian42-brat), then add `shangeethsivan/Syncidian`. BRAT needs a GitHub Release whose **tag** matches `manifest.json` `version` **and** whose **Assets** list includes `main.js`, `manifest.json`, and `styles.css` (not only the automatic source zip). See [Publishing](#-publishing-the-obsidian-plugin).
 
-**Sideload** from this repo (desktop, or copy the same folder onto a phone):
+**Sideload** from a running Syncidian server (no git clone) or from this repo:
 
 Syncidian is a **mobile-capable** community plugin (`isDesktopOnly: false`). It does **not** use Node.js, Electron, or a local Git binary — that is why [Obsidian Git](https://github.com/denolehov/obsidian-git) and similar plugins never run on Android or iOS, and why this one can.
+
+```bash
+# from a deployed instance — downloads only the three plugin files
+./scripts/install-plugin.sh "/path/to/YourVault" "https://your-syncidian.example"
+# or open https://your-syncidian.example/assets/obsidian.zip
+```
 
 ```bash
 # from this repository

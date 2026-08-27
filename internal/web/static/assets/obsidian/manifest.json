@@ -1,0 +1,11 @@
+{
+  "id": "syncidian",
+  "name": "Syncidian",
+  "version": "0.1.0",
+  "minAppVersion": "1.5.0",
+  "description": "Sync your vault across devices through a self-hosted Syncidian server, with optional GitHub backup and MCP for AI tools.",
+  "author": "Shangeeth Sivan",
+  "authorUrl": "https://github.com/shangeethsivan",
+  "helpUrl": "https://github.com/shangeethsivan/Syncidian",
+  "isDesktopOnly": false
+}

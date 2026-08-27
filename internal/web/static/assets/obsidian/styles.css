@@ -1,0 +1,52 @@
+.syncidian-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.syncidian-modal textarea {
+  width: 100%;
+  min-height: 180px;
+  font-family: var(--font-monospace);
+  font-size: 12px;
+}
+
+.syncidian-modal .cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.syncidian-modal h3 {
+  margin: 0 0 8px;
+}
+
+.is-mobile .syncidian-modal .cols,
+.syncidian-modal-mobile .cols {
+  grid-template-columns: 1fr;
+}
+
+.is-mobile .syncidian-modal textarea,
+.syncidian-modal-mobile textarea {
+  min-height: 120px;
+}
+
+.is-mobile .syncidian-modal .setting-item-control,
+.syncidian-modal-mobile .setting-item-control {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.is-mobile .syncidian-modal .setting-item-control button,
+.syncidian-modal-mobile .setting-item-control button {
+  width: 100%;
+  min-height: 44px;
+}
+
+@media (max-width: 720px) {
+  .syncidian-modal .cols {
+    grid-template-columns: 1fr;
+  }
+}

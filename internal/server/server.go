@@ -133,16 +133,41 @@ func (s *Server) Handler() http.Handler {
 		s.Log.Error("embed static", "err", err)
 	} else {
 		fileServer := http.FileServer(http.FS(static))
+		mux.HandleFunc("GET /assets/obsidian.zip", s.handlePluginZip)
 		mux.Handle("GET /assets/", fileServer)
-		serveIndex := func(w http.ResponseWriter, r *http.Request) {
+		serveHTML := func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Link", s.discoveryLinkHeader(s.publicOrigin(r)))
 			http.ServeFileFS(w, r, static, "index.html")
 		}
-		mux.HandleFunc("GET /{$}", serveIndex)
-		mux.HandleFunc("GET /admin", serveIndex)
-		mux.HandleFunc("GET /admin/{$}", serveIndex)
+		mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Link", s.discoveryLinkHeader(s.publicOrigin(r)))
+			w.Header().Set("Vary", "Accept")
+			if wantsMarkdown(r.Header.Get("Accept")) {
+				s.handleLandingMarkdown(w, r)
+				return
+			}
+			http.ServeFileFS(w, r, static, "index.html")
+		})
+		mux.HandleFunc("GET /admin", serveHTML)
+		mux.HandleFunc("GET /admin/{$}", serveHTML)
 		mux.HandleFunc("GET /favicon.ico", func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusNoContent)
 		})
+		mux.HandleFunc("GET /robots.txt", s.handleRobots)
+		mux.HandleFunc("GET /sitemap.xml", s.handleSitemap)
+		mux.HandleFunc("GET /auth.md", s.handleAuthMD)
+		mux.HandleFunc("GET /openapi.json", s.handleOpenAPI)
+		mux.HandleFunc("GET /.well-known/api-catalog", s.handleAPICatalog)
+		mux.HandleFunc("GET /.well-known/oauth-protected-resource", s.handleOAuthProtectedResource)
+		mux.HandleFunc("GET /.well-known/oauth-authorization-server", s.handleOAuthAS)
+		mux.HandleFunc("GET /.well-known/openid-configuration", s.handleOAuthAS)
+		mux.HandleFunc("GET /.well-known/mcp/server-card.json", s.handleMCPServerCard)
+		mux.HandleFunc("GET /.well-known/mcp.json", s.handleMCPServerCard)
+		mux.HandleFunc("GET /.well-known/mcp/server-cards.json", s.handleMCPServerCards)
+		mux.HandleFunc("GET /.well-known/agent-skills/index.json", s.handleAgentSkillsIndex)
+		mux.HandleFunc("GET /.well-known/skills/index.json", s.handleAgentSkillsIndex)
+		mux.HandleFunc("GET /.well-known/agent-skills/syncidian-mcp/SKILL.md", s.handleAgentSkillMD)
+		mux.HandleFunc("GET /.well-known/ai-catalog.json", s.handleAICatalog)
 	}
 
 	return s.cors(mux)
