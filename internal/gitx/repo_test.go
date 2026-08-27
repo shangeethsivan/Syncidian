@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
 )
 
@@ -123,5 +124,53 @@ func TestCommitAllGitOperations(t *testing.T) {
 	}
 	if _, ok := names["Archive/Projects/renamed.md"]; !ok {
 		t.Fatalf("file rename missing new path: %v", names)
+	}
+}
+
+func pointHEADToMain(t *testing.T, dir string) {
+	t.Helper()
+	repo, err := git.PlainOpen(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	head, err := repo.Head()
+	if err != nil {
+		t.Fatal(err)
+	}
+	ref := plumbing.NewHashReference(plumbing.NewBranchReferenceName("main"), head.Hash())
+	if err := repo.Storer.SetReference(ref); err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.Storer.SetReference(plumbing.NewSymbolicReference(plumbing.HEAD, plumbing.NewBranchReferenceName("main"))); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestResetToRemoteDropsOldFolders(t *testing.T) {
+	m := testMgr()
+	upstream := t.TempDir()
+	writeRel(t, upstream, "Content/keep.md", "keep\n")
+	if _, err := m.CommitAll(upstream, "github layout"); err != nil {
+		t.Fatal(err)
+	}
+	pointHEADToMain(t, upstream)
+
+	local := t.TempDir()
+	if _, err := git.PlainClone(local, false, &git.CloneOptions{URL: upstream}); err != nil {
+		t.Fatal(err)
+	}
+	writeRel(t, local, "Books to read/old.md", "stale\n")
+	if _, err := m.CommitAll(local, "local leftover"); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := m.ResetToRemote(local, "", "", "main"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(local, "Books to read", "old.md")); !os.IsNotExist(err) {
+		t.Fatalf("old folder should be gone after reset: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(local, "Content", "keep.md")); err != nil {
+		t.Fatal(err)
 	}
 }
