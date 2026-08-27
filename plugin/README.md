@@ -6,6 +6,8 @@ Git-based community plugins (for example [Obsidian Git](https://github.com/denol
 
 ## Install
 
+Full Android and iOS steps (Restricted mode, Community plugins, BRAT, copying files, Connect): **[docs/install-mobile.md](../docs/install-mobile.md)**.
+
 **From Community plugins** (once listed): Settings → Community plugins → turn **Restricted mode** off → Browse → **Syncidian** → Install → Enable.
 
 Until then:
@@ -13,19 +15,11 @@ Until then:
 1. Copy `plugin/manifest.json`, `plugin/main.js`, and `plugin/styles.css` into `{Vault}/.obsidian/plugins/syncidian/`, or `./scripts/install-plugin.sh "/path/to/YourVault"`.
 2. In Obsidian: Settings → Community plugins → turn **Restricted mode** off → enable **Syncidian**.
 
-[BRAT](https://github.com/TfTHacker/obsidian42-brat): add `shangeethsivan/Syncidian` after a GitHub Release whose tag matches `manifest.json` `version`.
+Those three files live in **`plugin/`** in this repo. They are not written to a `tests/` folder.
 
-### Android
+[BRAT](https://github.com/TfTHacker/obsidian42-brat): add `shangeethsivan/Syncidian` only after a GitHub Release whose tag matches `manifest.json` `version` **and** whose **Assets** include `main.js`, `manifest.json`, and `styles.css`. A tag without those attachments is not enough. See [docs/community-plugin.md](../docs/community-plugin.md).
 
-Copy the same three files into the vault on the device (Files, USB, Syncthing, or a vault that already has them from desktop). Restricted mode off → enable Syncidian.
-
-Set **Server URL** to a public `https://` address. `http://localhost:8080` is the phone itself, not your computer.
-
-### iOS / iPadOS
-
-Put the three files in an iCloud or otherwise synced vault via the Files app. Restricted mode off → enable Syncidian.
-
-Use **HTTPS**. iOS often blocks plain `http://`. Do not use `localhost`.
+On a phone, **Server URL** must be a public `https://` address. `http://localhost:8080` is the phone itself, not your computer. iOS often blocks plain `http://`.
 
 ## Settings
 
@@ -45,6 +39,7 @@ GitHub backup is configured in the web dashboard, not in this plugin.
 | Status bar missing on phones | Ribbon icon shows sync status; tap to sync now. |
 | WebSocket blocked (cleartext / ATS) | HTTP poll of `/api/v1/sync/manifest` every 15s while the socket is down. |
 | Community directory `manifest.json` | Copied at the **repository root** (required) as well as `plugin/manifest.json`. |
+| BRAT / in-app install | GitHub Release **Assets**: `main.js`, `manifest.json`, `styles.css` (not a tests folder). |
 
 ## Develop
 
