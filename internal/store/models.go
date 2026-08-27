@@ -124,11 +124,62 @@ type MCPPermissions struct {
 	Modify bool   `json:"modify"`
 }
 
+type MCPEvent struct {
+	UserID      string
+	Name        string
+	Version     string
+	UserAgent   string
+	TokenID     string
+	TokenName   string
+	TokenPrefix string
+	Method      string
+	Tool        string
+}
+
+type MCPClient struct {
+	ID              string    `json:"id"`
+	UserID          string    `json:"user_id"`
+	ClientKey       string    `json:"client_key"`
+	Name            string    `json:"name"`
+	Version         string    `json:"version"`
+	UserAgent       string    `json:"user_agent"`
+	TokenName       string    `json:"token_name"`
+	TokenPrefix     string    `json:"token_prefix"`
+	FirstSeenAt     time.Time `json:"first_seen_at"`
+	LastSeenAt      time.Time `json:"last_seen_at"`
+	InitializeCount int       `json:"initialize_count"`
+	CallCount       int       `json:"call_count"`
+	LastTool        string    `json:"last_tool"`
+	Status          string    `json:"status"`
+}
+
+type MCPToolStat struct {
+	Tool         string     `json:"tool"`
+	CallCount    int        `json:"call_count"`
+	LastCalledAt *time.Time `json:"last_called_at,omitempty"`
+}
+
+type MCPUsage struct {
+	ClientCount   int           `json:"client_count"`
+	ActiveClients int           `json:"active_clients"`
+	TotalCalls    int           `json:"total_calls"`
+	Calls24h      int           `json:"calls_24h"`
+	Calls7d       int           `json:"calls_7d"`
+	LastCallAt    *time.Time    `json:"last_call_at,omitempty"`
+	Clients       []MCPClient   `json:"clients"`
+	Tools         []MCPToolStat `json:"tools"`
+}
+
 type Stats struct {
-	TotalSyncs    int        `json:"total_syncs"`
-	FilesSynced   int        `json:"files_synced"`
-	ActiveClients int        `json:"active_clients"`
-	DeviceCount   int        `json:"device_count"`
-	ConflictCount int        `json:"conflict_count"`
-	LastSync      *time.Time `json:"last_sync"`
+	TotalSyncs     int        `json:"total_syncs"`
+	FilesSynced    int        `json:"files_synced"`
+	ActiveClients  int        `json:"active_clients"`
+	DeviceCount    int        `json:"device_count"`
+	ConflictCount  int        `json:"conflict_count"`
+	LastSync       *time.Time `json:"last_sync"`
+	MCPClientCount int        `json:"mcp_client_count"`
+	MCPActive      int        `json:"mcp_active_clients"`
+	MCPTotalCalls  int        `json:"mcp_total_calls"`
+	MCPCalls7d     int        `json:"mcp_calls_7d"`
+	LastMCPCall    *time.Time `json:"last_mcp_call"`
 }

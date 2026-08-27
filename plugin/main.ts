@@ -653,6 +653,11 @@ export default class SyncidianPlugin extends Plugin {
                 if (f) await this.app.vault.delete(f);
                 delete this.settings.hashes[msg.path];
                 await this.saveSettings();
+              } else if (msg.content) {
+                const bytes = toArrayBuffer(b64decode(msg.content));
+                await this.writeBinary(msg.path, bytes);
+                if (msg.hash) this.settings.hashes[msg.path] = msg.hash;
+                await this.saveSettings();
               } else {
                 await this.pullFile(msg.path);
               }

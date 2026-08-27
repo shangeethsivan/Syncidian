@@ -16,6 +16,7 @@ type migration struct {
 var migrations = []migration{
 	{version: 1, name: "initial_schema", up: migration001InitialSchema},
 	{version: 2, name: "github_app", up: migration002GitHubApp},
+	{version: 3, name: "mcp_usage", up: migration003MCPUsage},
 }
 
 func (s *Store) migrate() error {
@@ -137,6 +138,9 @@ func (s *Store) applyLegacyUpgrades() error {
 		return err
 	}
 	if err := migration002GitHubApp(tx); err != nil {
+		return err
+	}
+	if err := migration003MCPUsage(tx); err != nil {
 		return err
 	}
 	return tx.Commit()
@@ -276,5 +280,44 @@ func migration002GitHubApp(tx *sql.Tx) error {
 		`ALTER TABLE github_config ADD COLUMN install_token_expires TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE users ADD COLUMN email TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE users ADD COLUMN github_id INTEGER NOT NULL DEFAULT 0`,
+	})
+}
+
+func migration003MCPUsage(tx *sql.Tx) error {
+	return execAll(tx, []string{
+		`CREATE TABLE IF NOT EXISTS mcp_clients (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  client_key TEXT NOT NULL,
+  name TEXT NOT NULL DEFAULT '',
+  version TEXT NOT NULL DEFAULT '',
+  user_agent TEXT NOT NULL DEFAULT '',
+  token_id TEXT NOT NULL DEFAULT '',
+  token_name TEXT NOT NULL DEFAULT '',
+  token_prefix TEXT NOT NULL DEFAULT '',
+  first_seen_at TEXT NOT NULL,
+  last_seen_at TEXT NOT NULL,
+  initialize_count INTEGER NOT NULL DEFAULT 0,
+  call_count INTEGER NOT NULL DEFAULT 0,
+  last_tool TEXT NOT NULL DEFAULT '',
+  UNIQUE(user_id, client_key)
+)`,
+		`CREATE TABLE IF NOT EXISTS mcp_tool_stats (
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  tool TEXT NOT NULL,
+  call_count INTEGER NOT NULL DEFAULT 0,
+  last_called_at TEXT NOT NULL DEFAULT '',
+  PRIMARY KEY (user_id, tool)
+)`,
+		`CREATE TABLE IF NOT EXISTS mcp_calls (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  client_id TEXT NOT NULL DEFAULT '',
+  tool TEXT NOT NULL DEFAULT '',
+  method TEXT NOT NULL,
+  created_at TEXT NOT NULL
+)`,
+		`CREATE INDEX IF NOT EXISTS idx_mcp_clients_user ON mcp_clients(user_id, last_seen_at DESC)`,
+		`CREATE INDEX IF NOT EXISTS idx_mcp_calls_user ON mcp_calls(user_id, created_at DESC)`,
 	})
 }

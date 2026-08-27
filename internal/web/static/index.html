@@ -550,7 +550,7 @@ docker compose up --build -d</pre>
         <li>Click <b>Connect</b></li>
       </ol>
       <p>Use a separate token (or at least a clear device name) per phone or computer so the Devices page stays readable.</p>
-      <p>Optional: point an MCP client at <code>${esc(location.origin)}/mcp</code> with the same token.</p>
+      <p>Optional: point an MCP client at <code>${esc(location.origin)}/mcp</code> with the same token. Overview and <b>MCP / AI</b> then show that client and how often it uses each tool.</p>
     `,
   },
 ];
@@ -897,15 +897,17 @@ async function adminOverview(main) {
 }
 
 async function overview(main) {
-  const [stats, devices, gh, conflicts] = await Promise.all([
+  const [stats, devices, gh, conflicts, mcpStatus] = await Promise.all([
     api("/api/v1/stats"),
     api("/api/v1/devices").then(asList),
     api("/api/v1/github"),
     api("/api/v1/conflicts").then(asList),
+    api("/api/v1/mcp"),
   ]);
+  const usage = mcpStatus.usage || {};
   main.innerHTML = `
     <h1>Overview</h1>
-    <p class="muted">Your devices, tokens, and one GitHub repository stay private to this account.</p>
+    <p class="muted">Your devices, tokens, GitHub repository, and MCP clients stay private to this account.</p>
     <div class="grid">
       <div class="stat">Active clients<b>${stats.active_clients ?? 0}</b></div>
       <div class="stat">Devices<b>${stats.device_count ?? 0}</b></div>
@@ -913,12 +915,27 @@ async function overview(main) {
       <div class="stat">Files synced<b>${stats.files_synced ?? 0}</b></div>
       <div class="stat">Last sync<b>${when(stats.last_sync)}</b></div>
       <div class="stat">Open conflicts<b>${stats.conflict_count ?? 0}</b></div>
+      <div class="stat">MCP clients<b>${stats.mcp_client_count ?? 0}</b></div>
+      <div class="stat">MCP calls (7d)<b>${stats.mcp_calls_7d ?? 0}</b></div>
+      <div class="stat">MCP calls (all)<b>${stats.mcp_total_calls ?? 0}</b></div>
+      <div class="stat">Last MCP call<b>${when(stats.last_mcp_call)}</b></div>
     </div>
     <div class="card">
       <h2>Your GitHub repository</h2>
       <p>${gh.configured ? `<span class="pill ok">Connected</span> ${esc(gh.repo)} on <code>main</code>` : `<span class="pill warn">Not configured</span> Connect your GitHub repository on the GitHub page. One user can set up one repository on the <code>main</code> branch.`}</p>
       ${gh.last_error ? `<p class="flash err">${esc(gh.last_error)}</p>` : ""}
       ${gh.configured ? "" : `<button class="btn" id="go-github" type="button">Connect GitHub</button>`}
+    </div>
+    <div class="card" id="mcp-overview">
+      <h2>MCP / AI</h2>
+      <p>${(usage.client_count || 0) > 0
+        ? `<span class="pill ok">${usage.active_clients || 0} recently used</span> ${usage.client_count} connected client${usage.client_count === 1 ? "" : "s"} · ${usage.calls_24h || 0} tool calls in the last 24 hours`
+        : `<span class="pill warn">None connected yet</span> Point an MCP client at <code>/mcp</code> with an access token. Usage shows up here after the first call.`}</p>
+      ${mcpClientTable(asList(usage.clients))}
+      ${mcpToolTable(asList(usage.tools))}
+      <div class="row" style="margin-top:12px">
+        <button class="btn secondary" id="go-mcp" type="button">MCP permissions and setup</button>
+      </div>
     </div>
     <div class="card">
       <h2>Devices</h2>
@@ -949,8 +966,34 @@ async function overview(main) {
   `;
   const go = $("go-github");
   if (go) go.onclick = () => { page = "github"; paintNav(); render(); };
+  const goMcp = $("go-mcp");
+  if (goMcp) goMcp.onclick = () => { page = "mcp"; paintNav(); render(); };
   const helpBtn = $("open-help");
   if (helpBtn) helpBtn.onclick = () => openHelp(6);
+}
+
+function mcpClientTable(clients) {
+  clients = asList(clients);
+  if (!clients.length) return `<p class="muted">No MCP clients have connected yet.</p>`;
+  return `<table><thead><tr><th>Client</th><th>Token</th><th>Status</th><th>Last seen</th><th>Tool calls</th><th>Last tool</th></tr></thead><tbody>
+    ${clients.map(c => `<tr>
+      <td>${esc(c.name || "Unknown")}${c.version ? ` <span class="muted">${esc(c.version)}</span>` : ""}</td>
+      <td class="muted">${esc(c.token_name || c.token_prefix || "—")}</td>
+      <td><span class="pill ${c.status === "active" ? "ok" : "off"}">${c.status === "active" ? "● Recently used" : "○ Idle"}</span></td>
+      <td>${when(c.last_seen_at)}</td>
+      <td>${c.call_count ?? 0}</td>
+      <td>${esc(c.last_tool || "—")}</td>
+    </tr>`).join("")}
+  </tbody></table>`;
+}
+
+function mcpToolTable(tools) {
+  tools = asList(tools);
+  if (!tools.length) return "";
+  return `<h2 style="font-size:16px;margin-top:16px">Tool usage</h2>
+    <table><thead><tr><th>Tool</th><th>Calls</th><th>Last used</th></tr></thead><tbody>
+    ${tools.map(t => `<tr><td>${esc(t.tool)}</td><td>${t.call_count ?? 0}</td><td>${when(t.last_called_at)}</td></tr>`).join("")}
+  </tbody></table>`;
 }
 
 function deviceTable(devices) {
@@ -1114,9 +1157,23 @@ async function github(main) {
 
 async function mcp(main) {
   const p = await api("/api/v1/mcp");
+  const usage = p.usage || {};
   main.innerHTML = `
     <h1>MCP / AI</h1>
-    <p class="muted">Least privilege by default. AI tools authenticate with a Bearer access token, a dashboard session, or <code>POST /api/v1/mcp/login</code>.</p>
+    <p class="muted">Least privilege by default. AI tools authenticate with a Bearer access token, a dashboard session, or <code>POST /api/v1/mcp/login</code>. Connected clients and how often they use each tool show up here after the first call. MCP does not save notes on this server — writes go to your GitHub repository and to live Obsidian clients.</p>
+    <div class="grid">
+      <div class="stat">Connected clients<b>${usage.client_count ?? 0}</b></div>
+      <div class="stat">Recently used<b>${usage.active_clients ?? 0}</b></div>
+      <div class="stat">Calls (24h)<b>${usage.calls_24h ?? 0}</b></div>
+      <div class="stat">Calls (7d)<b>${usage.calls_7d ?? 0}</b></div>
+      <div class="stat">Calls (all)<b>${usage.total_calls ?? 0}</b></div>
+      <div class="stat">Last call<b>${when(usage.last_call_at)}</b></div>
+    </div>
+    <div class="card" id="mcp-clients">
+      <h2>Connected MCP clients</h2>
+      ${mcpClientTable(asList(usage.clients))}
+      ${mcpToolTable(asList(usage.tools))}
+    </div>
     <div class="card">
       <div class="check"><input id="m-search" type="checkbox" ${p.Search || p.search ? "checked" : ""} /> Search notes (includes find related / suggest path)</div>
       <div class="check"><input id="m-read" type="checkbox" ${p.Read || p.read ? "checked" : ""} /> Read notes (includes backlinks / graph)</div>

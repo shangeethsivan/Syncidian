@@ -511,6 +511,10 @@ func TestDashboardServed(t *testing.T) {
 		`id="setup-obsidian"`,
 		`Restricted mode`,
 		`already installed the app earlier`,
+		`id="mcp-overview"`,
+		`Connected MCP clients`,
+		`MCP calls (7d)`,
+		`mcpClientTable`,
 	} {
 		if !bytes.Contains(b, []byte(needle)) {
 			t.Fatalf("dashboard missing required markup %q", needle)
@@ -1229,13 +1233,13 @@ func TestCommunityPluginManifestAtRepoRoot(t *testing.T) {
 		t.Fatal(err)
 	}
 	var m struct {
-		ID             string `json:"id"`
-		Name           string `json:"name"`
-		Version        string `json:"version"`
-		MinAppVersion  string `json:"minAppVersion"`
-		Description    string `json:"description"`
-		Author         string `json:"author"`
-		IsDesktopOnly  *bool  `json:"isDesktopOnly"`
+		ID            string `json:"id"`
+		Name          string `json:"name"`
+		Version       string `json:"version"`
+		MinAppVersion string `json:"minAppVersion"`
+		Description   string `json:"description"`
+		Author        string `json:"author"`
+		IsDesktopOnly *bool  `json:"isDesktopOnly"`
 	}
 	if err := json.Unmarshal(raw, &m); err != nil {
 		t.Fatal(err)
@@ -1400,6 +1404,102 @@ func TestMCPLoginAndTools(t *testing.T) {
 	}
 }
 
+func TestMCPUsageShowsOnDashboard(t *testing.T) {
+	hs, done := newTestServer(t)
+	defer done()
+
+	adminCookies := setupAdmin(t, hs)
+	cookies := createAndLoginUser(t, hs, adminCookies, "bob")
+	res, m := doJSON(t, http.MethodPost, hs.URL+"/api/v1/tokens", map[string]string{"name": "Claude"}, cookies, "")
+	token, _ := m["token"].(string)
+	if !strings.HasPrefix(token, "sk_sync_") {
+		t.Fatalf("token %v", m)
+	}
+
+	postMCP := func(body map[string]any) {
+		t.Helper()
+		b, err := json.Marshal(body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		req, err := http.NewRequest(http.MethodPost, hs.URL+"/mcp", bytes.NewReader(b))
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+token)
+		req.Header.Set("User-Agent", "claude-code/2.0")
+		out, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		raw, _ := io.ReadAll(out.Body)
+		out.Body.Close()
+		if out.StatusCode != 200 {
+			t.Fatalf("mcp status %d %s", out.StatusCode, raw)
+		}
+	}
+
+	postMCP(map[string]any{
+		"jsonrpc": "2.0", "id": 1, "method": "initialize",
+		"params": map[string]any{
+			"protocolVersion": "2024-11-05",
+			"clientInfo":      map[string]string{"name": "claude-code", "version": "2.0.0"},
+		},
+	})
+	postMCP(map[string]any{
+		"jsonrpc": "2.0", "id": 2, "method": "tools/call",
+		"params": map[string]any{"name": "list_notes", "arguments": map[string]any{}},
+	})
+	postMCP(map[string]any{
+		"jsonrpc": "2.0", "id": 3, "method": "tools/call",
+		"params": map[string]any{"name": "search_notes", "arguments": map[string]any{"query": "x"}},
+	})
+
+	res, m = doJSON(t, http.MethodGet, hs.URL+"/api/v1/mcp", nil, cookies, "")
+	if res.StatusCode != 200 {
+		t.Fatalf("mcp status %d %v", res.StatusCode, m)
+	}
+	usage, _ := m["usage"].(map[string]any)
+	if usage == nil {
+		t.Fatalf("missing usage: %v", m)
+	}
+	if usage["client_count"] != float64(1) {
+		t.Fatalf("client_count: %v", usage)
+	}
+	if usage["total_calls"] != float64(2) {
+		t.Fatalf("total_calls: %v", usage)
+	}
+	clients, _ := usage["clients"].([]any)
+	if len(clients) != 1 {
+		t.Fatalf("clients: %v", usage)
+	}
+	c, _ := clients[0].(map[string]any)
+	if c["name"] != "claude-code" {
+		t.Fatalf("client name: %v", c)
+	}
+	if c["call_count"] != float64(2) {
+		t.Fatalf("client call_count: %v", c)
+	}
+	tools, _ := usage["tools"].([]any)
+	if len(tools) != 2 {
+		t.Fatalf("tools: %v", usage)
+	}
+
+	res, m = doJSON(t, http.MethodGet, hs.URL+"/api/v1/stats", nil, cookies, "")
+	if res.StatusCode != 200 {
+		t.Fatalf("stats %d %v", res.StatusCode, m)
+	}
+	if m["mcp_client_count"] != float64(1) || m["mcp_total_calls"] != float64(2) {
+		t.Fatalf("stats mcp fields: %v", m)
+	}
+
+	res, m = doJSON(t, http.MethodGet, hs.URL+"/api/v1/mcp", nil, adminCookies, "")
+	if res.StatusCode != http.StatusForbidden {
+		t.Fatalf("admin mcp usage: want 403, got %d %v", res.StatusCode, m)
+	}
+}
+
 func TestCORSAllowsObsidianMobileOrigins(t *testing.T) {
 	hs, done := newTestServer(t)
 	defer done()
@@ -1437,5 +1537,61 @@ func TestCORSAllowsObsidianMobileOrigins(t *testing.T) {
 		if !strings.Contains(methods, "POST") {
 			t.Fatalf("%s Allow-Methods: %q", origin, methods)
 		}
+	}
+}
+
+func TestMCPWriteRequiresGitHubAndSkipsServerVault(t *testing.T) {
+	dir := t.TempDir()
+	st, err := store.Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	srv := New(config.Config{Addr: ":0", DataDir: dir, PublicURL: "http://localhost"}, st, nil)
+	hs := httptest.NewServer(srv.Handler())
+	defer hs.Close()
+
+	adminCookies := setupAdmin(t, hs)
+	cookies := createAndLoginUser(t, hs, adminCookies, "bob")
+	res, m := doJSON(t, http.MethodPost, hs.URL+"/api/v1/mcp", map[string]any{
+		"search": true, "read": true, "create": true, "modify": true,
+	}, cookies, "")
+	if res.StatusCode != 200 {
+		t.Fatalf("set mcp: %d %v", res.StatusCode, m)
+	}
+	res, m = doJSON(t, http.MethodPost, hs.URL+"/api/v1/tokens", map[string]string{"name": "MCP"}, cookies, "")
+	token, _ := m["token"].(string)
+
+	body, _ := json.Marshal(map[string]any{
+		"jsonrpc": "2.0", "id": 1, "method": "tools/call",
+		"params": map[string]any{
+			"name":      "create_note",
+			"arguments": map[string]any{"path": "Weekly Focus.md", "content": "# Weekly Focus\n"},
+		},
+	})
+	req, err := http.NewRequest(http.MethodPost, hs.URL+"/mcp", bytes.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+	out, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := io.ReadAll(out.Body)
+	out.Body.Close()
+	if out.StatusCode != 200 {
+		t.Fatalf("status %d %s", out.StatusCode, raw)
+	}
+	if !strings.Contains(string(raw), "does not store notes on the server") && !strings.Contains(string(raw), "connect a GitHub") {
+		t.Fatalf("expected GitHub-required error, got %s", raw)
+	}
+	bob, err := st.GetUserByUsername("bob")
+	if err != nil || bob == nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(st.VaultDir(bob.ID), "Weekly Focus.md")); err == nil {
+		t.Fatal("MCP must not save notes on the server")
 	}
 }

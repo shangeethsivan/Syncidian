@@ -4,10 +4,9 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"os"
 	"path"
-	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
@@ -217,16 +216,11 @@ func (s *Server) findRelated(userID, query string, limit int) (any, error) {
 		}
 		// Approximate backlinks cheaply via index scan of stems
 		want := strings.ToLower(noteStem(qPath))
-		root := filepath.ToSlash(s.Store.VaultDir(userID))
 		for _, p := range paths {
 			if strings.EqualFold(p, qPath) {
 				continue
 			}
-			full, ok := vaultJoin(root, p)
-			if !ok {
-				continue
-			}
-			b, err := os.ReadFile(filepath.FromSlash(full))
+			b, err := s.loadNote(userID, p)
 			if err != nil || !utf8.Valid(b) {
 				continue
 			}
@@ -246,7 +240,6 @@ func (s *Server) findRelated(userID, query string, limit int) (any, error) {
 		Score int    `json:"score"`
 	}
 	var hits []hit
-	root := filepath.ToSlash(s.Store.VaultDir(userID))
 	for _, p := range paths {
 		score := seedLinks[p]
 		pl := strings.ToLower(p)
@@ -258,18 +251,15 @@ func (s *Server) findRelated(userID, query string, limit int) (any, error) {
 				score += 8
 			}
 		}
-		full, ok := vaultJoin(root, p)
-		if ok {
-			b, err := os.ReadFile(filepath.FromSlash(full))
-			if err == nil && utf8.Valid(b) {
-				body := strings.ToLower(string(b))
-				if strings.Contains(body, qLower) {
-					score += 20
-				}
-				for _, tok := range tokens {
-					if len(tok) >= 3 && strings.Contains(body, tok) {
-						score += 3
-					}
+		b, err := s.loadNote(userID, p)
+		if err == nil && utf8.Valid(b) {
+			body := strings.ToLower(string(b))
+			if strings.Contains(body, qLower) {
+				score += 20
+			}
+			for _, tok := range tokens {
+				if len(tok) >= 3 && strings.Contains(body, tok) {
+					score += 3
 				}
 			}
 		}
@@ -300,18 +290,12 @@ func (s *Server) appendToNote(userID, notePath, content, heading string) (any, e
 		return nil, fmt.Errorf("content is required")
 	}
 
-	root := filepath.ToSlash(s.Store.VaultDir(userID))
-	full, ok := vaultJoin(root, notePath)
-	if !ok {
-		return nil, fmt.Errorf("invalid path")
-	}
-	abs := filepath.FromSlash(full)
 	var body string
 	exists := true
-	b, err := os.ReadFile(abs)
+	b, err := s.loadNote(userID, notePath)
 	if err != nil {
-		if !os.IsNotExist(err) {
-			return nil, err
+		if !errors.Is(err, ErrNoteNotFound) {
+			return nil, noteErr(err)
 		}
 		exists = false
 		body = ""
@@ -401,29 +385,18 @@ func (s *Server) moveNote(userID, from, to string) (any, error) {
 	if from == to {
 		return textResult("Already at " + to), nil
 	}
-	root := filepath.ToSlash(s.Store.VaultDir(userID))
-	fromFull, ok1 := vaultJoin(root, from)
-	toFull, ok2 := vaultJoin(root, to)
-	if !ok1 || !ok2 {
-		return nil, fmt.Errorf("invalid path")
+	b, err := s.loadNote(userID, from)
+	if err != nil {
+		return nil, noteErr(err)
 	}
-	fromAbs := filepath.FromSlash(fromFull)
-	toAbs := filepath.FromSlash(toFull)
-	if _, err := os.Stat(fromAbs); err != nil {
-		return nil, fmt.Errorf("note not found")
-	}
-	if _, err := os.Stat(toAbs); err == nil {
+	if s.noteExists(userID, to) {
 		return nil, fmt.Errorf("destination already exists")
 	}
-	if err := os.MkdirAll(filepath.Dir(toAbs), 0o700); err != nil {
-		return nil, err
+	if err := s.notes().Put(userID, to, b, false); err != nil {
+		return nil, noteErr(err)
 	}
-	if err := os.Rename(fromAbs, toAbs); err != nil {
-		return nil, err
-	}
-	b, err := os.ReadFile(toAbs)
-	if err != nil {
-		return nil, err
+	if err := s.notes().Delete(userID, from); err != nil {
+		return nil, noteErr(err)
 	}
 	sum := sha256.Sum256(b)
 	hash := hex.EncodeToString(sum[:])
@@ -434,8 +407,8 @@ func (s *Server) moveNote(userID, from, to string) (any, error) {
 	}); err != nil {
 		return nil, err
 	}
-	s.notify(userID, from, "", true)
-	s.notify(userID, to, hash, false)
+	s.notify(userID, from, "", true, nil)
+	s.notify(userID, to, hash, false, b)
 	_ = s.Store.AddActivity(store.Activity{UserID: userID, Action: "mcp.move", Detail: from + " -> " + to})
 	return textResult("Moved " + from + " → " + to), nil
 }
@@ -445,20 +418,14 @@ func (s *Server) deleteNote(userID, notePath string) (any, error) {
 	if !ok {
 		return nil, fmt.Errorf("invalid path")
 	}
-	root := filepath.ToSlash(s.Store.VaultDir(userID))
-	full, ok := vaultJoin(root, notePath)
-	if !ok {
-		return nil, fmt.Errorf("invalid path")
-	}
-	abs := filepath.FromSlash(full)
-	if err := os.Remove(abs); err != nil && !os.IsNotExist(err) {
-		return nil, err
+	if err := s.notes().Delete(userID, notePath); err != nil {
+		return nil, noteErr(err)
 	}
 	mtime := time.Now().UnixMilli()
 	if err := s.Store.UpsertFile(store.FileMeta{UserID: userID, Path: notePath, Deleted: true, Mtime: mtime}); err != nil {
 		return nil, err
 	}
-	s.notify(userID, notePath, "", true)
+	s.notify(userID, notePath, "", true, nil)
 	_ = s.Store.AddActivity(store.Activity{UserID: userID, Action: "mcp.delete", Detail: notePath})
 	return textResult("Deleted " + notePath), nil
 }

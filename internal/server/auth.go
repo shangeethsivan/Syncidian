@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/shangeethsivan/Syncidian/internal/githubapp"
+	"github.com/shangeethsivan/Syncidian/internal/mcp"
 	"github.com/shangeethsivan/Syncidian/internal/store"
 )
 
@@ -358,7 +359,19 @@ func (s *Server) handleGetMCP(w http.ResponseWriter, r *http.Request, u *store.U
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, p)
+	usage, err := s.Store.MCPUsage(u.ID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"user_id": p.UserID,
+		"search":  p.Search,
+		"read":    p.Read,
+		"create":  p.Create,
+		"modify":  p.Modify,
+		"usage":   usage,
+	})
 }
 
 func (s *Server) handleSetMCP(w http.ResponseWriter, r *http.Request, u *store.User) {
@@ -427,7 +440,18 @@ func (s *Server) handleMCP(w http.ResponseWriter, r *http.Request, u *store.User
 		writeError(w, http.StatusBadRequest, "invalid body")
 		return
 	}
-	resp, err := s.MCP.Handle(u, body)
+	meta := mcp.ClientMeta{UserAgent: r.Header.Get("User-Agent")}
+	if h := r.Header.Get("Authorization"); strings.HasPrefix(strings.ToLower(h), "bearer ") {
+		if i := strings.IndexByte(h, ' '); i >= 0 {
+			raw := strings.TrimSpace(h[i+1:])
+			if tok, err := s.Store.GetTokenByHash(store.HashToken(raw)); err == nil && tok != nil {
+				meta.TokenID = tok.ID
+				meta.TokenName = tok.Name
+				meta.TokenPrefix = tok.Prefix
+			}
+		}
+	}
+	resp, err := s.MCP.Handle(u, body, meta)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return

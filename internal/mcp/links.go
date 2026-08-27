@@ -3,9 +3,7 @@ package mcp
 import (
 	"encoding/json"
 	"fmt"
-	"os"
 	"path"
-	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
@@ -79,20 +77,17 @@ func resolveWikiLink(target string, byStem map[string][]string, byPath map[strin
 }
 
 func (s *Server) noteIndex(userID string) (paths []string, byStem map[string][]string, byPath map[string]string, err error) {
-	files, err := s.Store.ListFiles(userID, false)
+	listed, err := s.notes().List(userID)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, noteErr(err)
 	}
 	byStem = map[string][]string{}
 	byPath = map[string]string{}
-	for _, f := range files {
-		if !strings.HasSuffix(strings.ToLower(f.Path), ".md") {
-			continue
-		}
-		paths = append(paths, f.Path)
-		byPath[strings.ToLower(f.Path)] = f.Path
-		stem := strings.ToLower(noteStem(f.Path))
-		byStem[stem] = append(byStem[stem], f.Path)
+	for _, p := range mdPaths(listed, "") {
+		paths = append(paths, p)
+		byPath[strings.ToLower(p)] = p
+		stem := strings.ToLower(noteStem(p))
+		byStem[stem] = append(byStem[stem], p)
 	}
 	sort.Strings(paths)
 	return paths, byStem, byPath, nil
@@ -103,14 +98,9 @@ func (s *Server) readVaultText(userID, rel string) (string, error) {
 	if !ok {
 		return "", fmt.Errorf("invalid path")
 	}
-	root := filepath.ToSlash(s.Store.VaultDir(userID))
-	full, ok := vaultJoin(root, rel)
-	if !ok {
-		return "", fmt.Errorf("invalid path")
-	}
-	b, err := os.ReadFile(filepath.FromSlash(full))
+	b, err := s.loadNote(userID, rel)
 	if err != nil {
-		return "", fmt.Errorf("note not found")
+		return "", noteErr(err)
 	}
 	if !utf8.Valid(b) {
 		return "", fmt.Errorf("note is not valid UTF-8")
@@ -162,16 +152,11 @@ func (s *Server) backlinks(userID, notePath string) (any, error) {
 	wantStem := strings.ToLower(noteStem(notePath))
 	wantPath := strings.ToLower(notePath)
 	var hits []string
-	root := filepath.ToSlash(s.Store.VaultDir(userID))
 	for _, p := range paths {
 		if strings.EqualFold(p, notePath) {
 			continue
 		}
-		full, ok := vaultJoin(root, p)
-		if !ok {
-			continue
-		}
-		b, err := os.ReadFile(filepath.FromSlash(full))
+		b, err := s.loadNote(userID, p)
 		if err != nil || !utf8.Valid(b) {
 			continue
 		}
@@ -210,15 +195,10 @@ func (s *Server) buildGraph(userID string, prefix string, format string) (any, e
 	nodeSet := map[string]struct{}{}
 	var edges []graphEdge
 	edgeSeen := map[string]struct{}{}
-	root := filepath.ToSlash(s.Store.VaultDir(userID))
 
 	for _, p := range paths {
 		nodeSet[p] = struct{}{}
-		full, ok := vaultJoin(root, p)
-		if !ok {
-			continue
-		}
-		b, err := os.ReadFile(filepath.FromSlash(full))
+		b, err := s.loadNote(userID, p)
 		if err != nil || !utf8.Valid(b) {
 			continue
 		}

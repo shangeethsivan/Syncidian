@@ -141,6 +141,9 @@ func TestLegacyDatabaseGetsMigrationStamp(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("instance github app after legacy upgrade: %v", err)
 	}
+	if err := st.RecordMCPEvent(MCPEvent{UserID: u.ID, Name: "cursor", Method: "initialize"}); err != nil {
+		t.Fatalf("mcp usage after legacy upgrade: %v", err)
+	}
 }
 
 func TestUpgradeFromV1AddsGitHubAppSchema(t *testing.T) {

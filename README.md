@@ -118,7 +118,7 @@ Short version: open `/admin` → **Create GitHub App**, or set `SYNCIDIAN_GITHUB
 
 ## 4. Optional: MCP / AI
 
-Dashboard → **MCP / AI** sets tool permissions (search/read on by default). Point an MCP client at:
+Dashboard → **Overview** and **MCP / AI** list connected MCP clients, how often they call tools (last 24 hours, 7 days, and all time), and per-tool counts. **MCP / AI** also sets tool permissions (search/read on by default). Point an MCP client at:
 
 ```text
 POST http://localhost:8080/mcp
@@ -132,7 +132,7 @@ POST http://localhost:8080/api/v1/mcp/login
 {"username":"you","password":"…"}
 ```
 
-Dashboard session cookies also work on `/mcp`. Tools cover search, graph/backlinks, create/update/append, and bulk organize when permissions allow.
+Dashboard session cookies also work on `/mcp`. **MCP does not save notes on the Syncidian server.** Create/update/delete write to your connected GitHub repository on `main` and notify live Obsidian clients. Connect GitHub before using write tools. Tools cover search, graph/backlinks, create/update/append, and bulk organize when permissions allow.
 
 ---
 
@@ -1240,6 +1240,9 @@ The self-hosted version will remain free and open source.
 * [x] Bulk organize tools
 * [x] Permission management
 * [x] MCP authentication (token + password login)
+* [x] Dashboard: connected clients
+* [x] Dashboard: tool-call frequency
+* [x] MCP writes go to GitHub, not the server working copy
 
 ## 🧠 AI Conflict Resolution
 
