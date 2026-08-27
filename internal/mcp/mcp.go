@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -27,6 +28,8 @@ type Server struct {
 	Store    *store.Store
 	Notes    Notes
 	OnChange OnChange
+	// OnBatch asks live Obsidian clients to run a full sync after a bulk vault change.
+	OnBatch func(userID string)
 }
 
 func (s *Server) notes() Notes {
@@ -78,6 +81,12 @@ func marshal(v rpcResponse) ([]byte, error) {
 func (s *Server) notify(userID, path, hash string, deleted bool, content []byte) {
 	if s.OnChange != nil {
 		s.OnChange(userID, path, hash, deleted, content)
+	}
+}
+
+func (s *Server) notifyBatch(userID string) {
+	if s.OnBatch != nil {
+		s.OnBatch(userID)
 	}
 }
 
@@ -183,6 +192,13 @@ func (s *Server) tools(user *store.User) []map[string]any {
 					"prefix": map[string]any{"type": "string", "description": "Optional path prefix filter"},
 				},
 			}),
+			tool("list_files", "List vault files of any type (markdown, images, PDFs, and other attachments).", map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"prefix": map[string]any{"type": "string", "description": "Optional path prefix filter"},
+					"ext":    map[string]any{"type": "string", "description": "Optional extension filter, e.g. .png or png"},
+				},
+			}),
 			tool("find_related", "Find notes related to a topic or note path via links and text overlap.", map[string]any{
 				"type": "object",
 				"properties": map[string]any{
@@ -264,27 +280,27 @@ func (s *Server) tools(user *store.User) []map[string]any {
 				},
 				"required": []string{"from", "to"},
 			}),
-			tool("move_note", "Rename or move a note within the vault.", map[string]any{
+			tool("move_note", "Rename or move a vault file (markdown, images, PDFs, and other attachments).", map[string]any{
 				"type": "object",
 				"properties": map[string]any{
-					"from": map[string]any{"type": "string"},
-					"to":   map[string]any{"type": "string"},
+					"from": map[string]any{"type": "string", "description": "Current vault-relative path"},
+					"to":   map[string]any{"type": "string", "description": "Destination vault-relative path"},
 				},
 				"required": []string{"from", "to"},
 			}),
-			tool("delete_note", "Delete a note from the vault.", map[string]any{
+			tool("delete_note", "Delete a vault file (markdown or any other synced type).", map[string]any{
 				"type": "object",
 				"properties": map[string]any{
 					"path": map[string]any{"type": "string"},
 				},
 				"required": []string{"path"},
 			}),
-			tool("bulk_move", "Move many notes from one folder prefix to another (organize / clean up).", map[string]any{
+			tool("bulk_move", "Move many vault files (any type) from one folder prefix to another.", map[string]any{
 				"type": "object",
 				"properties": map[string]any{
 					"from_prefix": map[string]any{"type": "string"},
 					"to_prefix":   map[string]any{"type": "string"},
-					"paths":       map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "Optional subset; defaults to all notes under from_prefix"},
+					"paths":       map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "Optional subset; defaults to all files under from_prefix"},
 				},
 				"required": []string{"from_prefix", "to_prefix"},
 			}),
@@ -338,6 +354,11 @@ func (s *Server) callTool(user *store.User, params json.RawMessage) (any, error)
 			return nil, fmt.Errorf("permission denied")
 		}
 		return s.listNotes(user.ID, str(p.Arguments["prefix"]))
+	case "list_files":
+		if !perms.Search {
+			return nil, fmt.Errorf("permission denied")
+		}
+		return s.listFiles(user.ID, str(p.Arguments["prefix"]), str(p.Arguments["ext"]))
 	case "search_notes":
 		if !perms.Search {
 			return nil, fmt.Errorf("permission denied")
@@ -478,6 +499,33 @@ func (s *Server) listNotes(userID, prefix string) (any, error) {
 	lines := mdPaths(paths, prefix)
 	if len(lines) == 0 {
 		return textResult("(no notes)"), nil
+	}
+	return textResult(strings.Join(lines, "\n")), nil
+}
+
+func (s *Server) listFiles(userID, prefix, ext string) (any, error) {
+	paths, err := s.notes().List(userID)
+	if err != nil {
+		return nil, noteErr(err)
+	}
+	prefix = strings.TrimSpace(strings.ReplaceAll(prefix, "\\", "/"))
+	ext = strings.ToLower(strings.TrimSpace(ext))
+	if ext != "" && !strings.HasPrefix(ext, ".") {
+		ext = "." + ext
+	}
+	var lines []string
+	for _, p := range paths {
+		if prefix != "" && !strings.HasPrefix(p, prefix) {
+			continue
+		}
+		if ext != "" && !strings.HasSuffix(strings.ToLower(p), ext) {
+			continue
+		}
+		lines = append(lines, p)
+	}
+	sort.Strings(lines)
+	if len(lines) == 0 {
+		return textResult("(no files)"), nil
 	}
 	return textResult(strings.Join(lines, "\n")), nil
 }

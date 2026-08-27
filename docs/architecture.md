@@ -396,13 +396,13 @@ Default permissions are **search + read**. Create and modify are off until the d
 
 | Permission | Tools |
 | --- | --- |
-| search | `search_notes`, `list_notes`, `find_related`, `suggest_note_path` |
+| search | `search_notes`, `list_notes`, `list_files`, `find_related`, `suggest_note_path` |
 | read | `read_note`, `get_outgoing_links`, `get_backlinks`, `get_graph` |
 | create | `create_note` |
 | modify | `update_note`, `add_backlink`, `move_note`, `delete_note`, `bulk_move`, `bulk_add_links` |
 | create or modify | `append_to_note` |
 
-Writes go to the user’s GitHub repository (Contents API on `main`), not the server working copy. Connected Obsidian clients receive `file_changed` with the note body. `get_graph` returns JSON nodes/edges plus a Mermaid diagram for agents to render. MCP create/update fails until GitHub backup is connected.
+Writes go to the user’s GitHub repository (Contents API on `main`), not the server working copy. Connected Obsidian clients receive `file_changed` with the file body (large binaries are pulled over HTTP). `move_note` and `bulk_move` work for any vault file type, including images. `get_graph` returns JSON nodes/edges plus a Mermaid diagram for agents to render. MCP create/update fails until GitHub backup is connected.
 
 ---
 

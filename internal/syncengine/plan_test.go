@@ -117,6 +117,28 @@ func TestPlanSyncRemoteDelete(t *testing.T) {
 	}
 }
 
+func TestPlanSyncRemoteDeleteEmptyBase(t *testing.T) {
+	client := map[string]string{"stale.md": "abc"}
+	server := map[string]string{"stale.md": ""}
+	got := PlanSync(client, server, nil)
+	if len(got.Push) != 0 || len(got.Conflicts) != 0 {
+		t.Fatalf("empty base + tombstone should pull, got %+v", got)
+	}
+	if len(got.Pull) != 1 || got.Pull[0] != "stale.md" {
+		t.Fatalf("want pull stale.md, got %+v", got)
+	}
+}
+
+func TestPlanSyncRemoteDeleteLocalEdit(t *testing.T) {
+	client := map[string]string{"note.md": "local"}
+	server := map[string]string{"note.md": ""}
+	base := map[string]string{"note.md": "synced"}
+	got := PlanSync(client, server, base)
+	if len(got.Conflicts) != 1 || got.Conflicts[0] != "note.md" {
+		t.Fatalf("want conflict, got %+v", got)
+	}
+}
+
 func TestClassifyPush(t *testing.T) {
 	if got := ClassifyPush("aaa", "", "", false); got != "accept" {
 		t.Fatalf("new file: %s", got)

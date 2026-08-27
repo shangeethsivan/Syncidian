@@ -357,7 +357,7 @@ var SyncidianPlugin = class extends import_obsidian2.Plugin {
     return devicePlatform();
   }
   setStatus(kind, extra = "") {
-    var _a, _b, _c;
+    var _a, _b, _c, _d, _e;
     const labels = {
       offline: "Syncidian \u2022 offline",
       connecting: "Syncidian \u2022 connecting",
@@ -368,9 +368,19 @@ var SyncidianPlugin = class extends import_obsidian2.Plugin {
       error: "Syncidian \u2022 error"
     };
     const text = extra ? `${labels[kind]} ${extra}` : labels[kind];
-    (_a = this.statusEl) == null ? void 0 : _a.setText(text);
-    (_b = this.ribbonEl) == null ? void 0 : _b.setAttribute("aria-label", text);
-    (_c = this.ribbonEl) == null ? void 0 : _c.setAttribute("title", `${text} \u2014 tap to sync now`);
+    (_a = this.statusEl) == null ? void 0 : _a.removeClass(
+      "is-offline",
+      "is-connecting",
+      "is-syncing",
+      "is-pending",
+      "is-ok",
+      "is-conflict",
+      "is-error"
+    );
+    (_b = this.statusEl) == null ? void 0 : _b.addClass(`is-${kind}`);
+    (_c = this.statusEl) == null ? void 0 : _c.setText(text);
+    (_d = this.ribbonEl) == null ? void 0 : _d.setAttribute("aria-label", text);
+    (_e = this.ribbonEl) == null ? void 0 : _e.setAttribute("title", `${text} \u2014 tap to sync now`);
   }
   apiUrl(path) {
     return this.settings.serverUrl.replace(/\/$/, "") + path;
@@ -562,9 +572,7 @@ var SyncidianPlugin = class extends import_obsidian2.Plugin {
   async pullFile(path) {
     const remote = await this.api(`/api/v1/sync/file?path=${encodeURIComponent(path)}`);
     if (remote.deleted) {
-      const existing = this.app.vault.getAbstractFileByPath(path);
-      if (existing)
-        await this.app.vault.delete(existing);
+      await this.removeLocalPath(path);
       delete this.settings.hashes[path];
       await this.saveSettings();
       return;
@@ -573,6 +581,32 @@ var SyncidianPlugin = class extends import_obsidian2.Plugin {
     await this.writeBinary(path, bytes);
     this.settings.hashes[path] = remote.hash;
     await this.saveSettings();
+  }
+  async removeLocalPath(path) {
+    path = (0, import_obsidian2.normalizePath)(path);
+    const existing = this.app.vault.getAbstractFileByPath(path);
+    if (existing)
+      await this.app.vault.delete(existing);
+    await this.pruneEmptyParents(path);
+  }
+  async pruneEmptyParents(filePath) {
+    const parts = (0, import_obsidian2.normalizePath)(filePath).split("/").filter(Boolean);
+    parts.pop();
+    while (parts.length) {
+      const dir = parts.join("/");
+      const af = this.app.vault.getAbstractFileByPath(dir);
+      if (!af || af instanceof import_obsidian2.TFile)
+        return;
+      const folder = af;
+      if (folder.children && folder.children.length > 0)
+        return;
+      try {
+        await this.app.vault.delete(folder);
+      } catch (e) {
+        return;
+      }
+      parts.pop();
+    }
   }
   /** Write bytes, tolerating vault-index lag vs files already on disk. */
   async writeBinary(path, data) {
@@ -973,9 +1007,7 @@ var SyncidianPlugin = class extends import_obsidian2.Plugin {
             this.applyingRemote++;
             try {
               if (msg.deleted) {
-                const f = this.app.vault.getAbstractFileByPath(msg.path);
-                if (f)
-                  await this.app.vault.delete(f);
+                await this.removeLocalPath(msg.path);
                 delete this.settings.hashes[msg.path];
                 await this.saveSettings();
               } else if (msg.content) {

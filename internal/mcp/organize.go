@@ -373,14 +373,46 @@ func insertUnderHeading(body, heading, content string) (string, bool) {
 	return strings.Join(insert, "\n"), true
 }
 
-func (s *Server) moveNote(userID, from, to string) (any, error) {
-	from, ok := vaultRel(ensureMD(from))
+func (s *Server) resolveExisting(userID, raw string) (string, error) {
+	p, ok := vaultRel(raw)
 	if !ok {
-		return nil, fmt.Errorf("invalid from path")
+		return "", fmt.Errorf("invalid path")
 	}
-	to, ok = vaultRel(ensureMD(to))
+	if s.noteExists(userID, p) {
+		return p, nil
+	}
+	if !basenameHasDot(p) {
+		md, ok := vaultRel(ensureMD(p))
+		if ok && s.noteExists(userID, md) {
+			return md, nil
+		}
+	}
+	return "", ErrNoteNotFound
+}
+
+func destForMove(from, rawTo string) (string, error) {
+	to, ok := vaultRel(rawTo)
 	if !ok {
-		return nil, fmt.Errorf("invalid to path")
+		return "", fmt.Errorf("invalid to path")
+	}
+	if strings.HasSuffix(strings.ToLower(from), ".md") && !basenameHasDot(to) {
+		to, ok = vaultRel(ensureMD(to))
+		if !ok {
+			return "", fmt.Errorf("invalid to path")
+		}
+	}
+	return to, nil
+}
+
+func (s *Server) moveNote(userID, from, to string) (any, error) {
+	resolved, err := s.resolveExisting(userID, from)
+	if err != nil {
+		return nil, noteErr(err)
+	}
+	from = resolved
+	to, err = destForMove(from, to)
+	if err != nil {
+		return nil, err
 	}
 	if from == to {
 		return textResult("Already at " + to), nil
@@ -414,9 +446,9 @@ func (s *Server) moveNote(userID, from, to string) (any, error) {
 }
 
 func (s *Server) deleteNote(userID, notePath string) (any, error) {
-	notePath, ok := vaultRel(ensureMD(notePath))
-	if !ok {
-		return nil, fmt.Errorf("invalid path")
+	notePath, err := s.resolveExisting(userID, notePath)
+	if err != nil {
+		return nil, noteErr(err)
 	}
 	if err := s.notes().Delete(userID, notePath); err != nil {
 		return nil, noteErr(err)
@@ -430,6 +462,25 @@ func (s *Server) deleteNote(userID, notePath string) (any, error) {
 	return textResult("Deleted " + notePath), nil
 }
 
+func (s *Server) listUnderPrefix(userID, fromPrefix string) ([]string, error) {
+	all, err := s.notes().List(userID)
+	if err != nil {
+		return nil, noteErr(err)
+	}
+	var targets []string
+	for _, p := range all {
+		p, ok := vaultRel(p)
+		if !ok {
+			continue
+		}
+		if strings.HasPrefix(p, fromPrefix+"/") || p == fromPrefix {
+			targets = append(targets, p)
+		}
+	}
+	sort.Strings(targets)
+	return targets, nil
+}
+
 func (s *Server) bulkMove(userID, fromPrefix, toPrefix string, paths []string) (any, error) {
 	fromPrefix = strings.Trim(strings.ReplaceAll(fromPrefix, "\\", "/"), "/")
 	toPrefix = strings.Trim(strings.ReplaceAll(toPrefix, "\\", "/"), "/")
@@ -440,31 +491,27 @@ func (s *Server) bulkMove(userID, fromPrefix, toPrefix string, paths []string) (
 	var targets []string
 	if len(paths) > 0 {
 		for _, p := range paths {
-			p, ok := vaultRel(ensureMD(p))
-			if !ok {
-				continue
+			resolved, err := s.resolveExisting(userID, p)
+			if err != nil {
+				return nil, fmt.Errorf("path %s: %w", p, noteErr(err))
 			}
-			if !strings.HasPrefix(p, fromPrefix+"/") && p != fromPrefix {
-				return nil, fmt.Errorf("path %s is not under %s", p, fromPrefix)
+			if !strings.HasPrefix(resolved, fromPrefix+"/") && resolved != fromPrefix {
+				return nil, fmt.Errorf("path %s is not under %s", resolved, fromPrefix)
 			}
-			targets = append(targets, p)
+			targets = append(targets, resolved)
 		}
 	} else {
-		all, _, _, err := s.noteIndex(userID)
+		var err error
+		targets, err = s.listUnderPrefix(userID, fromPrefix)
 		if err != nil {
 			return nil, err
 		}
-		for _, p := range all {
-			if strings.HasPrefix(p, fromPrefix+"/") || p == fromPrefix {
-				targets = append(targets, p)
-			}
-		}
 	}
 	if len(targets) == 0 {
-		return textResult("No notes to move."), nil
+		return textResult("No files to move."), nil
 	}
 	if len(targets) > 200 {
-		return nil, fmt.Errorf("refusing to move more than 200 notes at once (%d matched)", len(targets))
+		return nil, fmt.Errorf("refusing to move more than 200 files at once (%d matched)", len(targets))
 	}
 
 	var moved []string
@@ -479,6 +526,7 @@ func (s *Server) bulkMove(userID, fromPrefix, toPrefix string, paths []string) (
 		}
 		moved = append(moved, from+" → "+to)
 	}
+	s.notifyBatch(userID)
 	out := map[string]any{"moved": moved, "errors": errs, "count": len(moved)}
 	raw, _ := json.MarshalIndent(out, "", "  ")
 	return textResult(string(raw)), nil
