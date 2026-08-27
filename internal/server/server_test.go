@@ -488,6 +488,8 @@ func TestDashboardServed(t *testing.T) {
 		`HELP_STEPS`,
 		`scripts/install-plugin.sh`,
 		`Settings → Syncidian`,
+		`Browse → search`,
+		`shangeethsivan/Syncidian`,
 		`Connect your GitHub repository`,
 		`one GitHub repository`,
 		`Connect with GitHub`,
@@ -1204,6 +1206,119 @@ func TestAccessTokenRejectedInQueryString(t *testing.T) {
 	if out.StatusCode != http.StatusUnauthorized {
 		t.Fatalf("query token should be ignored, got %d", out.StatusCode)
 	}
+}
+
+func TestCommunityPluginManifestAtRepoRoot(t *testing.T) {
+	root := repoRoot(t)
+	rootManifest := filepath.Join(root, "manifest.json")
+	pluginManifest := filepath.Join(root, "plugin", "manifest.json")
+	rootVersions := filepath.Join(root, "versions.json")
+	pluginVersions := filepath.Join(root, "plugin", "versions.json")
+
+	if diffFiles(t, pluginManifest, rootManifest) {
+		t.Fatal("manifest.json at the repo root must match plugin/manifest.json (Obsidian reads the root file)")
+	}
+	if diffFiles(t, pluginVersions, rootVersions) {
+		t.Fatal("versions.json at the repo root must match plugin/versions.json")
+	}
+
+	raw, err := os.ReadFile(rootManifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var m struct {
+		ID            string `json:"id"`
+		Name          string `json:"name"`
+		Version       string `json:"version"`
+		MinAppVersion string `json:"minAppVersion"`
+		Description   string `json:"description"`
+		Author        string `json:"author"`
+	}
+	if err := json.Unmarshal(raw, &m); err != nil {
+		t.Fatal(err)
+	}
+	if m.ID != "syncidian" {
+		t.Fatalf("plugin id %q", m.ID)
+	}
+	if strings.Contains(strings.ToLower(m.ID), "obsidian") {
+		t.Fatal("plugin id must not contain obsidian")
+	}
+	if m.Name != "Syncidian" {
+		t.Fatalf("plugin name %q", m.Name)
+	}
+	if m.Version == "" || m.MinAppVersion == "" || m.Description == "" || m.Author == "" {
+		t.Fatalf("incomplete manifest: %+v", m)
+	}
+
+	pkgRaw, err := os.ReadFile(filepath.Join(root, "plugin", "package.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var pkg struct {
+		Version string `json:"version"`
+	}
+	if err := json.Unmarshal(pkgRaw, &pkg); err != nil {
+		t.Fatal(err)
+	}
+	if pkg.Version != m.Version {
+		t.Fatalf("package.json version %s != manifest %s", pkg.Version, m.Version)
+	}
+
+	verRaw, err := os.ReadFile(rootVersions)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var versions map[string]string
+	if err := json.Unmarshal(verRaw, &versions); err != nil {
+		t.Fatal(err)
+	}
+	if versions[m.Version] != m.MinAppVersion {
+		t.Fatalf("versions.json %s => %s, want minAppVersion %s", m.Version, versions[m.Version], m.MinAppVersion)
+	}
+
+	for _, name := range []string{
+		filepath.Join(root, ".github", "workflows", "release.yml"),
+		filepath.Join(root, "LICENSE"),
+		filepath.Join(root, "plugin", "main.js"),
+		filepath.Join(root, "plugin", "styles.css"),
+	} {
+		if _, err := os.Stat(name); err != nil {
+			t.Fatalf("community plugin file missing: %s", name)
+		}
+	}
+}
+
+func repoRoot(t *testing.T) string {
+	t.Helper()
+	dir, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 8; i++ {
+		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
+			return dir
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			break
+		}
+		dir = parent
+	}
+	t.Fatal("go.mod not found from test working directory")
+	return ""
+}
+
+func diffFiles(t *testing.T, a, b string) bool {
+	t.Helper()
+	left, err := os.ReadFile(a)
+	if err != nil {
+		t.Fatal(err)
+	}
+	right, err := os.ReadFile(b)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return !bytes.Equal(left, right)
 }
 
 func TestWebsocketTicketNotRawToken(t *testing.T) {
