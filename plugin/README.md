@@ -38,6 +38,7 @@ GitHub backup is configured in the web dashboard, not in this plugin.
 | HTTP from the WebView | `requestUrl` instead of `fetch`, so Android (`http://localhost` origin) and iOS (`capacitor://localhost`) are not blocked by CORS. |
 | Status bar missing on phones | Ribbon icon shows sync status; tap to sync now. |
 | WebSocket blocked (cleartext / ATS) | HTTP poll of `/api/v1/sync/manifest` every 15s while the socket is down. |
+| App backgrounded (desktop or phone) | On window focus, `visibilitychange`, `online`, or Capacitor `resume`, poll the manifest even if a WebSocket still looks open. |
 | Community directory `manifest.json` | Copied at the **repository root** (required) as well as `plugin/manifest.json`. |
 | BRAT / in-app install | GitHub Release **Assets**: `main.js`, `manifest.json`, `styles.css` (not a tests folder). |
 

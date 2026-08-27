@@ -59,7 +59,7 @@ flowchart TB
   Git -->|"GitHub App installation token"| GH
 ```
 
-The plugin does not use Node.js or Electron, so the same client runs on phones. Android and iOS call the API with `requestUrl`. If the WebSocket cannot open, they poll `GET /api/v1/sync/manifest`.
+The plugin does not use Node.js or Electron, so the same client runs on phones. Android and iOS call the API with `requestUrl`. If the WebSocket cannot open, they poll `GET /api/v1/sync/manifest`. Desktop and mobile also poll that manifest when the vault window is focused again, so a sleeping socket does not leave notes stale.
 
 ---
 
@@ -123,7 +123,7 @@ flowchart TB
   session --- plugin
 ```
 
-Both the dashboard cookie (`syncidian_session`) and the plugin/MCP Bearer token go through `authenticate()`. The Obsidian plugin calls the HTTP API with **`requestUrl`** (not browser `fetch`) so Android (`http://localhost` origin) and iOS (`capacitor://localhost`) are not blocked by CORS. Live updates use a WebSocket after `POST /api/v1/ws/ticket`; if the socket cannot connect (cleartext HTTP, iOS ATS), the plugin polls `GET /api/v1/sync/manifest`. Raw `sk_sync_…` values are shown once and stored as SHA-256 hashes. Session cookies are stored hashed too. GitHub App PEM, client secrets, and installation tokens are encrypted at rest (`enc:v1:` AES-256-GCM) with `SYNCIDIAN_DATA_KEY` or `data/secret.key`. Access tokens **cannot** call GitHub connect/disconnect/sync-now or mint more tokens — those require a dashboard session. The plugin identifies itself with `X-Syncidian-Client`; that header is not a security boundary (it is spoofable). Tokens are not accepted in query strings. `GET/POST /api/v1/github` is never public. GitHub App **callback**, **setup**, and **webhook** URLs are public so GitHub can redirect and ping.
+Both the dashboard cookie (`syncidian_session`) and the plugin/MCP Bearer token go through `authenticate()`. The Obsidian plugin calls the HTTP API with **`requestUrl`** (not browser `fetch`) so Android (`http://localhost` origin) and iOS (`capacitor://localhost`) are not blocked by CORS. Live updates use a WebSocket after `POST /api/v1/ws/ticket`; if the socket cannot connect (cleartext HTTP, iOS ATS), the plugin polls `GET /api/v1/sync/manifest`. The same poll runs when the vault window is focused again so a sleeping desktop or phone socket does not miss notes. Raw `sk_sync_…` values are shown once and stored as SHA-256 hashes. Session cookies are stored hashed too. GitHub App PEM, client secrets, and installation tokens are encrypted at rest (`enc:v1:` AES-256-GCM) with `SYNCIDIAN_DATA_KEY` or `data/secret.key`. Access tokens **cannot** call GitHub connect/disconnect/sync-now or mint more tokens — those require a dashboard session. The plugin identifies itself with `X-Syncidian-Client`; that header is not a security boundary (it is spoofable). Tokens are not accepted in query strings. `GET/POST /api/v1/github` is never public. GitHub App **callback**, **setup**, and **webhook** URLs are public so GitHub can redirect and ping.
 
 ---
 
@@ -209,9 +209,12 @@ sequenceDiagram
       Plugin->>Plugin: fullSync if hashes differ
     end
   end
+  Note over Plugin,API: On window focus, visibility, or mobile resume: poll manifest even if WS looks open
 ```
 
 After the first plan/push, the plugin keeps a local `hashes` map (last-known server hash per path). That map is the `base_hash` used on later syncs. Locally deleted files that are still in `hashes` are sent as tombstones so a resync deletes them on the server instead of restoring them.
+
+Returning to Obsidian (desktop window focus, tab visibility, network `online`, or a phone `resume`) runs the same manifest poll. Timers and WebSockets freeze while the app is backgrounded; a socket can stay `OPEN` and still miss `file_changed` events. The 15s poll still runs only when the socket is down.
 
 ---
 
@@ -237,7 +240,7 @@ sequenceDiagram
     API->>API: Write, RemoveAll, or os.Rename + UpsertFile
     API->>Hub: Broadcast file_changed (skip sender)
     Hub->>Other: pullFile or local delete
-    Note over Other: If WS is down, the other device polls GET /api/v1/sync/manifest
+    Note over Other: If WS is down or the other vault was backgrounded, it polls GET /api/v1/sync/manifest
     API->>Git: CommitAll (add / modify / rm / mv)
     opt GitHub configured
       Git->>GH: Push
@@ -499,7 +502,7 @@ flowchart TB
   C --> CV["vaults/C"]
 ```
 
-A regular user only sees their own devices, tokens, vault, conflicts, activity, MCP usage, and one GitHub repository. Admins manage accounts and cannot call vault, token, device, activity, MCP, or GitHub APIs. The WebSocket hub broadcasts per `userID`. Devices that cannot keep a socket (typical on some phones) poll `GET /api/v1/sync/manifest` instead.
+A regular user only sees their own devices, tokens, vault, conflicts, activity, MCP usage, and one GitHub repository. Admins manage accounts and cannot call vault, token, device, activity, MCP, or GitHub APIs. The WebSocket hub broadcasts per `userID`. Devices that cannot keep a socket (typical on some phones) poll `GET /api/v1/sync/manifest` instead. Every device also polls that manifest when Obsidian is foregrounded again.
 
 Admins can create users and list `adminUserSummary` fields (`username`, `is_admin`, `created_at`). They do **not** receive another user's GitHub App credentials, repository, vault bytes, tokens, or activity. Admin login does not require `github_config`.
 
