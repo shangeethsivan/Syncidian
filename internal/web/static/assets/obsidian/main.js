@@ -264,6 +264,12 @@ var IGNORE = [
 function ignored(path) {
   return IGNORE.some((re) => re.test(path));
 }
+function listedConflictId(c) {
+  return c.id || c.ID || "";
+}
+function listedConflictPath(c) {
+  return c.path || c.Path || "";
+}
 var SyncidianPlugin = class extends import_obsidian2.Plugin {
   constructor() {
     super(...arguments);
@@ -279,6 +285,8 @@ var SyncidianPlugin = class extends import_obsidian2.Plugin {
     this.idleTimer = null;
     this.applyingRemote = 0;
     this.lastResumeSync = 0;
+    this.conflictQueue = [];
+    this.activeConflictId = null;
   }
   async onload() {
     await this.loadSettings();
@@ -287,6 +295,10 @@ var SyncidianPlugin = class extends import_obsidian2.Plugin {
     }
     this.statusEl = this.addStatusBarItem();
     this.statusEl.addClass("syncidian-status");
+    this.statusEl.addClass("mod-clickable");
+    this.registerDomEvent(this.statusEl, "click", () => {
+      void this.onStatusClick();
+    });
     this.ribbonEl = this.addRibbonIcon("sync", "Syncidian: sync now", () => {
       void this.fullSync();
     });
@@ -523,10 +535,9 @@ var SyncidianPlugin = class extends import_obsidian2.Plugin {
       if ((plan.Delete || []).length || (plan.Push || []).length) {
         await this.pushBatch(plan.Delete || [], plan.Push || []);
       }
-      for (const path of plan.Conflicts || []) {
-        await this.raiseConflict(path);
-      }
-      this.setStatus((plan.Conflicts || []).length ? "conflict" : "ok");
+      await this.resolvePlanConflicts(plan.Conflicts || []);
+      if (!this.activeConflictId && !this.conflictQueue.length)
+        this.setStatus("ok");
       return true;
     } catch (e) {
       this.setStatus("error");
@@ -681,9 +692,92 @@ var SyncidianPlugin = class extends import_obsidian2.Plugin {
       delete this.settings.hashes[old];
     await this.saveSettings();
     for (const c of res.conflicts || []) {
-      new ConflictModal(this.app, this, c.id, c.path).open();
-      this.setStatus("conflict");
+      this.enqueueConflict(c.id, c.path);
     }
+  }
+  async onStatusClick() {
+    if (await this.openStoredConflicts())
+      return;
+    void this.fullSync();
+  }
+  async listOpenConflicts() {
+    try {
+      const res = await this.api("/api/v1/conflicts");
+      return Array.isArray(res) ? res : [];
+    } catch (e) {
+      return [];
+    }
+  }
+  async openStoredConflicts() {
+    const items = await this.listOpenConflicts();
+    if (!items.length)
+      return false;
+    for (const c of items) {
+      const id = listedConflictId(c);
+      if (id)
+        this.enqueueConflict(id, listedConflictPath(c));
+    }
+    return true;
+  }
+  /** Full sync reports conflict paths without ids; open a stored conflict or push to create one. */
+  async resolvePlanConflicts(paths) {
+    if (!paths.length)
+      return;
+    const stored = await this.listOpenConflicts();
+    const remaining = [];
+    for (const path of paths) {
+      const hit = stored.find((c) => listedConflictPath(c) === path);
+      const id = hit ? listedConflictId(hit) : "";
+      if (id)
+        this.enqueueConflict(id, path);
+      else
+        remaining.push(path);
+    }
+    if (!remaining.length)
+      return;
+    const deletes = [];
+    const upserts = [];
+    for (const path of remaining) {
+      if (this.app.vault.getAbstractFileByPath(path) instanceof import_obsidian2.TFile)
+        upserts.push(path);
+      else
+        deletes.push(path);
+    }
+    await this.pushBatch(deletes, upserts);
+  }
+  enqueueConflict(id, path) {
+    if (!id)
+      return;
+    if (this.activeConflictId === id)
+      return;
+    if (this.conflictQueue.some((c) => c.id === id))
+      return;
+    if (this.activeConflictId) {
+      this.conflictQueue.push({ id, path });
+      return;
+    }
+    this.presentConflict(id, path);
+  }
+  presentConflict(id, path) {
+    this.activeConflictId = id;
+    this.setStatus("conflict", path);
+    new ConflictModal(this.app, this, id, path).open();
+  }
+  onConflictResolved() {
+    this.activeConflictId = null;
+    const next = this.conflictQueue.shift();
+    if (next)
+      this.presentConflict(next.id, next.path);
+    else
+      this.setStatus("ok");
+  }
+  onConflictModalClosed(id) {
+    if (this.activeConflictId !== id)
+      return;
+    this.activeConflictId = null;
+    const next = this.conflictQueue.shift();
+    if (next)
+      this.presentConflict(next.id, next.path);
   }
   async raiseConflict(path) {
     new import_obsidian2.Notice(`Syncidian conflict: ${path}`);
@@ -887,7 +981,8 @@ var SyncidianPlugin = class extends import_obsidian2.Plugin {
               } else if (msg.content) {
                 const bytes = toArrayBuffer(b64decode(msg.content));
                 await this.writeBinary(msg.path, bytes);
-                if (msg.hash) this.settings.hashes[msg.path] = msg.hash;
+                if (msg.hash)
+                  this.settings.hashes[msg.path] = msg.hash;
                 await this.saveSettings();
               } else {
                 await this.pullFile(msg.path);
@@ -996,6 +1091,7 @@ var ConflictModal = class extends import_obsidian2.Modal {
     this.plugin = plugin;
     this.id = id;
     this.path = path;
+    this.resolved = false;
   }
   async onOpen() {
     const { contentEl } = this;
@@ -1039,11 +1135,14 @@ var ConflictModal = class extends import_obsidian2.Modal {
     });
     await this.plugin.pullFile(this.path);
     new import_obsidian2.Notice(`Resolved ${this.path}`);
+    this.resolved = true;
+    this.plugin.onConflictResolved();
     this.close();
-    this.plugin.setStatus("ok");
   }
   onClose() {
     this.contentEl.empty();
+    if (!this.resolved)
+      this.plugin.onConflictModalClosed(this.id);
   }
 };
 var SyncidianSettingTab = class extends import_obsidian2.PluginSettingTab {
