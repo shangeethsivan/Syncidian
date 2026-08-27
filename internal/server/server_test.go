@@ -1192,6 +1192,51 @@ func TestBearerTokenCannotManageGitHub(t *testing.T) {
 	}
 }
 
+func TestBearerCanGetAndResolveConflict(t *testing.T) {
+	hs, done := newTestServer(t)
+	defer done()
+	token, deviceID := vaultPluginAuth(t, hs, "bob")
+
+	note := "# Hello\n"
+	pushNote(t, hs, token, deviceID, "Inbox/Hello.md", note, "")
+	other := "# Other\n"
+	res, m := doJSON(t, http.MethodPost, hs.URL+"/api/v1/sync/push", map[string]any{
+		"device_id": deviceID,
+		"files": []map[string]any{{
+			"path":      "Inbox/Hello.md",
+			"hash":      fileSHA256([]byte(other)),
+			"mtime":     2,
+			"base_hash": "deadbeef",
+			"content":   base64.StdEncoding.EncodeToString([]byte(other)),
+		}},
+	}, nil, token)
+	conflicts, _ := m["conflicts"].([]any)
+	if res.StatusCode != 200 || len(conflicts) != 1 {
+		t.Fatalf("expected conflict, got %d %v", res.StatusCode, m)
+	}
+	c, _ := conflicts[0].(map[string]any)
+	id, _ := c["id"].(string)
+	if id == "" {
+		t.Fatalf("conflict id: %v", c)
+	}
+
+	res, got := doJSON(t, http.MethodGet, hs.URL+"/api/v1/conflicts/"+id, nil, nil, token)
+	if res.StatusCode != 200 {
+		t.Fatalf("bearer GET conflict: want 200, got %d %v", res.StatusCode, got)
+	}
+	if got["path"] != "Inbox/Hello.md" {
+		t.Fatalf("conflict payload: %v", got)
+	}
+
+	res, resolved := doJSON(t, http.MethodPost, hs.URL+"/api/v1/conflicts/"+id+"/resolve", map[string]any{
+		"resolution": "local",
+		"device_id":  deviceID,
+	}, nil, token)
+	if res.StatusCode != 200 {
+		t.Fatalf("bearer resolve: want 200, got %d %v", res.StatusCode, resolved)
+	}
+}
+
 func TestAccessTokenRejectedInQueryString(t *testing.T) {
 	hs, done := newTestServer(t)
 	defer done()
