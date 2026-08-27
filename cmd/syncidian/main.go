@@ -74,7 +74,8 @@ Environment:
   SYNCIDIAN_PUBLIC_URL           Public URL shown in the dashboard
   SYNCIDIAN_BOOTSTRAP_USER       Create this admin on first boot
   SYNCIDIAN_BOOTSTRAP_PASSWORD   Password for the bootstrap admin
-  SYNCIDIAN_GITHUB_APP_ID        GitHub App ID (optional; /admin can create the app)
+  SYNCIDIAN_ADMIN_PATH           Unlisted operator path (default /admin). Not linked from the public site.
+  SYNCIDIAN_GITHUB_APP_ID        GitHub App ID (optional; operator page can create the app)
   SYNCIDIAN_GITHUB_APP_SLUG      GitHub App slug
   SYNCIDIAN_GITHUB_CLIENT_ID     GitHub App OAuth client ID
   SYNCIDIAN_GITHUB_CLIENT_SECRET GitHub App OAuth client secret

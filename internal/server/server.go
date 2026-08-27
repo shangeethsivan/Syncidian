@@ -153,8 +153,13 @@ func (s *Server) Handler() http.Handler {
 			}
 			http.ServeFileFS(w, r, static, "index.html")
 		})
-		mux.HandleFunc("GET /admin", serveHTML)
-		mux.HandleFunc("GET /admin/{$}", serveHTML)
+		admin := s.adminPath()
+		mux.HandleFunc("GET "+admin, serveHTML)
+		mux.HandleFunc("GET "+admin+"/{$}", serveHTML)
+		if admin != "/admin" {
+			mux.HandleFunc("GET /admin", http.NotFound)
+			mux.HandleFunc("GET /admin/{$}", http.NotFound)
+		}
 		mux.HandleFunc("GET /favicon.ico", func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusNoContent)
 		})
@@ -211,6 +216,14 @@ func (s *Server) originMayUseCookies(origin string) bool {
 	}
 	host := rHost(origin)
 	return host == "localhost" || strings.HasPrefix(host, "127.0.0.1") || strings.HasPrefix(host, "[::1]")
+}
+
+func (s *Server) adminPath() string {
+	return config.NormalizeAdminPath(s.Cfg.AdminPath)
+}
+
+func (s *Server) adminURL(r *http.Request) string {
+	return s.requestBase(r) + s.adminPath()
 }
 
 func rHost(origin string) string {

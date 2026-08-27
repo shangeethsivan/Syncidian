@@ -8,7 +8,9 @@
   <link rel="api-catalog" href="/.well-known/api-catalog" type="application/linkset+json" />
   <link rel="ai-catalog" href="/.well-known/ai-catalog.json" type="application/json" />
   <link rel="describedby" href="/.well-known/mcp/server-card.json" type="application/json" />
-  <link rel="sitemap" href="/sitemap.xml" type="application/xml" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
   <link rel="alternate" type="text/markdown" href="/" />
   <script>
     (function () {
@@ -144,6 +146,7 @@
     #landing {
       position: relative; z-index: 1; min-height: 100vh;
       display: flex; flex-direction: column;
+      font-family: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
     }
     #landing .site-head {
       background: color-mix(in srgb, var(--bg) 38%, transparent);
@@ -268,13 +271,127 @@
     .arch b { display: block; font-size: 15px; margin-bottom: 8px; }
     .arch span { color: var(--muted); font-size: 15px; }
     .email-box { max-width: 420px; margin: 28px auto 0; text-align: left; }
-    .site-foot { padding: 48px 24px 80px; text-align: center; color: var(--muted); font-size: 13px; }
     .landing-flash { max-width: 36em; margin: 0 auto; }
     .landing-flash:not(:empty) { margin-bottom: 28px; }
+    .story, .devices {
+      position: relative; z-index: 2; max-width: 1080px; margin: 0 auto;
+      padding: 24px 24px 72px; width: 100%;
+    }
+    .story h2, .devices h2 {
+      font-size: clamp(28px, 5vw, 42px); letter-spacing: -.03em; margin: 0 0 12px; text-align: center;
+    }
+    .story > p, .devices > p { text-align: center; color: var(--muted); max-width: 36em; margin: 0 auto 32px; }
+    .device-stage {
+      display: grid; grid-template-columns: 1.2fr .8fr; gap: 28px; align-items: center;
+    }
+    .laptop, .phone {
+      background: color-mix(in srgb, var(--card) 72%, transparent);
+      border: 1px solid var(--line); backdrop-filter: blur(18px);
+      box-shadow: 0 30px 80px rgba(8, 6, 20, .28);
+    }
+    .laptop { border-radius: 18px; padding: 14px 14px 18px; }
+    .laptop .bar { display: flex; gap: 6px; margin-bottom: 12px; }
+    .laptop .bar i { width: 8px; height: 8px; border-radius: 50%; background: var(--line); display: block; }
+    .note-list { display: grid; gap: 8px; text-align: left; }
+    .note-list div {
+      background: color-mix(in srgb, var(--bg) 70%, transparent);
+      border-radius: 10px; padding: 12px 14px;
+    }
+    .note-list b { display: block; font-size: 14px; margin-bottom: 4px; }
+    .note-list span { color: var(--muted); font-size: 13px; }
+    .phone {
+      border-radius: 32px; padding: 18px 14px 22px; max-width: 240px; margin: 0 auto;
+    }
+    .phone .notch { width: 72px; height: 8px; border-radius: 8px; background: var(--line); margin: 0 auto 14px; }
+    .phone .chip {
+      background: linear-gradient(135deg, #7852ee, #027aff); color: #f7f4ff;
+      border-radius: 14px; padding: 16px; font-size: 13px;
+    }
+    header.app {
+      background: color-mix(in srgb, var(--bg) 78%, transparent);
+      backdrop-filter: saturate(180%) blur(20px);
+    }
+    #app .btn:not(.secondary):not(.danger) { background: #7852ee; color: #f7f4ff; }
+    #nerds-toggle.on { color: var(--text); border-color: var(--line); background: var(--card); }
+    .cinematic-footer-wrap { position: relative; height: min(100vh, 920px); width: 100%; overflow: hidden; }
+    .cinematic-footer {
+      position: relative; min-height: min(100vh, 920px); width: 100%;
+      display: flex; flex-direction: column; justify-content: space-between;
+      overflow: hidden; color: var(--text);
+      font-family: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+    }
+    .footer-aurora {
+      position: absolute; left: 50%; top: 42%; width: 80vw; height: 55vh;
+      transform: translate(-50%, -50%); border-radius: 50%; filter: blur(80px); pointer-events: none;
+      background: radial-gradient(circle at 50% 50%, color-mix(in srgb, #7852ee 28%, transparent), color-mix(in srgb, #027aff 18%, transparent) 42%, transparent 70%);
+      animation: footer-breathe 8s ease-in-out infinite alternate;
+    }
+    .footer-grid {
+      position: absolute; inset: 0; pointer-events: none;
+      background-size: 60px 60px;
+      background-image:
+        linear-gradient(to right, color-mix(in srgb, var(--text) 8%, transparent) 1px, transparent 1px),
+        linear-gradient(to bottom, color-mix(in srgb, var(--text) 8%, transparent) 1px, transparent 1px);
+      mask-image: linear-gradient(to bottom, transparent, black 30%, black 72%, transparent);
+    }
+    .footer-giant {
+      position: absolute; bottom: -4vh; left: 50%; transform: translateX(-50%);
+      font-size: 18vw; line-height: .75; font-weight: 900; letter-spacing: -.05em;
+      color: transparent; -webkit-text-stroke: 1px color-mix(in srgb, var(--text) 10%, transparent);
+      background: linear-gradient(180deg, color-mix(in srgb, var(--text) 14%, transparent), transparent 60%);
+      -webkit-background-clip: text; background-clip: text; pointer-events: none; user-select: none; white-space: nowrap;
+    }
+    .footer-marquee {
+      position: relative; z-index: 2; overflow: hidden; margin-top: 36px;
+      border-top: 1px solid var(--line); border-bottom: 1px solid var(--line);
+      background: color-mix(in srgb, var(--bg) 55%, transparent); transform: rotate(-2deg) scale(1.08);
+      padding: 12px 0;
+    }
+    .footer-marquee-track {
+      display: flex; width: max-content; animation: footer-scroll 36s linear infinite;
+      font-size: 12px; font-weight: 700; letter-spacing: .28em; text-transform: uppercase; color: var(--muted);
+    }
+    .footer-marquee-track span { padding: 0 18px; }
+    .footer-center {
+      position: relative; z-index: 2; flex: 1; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; padding: 80px 24px 24px; text-align: center;
+    }
+    .footer-center h2 {
+      font-size: clamp(40px, 8vw, 84px); font-weight: 800; letter-spacing: -.05em; margin: 0 0 28px;
+      background: linear-gradient(180deg, var(--text), color-mix(in srgb, var(--text) 45%, transparent));
+      -webkit-background-clip: text; background-clip: text; color: transparent;
+    }
+    .footer-pills { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; }
+    .footer-pill {
+      display: inline-flex; align-items: center; gap: 8px; padding: 14px 22px; border-radius: 999px;
+      text-decoration: none; color: var(--text); font-weight: 700; font-size: 14px;
+      background: linear-gradient(145deg, color-mix(in srgb, var(--text) 8%, transparent), color-mix(in srgb, var(--text) 3%, transparent));
+      border: 1px solid color-mix(in srgb, var(--text) 10%, transparent);
+      backdrop-filter: blur(16px);
+    }
+    .footer-pill:hover { border-color: color-mix(in srgb, var(--text) 24%, transparent); }
+    .footer-bar {
+      position: relative; z-index: 2; display: flex; flex-wrap: wrap; gap: 16px;
+      align-items: center; justify-content: space-between;
+      padding: 18px 28px 28px; color: var(--muted); font-size: 12px; letter-spacing: .12em; text-transform: uppercase;
+    }
+    .footer-love { display: inline-flex; align-items: center; gap: 8px; padding: 10px 16px; border-radius: 999px; border: 1px solid var(--line); }
+    .footer-love .heart { color: var(--danger); animation: footer-heartbeat 2s ease-in-out infinite; }
+    @keyframes footer-breathe {
+      0% { transform: translate(-50%, -50%) scale(1); opacity: .65; }
+      100% { transform: translate(-50%, -50%) scale(1.08); opacity: 1; }
+    }
+    @keyframes footer-scroll { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+    @keyframes footer-heartbeat {
+      0%, 100% { transform: scale(1); }
+      20% { transform: scale(1.18); }
+    }
     @media (max-width: 800px) {
       .site-head { padding: 16px; }
       .arch { grid-template-columns: 1fr; }
       .hero-actions { flex-direction: column; align-items: center; }
+      .device-stage { grid-template-columns: 1fr; }
+      .footer-giant { font-size: 22vw; }
     }
   </style>
 </head>
@@ -286,7 +403,6 @@
       <div class="row">
         <button class="ghost theme-toggle" type="button">Theme</button>
         <a class="ghost" href="/api/v1/auth/github/start">Log in</a>
-        <a class="ghost" href="/admin">Admin</a>
       </div>
     </header>
     <section class="hero" id="start">
@@ -320,9 +436,62 @@
         </div>
       </div>
     </section>
-    <footer class="site-foot">
-      <p>Your notes. Your GitHub.</p>
-    </footer>
+    <section class="story" id="how">
+      <h2>Quiet by default. Yours throughout.</h2>
+      <p>Sign in, connect one repository, and keep writing. Devices stay in step. AI talks to your notes only with a token you mint.</p>
+      <div class="arch">
+        <div><b>Every device</b><span>The same plugin on desktop, Android, and iOS. No Electron, no extra client.</span></div>
+        <div><b>Your GitHub</b><span>Optional backup on main. You own the repo. This server never asks for a personal access token.</span></div>
+        <div><b>MCP, on your terms</b><span>Search and read are enough for most agents. Create and modify stay off until you allow them.</span></div>
+      </div>
+    </section>
+    <section class="devices" id="look">
+      <h2>The same vault, wherever you write.</h2>
+      <p>Obsidian stays the editor. Syncidian is the quiet layer underneath — phones, laptops, and the agents you invite.</p>
+      <div class="device-stage">
+        <div class="laptop" aria-hidden="true">
+          <div class="bar"><i></i><i></i><i></i></div>
+          <div class="note-list">
+            <div><b>Projects / Syncidian.md</b><span>Vault on GitHub. Plugin on every device.</span></div>
+            <div><b>Daily / 2026-08-28.md</b><span>Edits land on main. Conflicts stay rare.</span></div>
+            <div><b>MCP / permissions.md</b><span>Search and read by default. Writes are a choice.</span></div>
+          </div>
+        </div>
+        <div class="phone" aria-hidden="true">
+          <div class="notch"></div>
+          <div class="chip">
+            <b style="display:block;margin-bottom:8px">On the phone</b>
+            Restricted mode off. Community plugin or three files. Server URL is this host — never localhost.
+          </div>
+        </div>
+      </div>
+    </section>
+    <div class="cinematic-footer-wrap" id="cinematic-footer">
+      <footer class="cinematic-footer">
+        <div class="footer-aurora"></div>
+        <div class="footer-grid"></div>
+        <div class="footer-giant">SYNCIDIAN</div>
+        <div class="footer-marquee">
+          <div class="footer-marquee-track">
+            <span>Your vault ✦ Your GitHub ✦ Every device ✦ MCP on your terms ✦</span>
+            <span>Your vault ✦ Your GitHub ✦ Every device ✦ MCP on your terms ✦</span>
+          </div>
+        </div>
+        <div class="footer-center">
+          <h2>Ready to begin?</h2>
+          <div class="footer-pills">
+            <a class="footer-pill" href="/api/v1/auth/github/start?next=install">Continue with GitHub</a>
+            <a class="footer-pill" href="#start">Email signup</a>
+            <a class="footer-pill" href="https://github.com/shangeethsivan/Syncidian" target="_blank" rel="noopener">Source</a>
+          </div>
+        </div>
+        <div class="footer-bar">
+          <div>© 2026 Syncidian</div>
+          <div class="footer-love">Crafted with <span class="heart">❤</span> for people who keep their own notes</div>
+          <a class="footer-pill" href="#start">Back to top</a>
+        </div>
+      </footer>
+    </div>
   </div>
 
   <div id="auth" class="auth hidden">
@@ -351,6 +520,7 @@
       <nav id="nav"></nav>
       <div class="row">
         <span class="muted" id="who"></span>
+        <button class="ghost" id="nerds-toggle" type="button">Stats for Nerds</button>
         <button class="ghost theme-toggle" type="button">Theme</button>
         <button class="ghost" id="logout" type="button">Log out</button>
       </div>
@@ -366,7 +536,7 @@
       <div class="help-head">
         <div>
           <h1 id="help-title">Setup walkthrough</h1>
-          <p class="muted" style="margin:0">GitHub for vault users. Admin stays at /admin.</p>
+          <p class="muted" style="margin:0">GitHub for vault users. Operators use the unlisted admin path.</p>
         </div>
         <button class="ghost" id="help-close" type="button">Close</button>
       </div>
@@ -389,7 +559,19 @@ let page = "overview";
 let publicInfo = null;
 
 function isAdminPath() {
-  return location.pathname.replace(/\/+$/, "") === "/admin";
+  const p = location.pathname.replace(/\/+$/, "") || "/";
+  return p !== "/";
+}
+function nerdsOn() {
+  return localStorage.getItem("syncidian-nerds") === "1";
+}
+function paintNerdsToggle() {
+  const b = $("nerds-toggle");
+  if (!b) return;
+  const on = nerdsOn();
+  b.classList.toggle("on", on);
+  b.setAttribute("aria-pressed", on ? "true" : "false");
+  b.textContent = on ? "Stats for Nerds on" : "Stats for Nerds";
 }
 function applyTheme(next) {
   const theme = next || localStorage.getItem("syncidian-theme") || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
@@ -463,7 +645,7 @@ const HELP_STEPS = [
   {
     title: "1. Start the Syncidian server",
     html: () => `
-      <p>The public site is a one-page story. Vault users sign in with GitHub. Operators use <code>/admin</code>.</p>
+      <p>The public site is a one-page story. Vault users sign in with GitHub. The operator page is unlisted (default <code>/admin</code>, or <code>SYNCIDIAN_ADMIN_PATH</code>).</p>
       <h2>Docker</h2>
       <pre>git clone https://github.com/shangeethsivan/Syncidian.git
 cd Syncidian
@@ -483,9 +665,9 @@ docker compose up --build -d</pre>
   {
     title: "2. Authenticate",
     html: () => `
-      <p>The first account is an admin, created at <code>/admin</code>. Admins manage users only — they do not connect a GitHub repository and never see another person’s vault, tokens, or GitHub credentials. Vault users sign in with GitHub from the public site, or with email.</p>
+      <p>The first account is an admin, created on the operator page (default <code>/admin</code>). Admins manage users only — they do not connect a GitHub repository and never see another person’s vault, tokens, or GitHub credentials. Vault users sign in with GitHub from the public site, or with email.</p>
       <ol>
-        <li>Open <code>/admin</code>.</li>
+        <li>Open the operator path (not linked from the public site).</li>
         <li>Choose a username.</li>
         <li>Choose a password of at least 8 characters.</li>
         <li>Click <b>Create admin</b>.</li>
@@ -497,7 +679,7 @@ docker compose up --build -d</pre>
     html: () => `
       <p>Self-hosters create <b>one GitHub App for this instance</b> so people can sign in with GitHub. Full walkthrough: <code>docs/github-app.md</code>.</p>
       <ol>
-        <li>On the admin page, copy the <b>Callback</b>, <b>Setup</b>, and <b>Webhook</b> URLs — or click <b>Create GitHub App</b> to pre-fill them.</li>
+        <li>On the admin page (enable <b>Stats for Nerds</b> to see GitHub App URLs), copy the <b>Callback</b>, <b>Setup</b>, and <b>Webhook</b> URLs — or click <b>Create GitHub App</b> to pre-fill them.</li>
         <li>If you create the app by hand in GitHub Developer settings, finish on the admin page: copy <b>App ID</b>, <b>Client ID</b>, generate a <b>client secret</b> and <b>private key</b>, then paste them into <b>Complete setup after creating the GitHub App</b>.</li>
         <li>Permissions: Contents read and write, Metadata read, Email addresses read. Enable OAuth during installation. Branch is always <code>main</code>.</li>
       </ol>
@@ -674,6 +856,15 @@ function paintNav() {
 async function boot() {
   applyTheme();
   document.querySelectorAll(".theme-toggle").forEach((b) => { b.onclick = toggleTheme; });
+  const nerdsBtn = $("nerds-toggle");
+  if (nerdsBtn) {
+    paintNerdsToggle();
+    nerdsBtn.onclick = () => {
+      localStorage.setItem("syncidian-nerds", nerdsOn() ? "0" : "1");
+      paintNerdsToggle();
+      if (me) render();
+    };
+  }
   const q = new URLSearchParams(location.search);
   if (q.get("github")) {
     window.__githubQuery = { flag: q.get("github"), message: q.get("message") || "" };
@@ -723,7 +914,7 @@ function showAuth() {
   heroScene.start();
   $("auth-title").textContent = needsSetup ? "Create the first admin" : "Admin sign in";
   $("auth-sub").textContent = needsSetup
-    ? "This is /admin. Choose a username and a password of at least 8 characters. Vault users sign in with GitHub on the public site."
+    ? "This is the operator page. Choose a username and a password of at least 8 characters. Vault users sign in with GitHub on the public site."
     : "Operators only. Vault users sign in with GitHub from the public site.";
   $("auth-btn").textContent = needsSetup ? "Create admin" : "Sign in";
   $("auth-btn").disabled = false;
@@ -739,6 +930,7 @@ function showApp() {
   $("app").classList.remove("hidden");
   heroScene.stop();
   $("who").textContent = isAdmin() ? me.username + " · admin" : me.username;
+  paintNerdsToggle();
   paintNav();
   render();
 }
@@ -763,7 +955,7 @@ $("logout").onclick = async () => {
   me = null;
   needsSetup = false;
   page = "overview";
-  if (isAdminPath()) location.href = "/admin";
+  if (isAdminPath()) location.href = location.pathname.replace(/\/+$/, "") || "/";
   else location.href = "/";
 };
 
@@ -820,7 +1012,7 @@ async function adminOverview(main) {
       <h2>What you can do</h2>
       <ul>
         <li>Create regular users on the <b>Users</b> page, or let them sign up with GitHub.</li>
-        <li>Register the instance GitHub App using the URLs below.</li>
+        <li>${nerdsOn() ? "Register the instance GitHub App using the URLs below." : "Turn on <b>Stats for Nerds</b> to register the instance GitHub App."}</li>
         <li>You never open another user’s notes.</li>
       </ul>
       <div class="row">
@@ -829,11 +1021,16 @@ async function adminOverview(main) {
       </div>
     </div>
     <div class="card">
-      <h2>GitHub App URLs</h2>
-      <p class="muted">Paste these into the GitHub App form. GitHub requires a webhook URL so it can ping the app after you create it. Syncidian answers that ping with 200 even if you do not subscribe to extra events. Callback is the sign-in redirect. Setup is where GitHub sends people after they install the app.</p>
+      <h2>GitHub App</h2>
       <p>${publicInfo && publicInfo.github_app && publicInfo.github_app.configured
         ? `<span class="pill ok">Registered</span> ${esc((publicInfo.github_app.slug || "GitHub App"))}`
-        : `<span class="pill warn">Not registered</span> Create the GitHub App so people can sign in with GitHub.`}</p>
+        : `<span class="pill warn">Not registered</span> People cannot sign in with GitHub until an operator registers the app.`}</p>
+      ${nerdsOn() ? "" : `<p class="muted">Enable <b>Stats for Nerds</b> for callback URLs, Create GitHub App, and credential paste.</p>`}
+    </div>
+    ${nerdsOn() ? `
+    <div class="card">
+      <h2>GitHub App URLs</h2>
+      <p class="muted">Paste these into the GitHub App form. GitHub requires a webhook URL so it can ping the app after you create it. Syncidian answers that ping with 200 even if you do not subscribe to extra events. Callback is the sign-in redirect. Setup is where GitHub sends people after they install the app.</p>
       <p><b>Callback URL</b> (User authorization callback / redirect URI)<br><code id="adm-callback">/api/v1/auth/github/callback</code></p>
       <p><b>Setup URL</b> (post-installation redirect)<br><code id="adm-setup">/api/v1/github/app/setup</code></p>
       <p><b>Webhook URL</b><br><code id="adm-webhook">/api/v1/github/app/webhook</code></p>
@@ -885,12 +1082,12 @@ async function adminOverview(main) {
         <button class="btn" id="gh-man-save" type="button">Save credentials</button>
       </div>
       <div id="adm-gh-man-flash"></div>
-    </div>
+    </div>` : ""}
   `;
   $("go-users").onclick = () => { page = "users"; paintNav(); render(); };
   $("go-help").onclick = () => openHelp(2);
   const urls = publicInfo && publicInfo.github_app && publicInfo.github_app.urls;
-  if (urls) {
+  if (urls && $("adm-callback")) {
     $("adm-callback").textContent = urls.callback;
     $("adm-setup").textContent = urls.setup;
     $("adm-webhook").textContent = urls.webhook;
@@ -898,9 +1095,11 @@ async function adminOverview(main) {
   const q = window.__githubQuery;
   if (q && q.flag === "app-ready") {
     window.__githubQuery = null;
-    flash($("adm-gh-flash"), "GitHub App registered. People can now sign in with GitHub.", "ok");
+    const box = $("adm-gh-flash");
+    if (box) flash(box, "GitHub App registered. People can now sign in with GitHub.", "ok");
   }
-  $("gh-app-register").onclick = async () => {
+  const registerBtn = $("gh-app-register");
+  if (registerBtn) registerBtn.onclick = async () => {
     try {
       const data = await api("/api/v1/github/app/register/start", { method: "POST", body: "{}" });
       const form = document.createElement("form");
@@ -915,7 +1114,8 @@ async function adminOverview(main) {
       form.submit();
     } catch (e) { flash($("adm-gh-flash"), e.message); }
   };
-  $("gh-man-save").onclick = async () => {
+  const saveBtn = $("gh-man-save");
+  if (saveBtn) saveBtn.onclick = async () => {
     flash($("adm-gh-man-flash"), "");
     const appId = Number($("gh-man-app-id").value);
     const body = {
@@ -946,8 +1146,8 @@ async function overview(main) {
   const usage = mcpStatus.usage || {};
   main.innerHTML = `
     <h1>Overview</h1>
-    <p class="muted">Your devices, tokens, GitHub repository, and MCP clients stay private to this account.</p>
-    <div class="grid">
+    <p class="muted">Your devices stay in sync. GitHub backup and MCP are optional.</p>
+    ${nerdsOn() ? `<div class="grid">
       <div class="stat">Active clients<b>${stats.active_clients ?? 0}</b></div>
       <div class="stat">Devices<b>${stats.device_count ?? 0}</b></div>
       <div class="stat">Total syncs<b>${stats.total_syncs ?? 0}</b></div>
@@ -958,14 +1158,14 @@ async function overview(main) {
       <div class="stat">MCP calls (7d)<b>${stats.mcp_calls_7d ?? 0}</b></div>
       <div class="stat">MCP calls (all)<b>${stats.mcp_total_calls ?? 0}</b></div>
       <div class="stat">Last MCP call<b>${when(stats.last_mcp_call)}</b></div>
-    </div>
+    </div>` : ""}
     <div class="card">
       <h2>Your GitHub repository</h2>
       <p>${gh.configured ? `<span class="pill ok">Connected</span> ${esc(gh.repo)} on <code>main</code>` : `<span class="pill warn">Not configured</span> Connect your GitHub repository on the GitHub page. One user can set up one repository on the <code>main</code> branch.`}</p>
       ${gh.last_error ? `<p class="flash err">${esc(gh.last_error)}</p>` : ""}
       ${gh.configured ? "" : `<button class="btn" id="go-github" type="button">Connect GitHub</button>`}
     </div>
-    <div class="card" id="mcp-overview">
+    ${nerdsOn() ? `<div class="card" id="mcp-overview">
       <h2>MCP / AI</h2>
       <p>${(usage.client_count || 0) > 0
         ? `<span class="pill ok">${usage.active_clients || 0} recently used</span> ${usage.client_count} connected client${usage.client_count === 1 ? "" : "s"} · ${usage.calls_24h || 0} tool calls in the last 24 hours`
@@ -975,7 +1175,7 @@ async function overview(main) {
       <div class="row" style="margin-top:12px">
         <button class="btn secondary" id="go-mcp" type="button">MCP permissions and setup</button>
       </div>
-    </div>
+    </div>` : `<div class="card"><p class="muted">Need AI tools? Open <b>MCP / AI</b>, or turn on <b>Stats for Nerds</b> for client and call counts.</p><button class="btn secondary" id="go-mcp" type="button">MCP permissions and setup</button></div>`}
     <div class="card">
       <h2>Devices</h2>
       ${deviceTable(devices)}
@@ -1002,7 +1202,7 @@ async function overview(main) {
       </ol>
       <button class="btn secondary" id="open-help" type="button">Open setup walkthrough</button>
     </div>
-    ${asList(conflicts).length ? `<div class="card"><h2>Conflicts</h2>${conflictList(asList(conflicts))}</div>` : ""}
+    ${nerdsOn() && asList(conflicts).length ? `<div class="card"><h2>Conflicts</h2>${conflictList(asList(conflicts))}</div>` : ""}
   `;
   const go = $("go-github");
   if (go) go.onclick = () => { page = "github"; paintNav(); render(); };
@@ -1200,8 +1400,8 @@ async function mcp(main) {
   const usage = p.usage || {};
   main.innerHTML = `
     <h1>MCP / AI</h1>
-    <p class="muted">Least privilege by default. AI tools authenticate with a Bearer access token, a dashboard session, or <code>POST /api/v1/mcp/login</code>. Connected clients and how often they use each tool show up here after the first call. MCP does not save notes on this server — writes go to your GitHub repository and to live Obsidian clients.</p>
-    <div class="grid">
+    <p class="muted">Least privilege by default. AI tools authenticate with a Bearer access token. MCP does not save notes on this server — writes go to your GitHub repository and to live Obsidian clients.</p>
+    ${nerdsOn() ? `<div class="grid">
       <div class="stat">Connected clients<b>${usage.client_count ?? 0}</b></div>
       <div class="stat">Recently used<b>${usage.active_clients ?? 0}</b></div>
       <div class="stat">Calls (24h)<b>${usage.calls_24h ?? 0}</b></div>
@@ -1213,7 +1413,7 @@ async function mcp(main) {
       <h2>Connected MCP clients</h2>
       ${mcpClientTable(asList(usage.clients))}
       ${mcpToolTable(asList(usage.tools))}
-    </div>
+    </div>` : `<p class="muted">Turn on <b>Stats for Nerds</b> to see connected MCP clients, tool usage, and call counts.</p>`}
     <div class="card">
       <div class="check"><input id="m-search" type="checkbox" ${p.Search || p.search ? "checked" : ""} /> Search notes (includes find related / suggest path)</div>
       <div class="check"><input id="m-read" type="checkbox" ${p.Read || p.read ? "checked" : ""} /> Read notes (includes backlinks / graph)</div>
@@ -1527,7 +1727,7 @@ boot().catch((e) => {
   heroScene.stop();
   const wrap = document.createElement("div");
   wrap.className = "wrap";
-  wrap.innerHTML = `<div class="flash err">${esc(e.message)}</div><p class="muted">Open /admin if this is a new instance.</p>`;
+  wrap.innerHTML = `<div class="flash err">${esc(e.message)}</div><p class="muted">If this is a new instance, open the operator path to create the first admin.</p>`;
   document.body.insertBefore(wrap, $("help-fab"));
 });
 </script>

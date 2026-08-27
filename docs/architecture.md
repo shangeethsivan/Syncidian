@@ -2,7 +2,7 @@
 
 This document describes the **current MVP** as implemented in this repository. GitHub renders the Mermaid diagrams below — open this file on GitHub to visualize them.
 
-The plugin is the client (Windows, macOS, Linux, Android, and iOS — `isDesktopOnly` is false). HTTP from the plugin uses Obsidian `requestUrl`. The Go server is the coordination layer. A per-user vault on disk plus SQLite metadata is the working copy. GitHub is an **optional, per-user** durable source of truth — people sign in with GitHub on the public landing, then install the App on one repository. Operators use `/admin`. MCP is the AI bridge.
+The plugin is the client (Windows, macOS, Linux, Android, and iOS — `isDesktopOnly` is false). HTTP from the plugin uses Obsidian `requestUrl`. The Go server is the coordination layer. A per-user vault on disk plus SQLite metadata is the working copy. GitHub is an **optional, per-user** durable source of truth — people sign in with GitHub on the public landing, then install the App on one repository. Operators use an unlisted path (`SYNCIDIAN_ADMIN_PATH`, default `/admin`). MCP is the AI bridge.
 
 When you change this architecture, update the Mermaid diagrams in this file and in `README.md`. See [`AGENT.md`](../AGENT.md).
 
@@ -88,7 +88,7 @@ flowchart TB
   subgraph public [Unauthenticated — public site]
     H["GET /health · /ready"]
     UI["GET /  HTML or text/markdown"]
-    AdminUI["GET /admin → admin sign-in / first setup"]
+    AdminUI["GET SYNCIDIAN_ADMIN_PATH<br/>default /admin · unlisted"]
     Robots["GET /robots.txt · /sitemap.xml · /auth.md"]
     Discover["GET /.well-known/api-catalog · mcp/server-card.json<br/>oauth-protected-resource · agent-skills · ai-catalog"]
     OpenAPI["GET /openapi.json"]
@@ -140,9 +140,8 @@ flowchart TD
   Open["GET /"] --> Land["Landing: what Syncidian is"]
   Land --> GH["Sign up / Log in / Connect with GitHub"]
   Land --> Email["Optional email signup"]
-  Land --> AdminLink["GET /admin"]
 
-  AdminLink --> Auth{"Authenticated admin?"}
+  Ops["GET SYNCIDIAN_ADMIN_PATH<br/>unlisted · default /admin"] --> Auth{"Authenticated admin?"}
   Auth -->|no, empty DB| Form["Create first admin"]
   Auth -->|no| Login["POST /api/v1/auth/login"]
   Form --> Cookie["HttpOnly cookie"]
@@ -328,7 +327,7 @@ flowchart LR
   end
 
   subgraph admin [Operators]
-    AdminUI["GET /admin"] --> Setup["First-boot: create admin"]
+    AdminUI["GET SYNCIDIAN_ADMIN_PATH"] --> Setup["First-boot: create admin"]
     AdminUI --> Login["POST /api/v1/auth/login"]
     Setup --> Cookie
     Login --> Cookie
@@ -348,7 +347,7 @@ flowchart LR
   Authed --> User["store.User"]
 ```
 
-GitHub OAuth is how vault users sign in. Admins sign in at `/admin` with username and password. The instance GitHub App needs a callback URL, a setup URL, and a webhook URL so GitHub can redirect and ping.
+GitHub OAuth is how vault users sign in. Admins sign in on the unlisted operator path (`SYNCIDIAN_ADMIN_PATH`, default `/admin`) with username and password. The instance GitHub App needs a callback URL, a setup URL, and a webhook URL so GitHub can redirect and ping. GitHub App URL paste and MCP/call stats in the dashboard sit behind **Stats for Nerds**.
 
 ---
 

@@ -8,7 +8,6 @@ Syncidian is a self-hosted sync server and MCP bridge for Obsidian. The same plu
 
 - **GitHub:** [Continue with GitHub](/api/v1/auth/github/start?next=install)
 - **Email:** use the Email button on the [homepage](/)
-- **Operators:** [Admin](/admin)
 
 ## For AI agents
 

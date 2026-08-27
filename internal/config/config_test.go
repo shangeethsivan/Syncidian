@@ -24,6 +24,9 @@ func TestFromEnvDefaults(t *testing.T) {
 	if c.PublicURL != "http://localhost:8080" {
 		t.Fatalf("PublicURL=%q", c.PublicURL)
 	}
+	if c.AdminPath != "/admin" {
+		t.Fatalf("AdminPath=%q, want /admin", c.AdminPath)
+	}
 }
 
 func TestFromEnvPortWhenAddrUnset(t *testing.T) {
@@ -98,5 +101,25 @@ func TestFromEnvGitHubAppSlugNormalizesURL(t *testing.T) {
 	c := FromEnv()
 	if c.GitHubAppSlug != "syncidian" {
 		t.Fatalf("GitHubAppSlug=%q, want syncidian", c.GitHubAppSlug)
+	}
+}
+
+func TestNormalizeAdminPath(t *testing.T) {
+	if got := NormalizeAdminPath(""); got != "/admin" {
+		t.Fatalf("empty: %q", got)
+	}
+	if got := NormalizeAdminPath("ops-secret"); got != "/ops-secret" {
+		t.Fatalf("relative: %q", got)
+	}
+	if got := NormalizeAdminPath("/api"); got != "/admin" {
+		t.Fatalf("reserved: %q", got)
+	}
+	if got := NormalizeAdminPath("/ops/nested"); got != "/admin" {
+		t.Fatalf("nested: %q", got)
+	}
+	t.Setenv("SYNCIDIAN_ADMIN_PATH", "gate-9f3")
+	c := FromEnv()
+	if c.AdminPath != "/gate-9f3" {
+		t.Fatalf("from env: %q", c.AdminPath)
 	}
 }

@@ -42,7 +42,7 @@ func TestAgentDiscovery(t *testing.T) {
 		t.Fatalf("robots.txt %d %s", res.StatusCode, body)
 	}
 	txt := string(body)
-	for _, needle := range []string{"User-agent: *", "User-agent: GPTBot", "Content-Signal:", "Sitemap:", "Agentmap:"} {
+	for _, needle := range []string{"User-agent: *", "User-agent: GPTBot", "Content-Signal:", "Sitemap:", "Agentmap:", "Disallow: /admin"} {
 		if !strings.Contains(txt, needle) {
 			t.Fatalf("robots.txt missing %q:\n%s", needle, txt)
 		}
@@ -51,6 +51,9 @@ func TestAgentDiscovery(t *testing.T) {
 	res, body = getBody(t, hs.URL+"/sitemap.xml", "")
 	if res.StatusCode != http.StatusOK || !strings.Contains(string(body), "/auth.md") {
 		t.Fatalf("sitemap %d %s", res.StatusCode, body)
+	}
+	if strings.Contains(string(body), "/admin") {
+		t.Fatal("sitemap must not advertise the operator page")
 	}
 
 	res, body = getBody(t, hs.URL+"/", "text/markdown")

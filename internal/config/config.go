@@ -18,6 +18,7 @@ type Config struct {
 	Addr               string
 	DataDir            string
 	PublicURL          string
+	AdminPath          string
 	GitName            string
 	GitEmail           string
 	GitHubAppID        int64
@@ -32,6 +33,7 @@ func FromEnv() Config {
 		Addr:               firstEnv("SYNCIDIAN_ADDR", "PORT"),
 		DataDir:            resolveDataDir(),
 		PublicURL:          publicURL(),
+		AdminPath:          NormalizeAdminPath(env("SYNCIDIAN_ADMIN_PATH", "")),
 		GitName:            env("SYNCIDIAN_GIT_NAME", "Syncidian"),
 		GitEmail:           env("SYNCIDIAN_GIT_EMAIL", "syncidian@localhost"),
 		GitHubAppSlug:      githubapp.NormalizeAppSlug(env("SYNCIDIAN_GITHUB_APP_SLUG", "")),
@@ -96,4 +98,38 @@ func env(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+// NormalizeAdminPath returns a single-segment operator path. Default is /admin.
+// The public landing does not link here; set SYNCIDIAN_ADMIN_PATH to an
+// unguessable value if the instance is on the public internet.
+func NormalizeAdminPath(raw string) string {
+	p := strings.TrimSpace(raw)
+	if p == "" {
+		return "/admin"
+	}
+	p = strings.TrimRight(p, "/")
+	if !strings.HasPrefix(p, "/") {
+		p = "/" + p
+	}
+	if p == "/" || strings.Contains(p, "//") || strings.Contains(p, "..") || strings.Count(p, "/") != 1 {
+		return "/admin"
+	}
+	lower := strings.ToLower(p)
+	reserved := []string{
+		"/api", "/assets", "/mcp", "/health", "/ready", "/auth.md",
+		"/openapi.json", "/robots.txt", "/sitemap.xml", "/favicon.ico",
+	}
+	for _, r := range reserved {
+		if lower == r {
+			return "/admin"
+		}
+	}
+	for _, c := range p[1:] {
+		ok := (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-' || c == '_'
+		if !ok {
+			return "/admin"
+		}
+	}
+	return p
 }

@@ -32,14 +32,17 @@ func (s *Server) instanceGitHubApp() *store.GitHubApp {
 func (s *Server) handleGitHubAuthStart(w http.ResponseWriter, r *http.Request) {
 	n, _ := s.Store.UserCount()
 	if n == 0 {
-		http.Redirect(w, r, s.requestBase(r)+"/admin", http.StatusFound)
+		s.dashboardRedirect(w, r, url.Values{
+			"github":  {"error"},
+			"message": {"This instance is not ready yet. An operator must create the first admin."},
+		})
 		return
 	}
 	app := s.instanceGitHubApp()
 	if !app.Configured() {
 		s.dashboardRedirect(w, r, url.Values{
 			"github":  {"error"},
-			"message": {"This instance has no GitHub App yet. An admin must register it at /admin."},
+			"message": {"This instance has no GitHub App yet. An operator must register it first."},
 		})
 		return
 	}
@@ -125,7 +128,7 @@ func (s *Server) handleGitHubAuthCallback(w http.ResponseWriter, r *http.Request
 		return
 	}
 	if u.IsAdmin {
-		s.dashboardRedirect(w, r, url.Values{"github": {"error"}, "message": {"Admins sign in at /admin."}})
+		s.dashboardRedirect(w, r, url.Values{"github": {"error"}, "message": {"Admins sign in on the operator page."}})
 		return
 	}
 	sess, err := s.Store.CreateSession(u.ID, 30*24*time.Hour)
@@ -206,7 +209,7 @@ func (s *Server) upsertGitHubUser(gh *githubapp.User) (*store.User, error) {
 }
 
 func errAdminRequired() error {
-	return errString("Create the first admin at /admin before signing in with GitHub.")
+	return errString("Create the first admin before signing in with GitHub.")
 }
 
 type errString string
