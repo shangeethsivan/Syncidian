@@ -68,7 +68,7 @@ func New(cfg config.Config, st *store.Store, log *slog.Logger) *Server {
 		s.hub.Broadcast(userID, "", msg)
 	}
 	s.MCP.OnBatch = func(userID string) {
-		if err := s.importGitHubVault(userID); err != nil {
+		if _, err := s.importGitHubVault(userID); err != nil {
 			s.Log.Error("import github after mcp batch", "user", userID, "err", err)
 		}
 		s.hub.Broadcast(userID, "", map[string]any{"type": "github_synced"})
@@ -116,6 +116,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/github", s.sessionVaultAuthed(s.handleGetGitHub))
 	mux.HandleFunc("POST /api/v1/github", s.sessionVaultAuthed(s.handleSetGitHub))
 	mux.HandleFunc("DELETE /api/v1/github", s.sessionVaultAuthed(s.handleDeleteGitHub))
+	mux.HandleFunc("GET /api/v1/github/tree", s.vaultAuthed(s.handleGitHubTree))
 	mux.HandleFunc("POST /api/v1/github/sync", s.vaultAuthed(s.handleGitHubSyncNow))
 	mux.HandleFunc("POST /api/v1/github/app/start", s.sessionVaultAuthed(s.handleGitHubAppStart))
 	mux.HandleFunc("POST /api/v1/github/app/register/start", s.adminAuthed(s.handleGitHubAppRegisterStart))

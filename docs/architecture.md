@@ -118,7 +118,7 @@ flowchart TB
     Conf["conflicts list · get · resolve"]
     File["GET /api/v1/sync/file"]
     Man["GET /api/v1/sync/manifest<br/>also poll if WS down"]
-    GHPull["POST /api/v1/github/sync<br/>reset + drop files not on GitHub"]
+    GHPull["GET /api/v1/github/tree · POST /api/v1/github/sync<br/>GitHub tree is the folder layout"]
     Ticket["POST /api/v1/ws/ticket"]
     Sock["GET /api/v1/ws?ticket="]
     MCP["POST /mcp"]
@@ -216,7 +216,7 @@ sequenceDiagram
   Note over Plugin,API: On window focus, visibility, or mobile resume: poll manifest even if WS looks open
 ```
 
-After the first plan/push, the plugin keeps a local `hashes` map (last-known server hash per path). That map is the `base_hash` used on later syncs. Locally deleted files that are still in `hashes` are sent as tombstones so a resync deletes them on the server instead of restoring them. When GitHub is connected, full sync first imports GitHub (`POST /api/v1/github/sync`), then deletes local files that are not in `GET /api/v1/sync/manifest` and prunes empty folders so Obsidian matches the GitHub tree instead of pushing leftover notes back.
+After the first plan/push, the plugin keeps a local `hashes` map (last-known server hash per path). That map is the `base_hash` used on later syncs. Locally deleted files that are still in `hashes` are sent as tombstones so a resync deletes them on the server instead of restoring them. When GitHub is connected, full sync loads **GitHub's file list** (`GET /api/v1/github/tree`), deletes local files that are not in that list (including leftover folders), then imports GitHub onto the server (`POST /api/v1/github/sync`). It will not pull leftover notes back from a stale server copy, and will not push those leftovers back to GitHub.
 
 Returning to Obsidian (desktop window focus, tab visibility, network `online`, or a phone `resume`) runs the same manifest poll. Timers and WebSockets freeze while the app is backgrounded; a socket can stay `OPEN` and still miss `file_changed` events. The 15s poll still runs only when the socket is down.
 

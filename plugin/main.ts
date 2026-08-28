@@ -346,18 +346,22 @@ export default class SyncidianPlugin extends Plugin {
     this.setStatus("syncing");
     try {
       if (!this.connected) await this.connect();
-      let githubLayout = false;
+      let githubFiles = await this.githubFileSet();
+      if (githubFiles) {
+        await this.dropLocalNotInRemote(githubFiles);
+      }
       try {
-        await this.api("/api/v1/github/sync", { method: "POST", body: "{}" });
-        githubLayout = true;
+        const sync = await this.api("/api/v1/github/sync", { method: "POST", body: "{}" });
+        const listed = stringArrayField(sync, "files").map((p) => normalizePath(p)).filter(Boolean);
+        if (listed.length) {
+          githubFiles = new Set(listed);
+          await this.dropLocalNotInRemote(githubFiles);
+        }
       } catch (e) {
         const msg = errorMessage(e);
         if (!/GitHub is not configured/i.test(msg)) {
           throw e;
         }
-      }
-      if (githubLayout) {
-        await this.dropLocalNotOnServer();
       }
       const local = await this.localManifest();
       const files: { path: string; hash: string; base_hash: string; deleted?: boolean }[] = Object.keys(local).map(
@@ -381,10 +385,17 @@ export default class SyncidianPlugin extends Plugin {
         body: JSON.stringify({ device_id: this.settings.deviceId, files }),
       });
       for (const path of stringArrayField(plan, "Pull")) {
+        if (githubFiles && !githubFiles.has(normalizePath(path))) {
+          await this.removeLocalPath(path);
+          delete this.settings.hashes[path];
+          continue;
+        }
         await this.pullFile(path);
       }
       const toDelete = stringArrayField(plan, "Delete");
-      const toPush = stringArrayField(plan, "Push");
+      const toPush = stringArrayField(plan, "Push").filter(
+        (path) => !githubFiles || githubFiles.has(normalizePath(path))
+      );
       if (toDelete.length || toPush.length) {
         await this.pushBatch(toDelete, toPush);
       }
@@ -465,24 +476,70 @@ export default class SyncidianPlugin extends Plugin {
     );
   }
 
-  /** After GitHub import, delete vault files that are not in the live server tree. */
-  async dropLocalNotOnServer() {
-    const man = await this.api("/api/v1/sync/manifest");
-    const remote = new Set<string>();
-    const listed = isRecord(man) ? man.files : null;
-    if (isUnknownArray(listed)) {
-      for (const item of listed) {
-        const path = normalizePath(stringField(item, "path"));
-        if (path) remote.add(path);
+  /** GitHub blob paths. Empty/null means GitHub backup is not connected. */
+  async githubFileSet(): Promise<Set<string> | null> {
+    try {
+      const tree = await this.api("/api/v1/github/tree");
+      const files = stringArrayField(tree, "files").map((p) => normalizePath(p)).filter(Boolean);
+      return files.length ? new Set(files) : null;
+    } catch (e) {
+      const msg = errorMessage(e);
+      if (/GitHub is not configured/i.test(msg) || /\b404\b/.test(msg)) {
+        return null;
       }
+      throw e;
     }
+  }
+
+  /** Delete local notes (and leftover folders) that are not in GitHub's tree. */
+  async dropLocalNotInRemote(remote: Set<string>) {
     for (const file of this.app.vault.getFiles()) {
       if (ignored(file.path) || remote.has(normalizePath(file.path))) continue;
       await this.removeLocalPath(file.path);
       delete this.settings.hashes[file.path];
     }
+    await this.dropOrphanFolders(remote);
     await this.pruneEmptyFolders();
     await this.saveSettings();
+  }
+
+  folderPrefixes(remote: Set<string>): Set<string> {
+    const prefixes = new Set<string>();
+    for (const filePath of remote) {
+      const parts = normalizePath(filePath).split("/").filter(Boolean);
+      for (let i = 1; i < parts.length; i++) {
+        prefixes.add(parts.slice(0, i).join("/"));
+      }
+    }
+    return prefixes;
+  }
+
+  async dropOrphanFolders(remote: Set<string>) {
+    const prefixes = this.folderPrefixes(remote);
+    const folders: TFolder[] = [];
+    const walk = (folder: TFolder) => {
+      for (const child of folder.children) {
+        if (child instanceof TFolder) {
+          walk(child);
+          folders.push(child);
+        }
+      }
+    };
+    walk(this.app.vault.getRoot());
+    folders.sort((a, b) => b.path.length - a.path.length);
+    for (const folder of folders) {
+      if (this.keepFolder(folder.path)) continue;
+      if (prefixes.has(folder.path) || remote.has(folder.path)) continue;
+      try {
+        await this.app.vault.adapter.rmdir(folder.path, true);
+      } catch {
+        try {
+          await this.app.vault.delete(folder, true);
+        } catch {
+          /* folder may already be gone */
+        }
+      }
+    }
   }
 
   async pruneEmptyFolders() {
