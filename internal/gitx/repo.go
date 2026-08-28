@@ -135,6 +135,10 @@ func (m *Manager) ResetToRemote(dir, ownerRepo, token, branch string) error {
 		if err := m.CloneOrOpen(dir, ownerRepo, token, branch); err != nil {
 			return err
 		}
+	} else if strings.TrimSpace(ownerRepo) != "" {
+		if err := m.ConfigureOrigin(dir, ownerRepo); err != nil {
+			return err
+		}
 	}
 	repo, err := git.PlainOpen(dir)
 	if err != nil {
@@ -162,9 +166,71 @@ func (m *Manager) ResetToRemote(dir, ownerRepo, token, branch string) error {
 	if err := wt.Reset(&git.ResetOptions{Mode: git.HardReset, Commit: ref.Hash()}); err != nil {
 		return fmt.Errorf("git reset: %w", err)
 	}
-	_ = wt.Clean(&git.CleanOptions{Dir: true})
+	if err := purgeUntracked(dir, repo, ref.Hash()); err != nil {
+		return err
+	}
 	head := plumbing.NewHashReference(plumbing.NewBranchReferenceName(branch), ref.Hash())
 	return repo.Storer.SetReference(head)
+}
+
+// purgeUntracked deletes files and empty folders that are not in commit.
+// go-git Clean misses some leftover vault folders after a GitHub rewrite.
+func purgeUntracked(dir string, repo *git.Repository, commitHash plumbing.Hash) error {
+	commit, err := repo.CommitObject(commitHash)
+	if err != nil {
+		return fmt.Errorf("commit: %w", err)
+	}
+	tree, err := commit.Tree()
+	if err != nil {
+		return err
+	}
+	keep := map[string]struct{}{}
+	if err := tree.Files().ForEach(func(f *object.File) error {
+		keep[filepath.ToSlash(f.Name)] = struct{}{}
+		return nil
+	}); err != nil {
+		return err
+	}
+	var dirs []string
+	if err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(dir, path)
+		if err != nil {
+			return err
+		}
+		rel = filepath.ToSlash(rel)
+		if rel == "." {
+			return nil
+		}
+		if rel == ".git" || strings.HasPrefix(rel, ".git/") {
+			if info.IsDir() && rel == ".git" {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if info.IsDir() {
+			dirs = append(dirs, path)
+			return nil
+		}
+		if _, ok := keep[rel]; ok {
+			return nil
+		}
+		return os.Remove(path)
+	}); err != nil {
+		return err
+	}
+	for i := len(dirs) - 1; i >= 0; i-- {
+		entries, err := os.ReadDir(dirs[i])
+		if err != nil {
+			continue
+		}
+		if len(entries) == 0 {
+			_ = os.Remove(dirs[i])
+		}
+	}
+	return nil
 }
 
 func (m *Manager) Push(dir, token, branch string) error {

@@ -157,6 +157,10 @@ func (s *Server) handleSyncPlan(w http.ResponseWriter, r *http.Request, u *store
 	}
 	server := map[string]string{}
 	for _, f := range serverFiles {
+		if f.Deleted {
+			server[f.Path] = ""
+			continue
+		}
 		server[f.Path] = f.Hash
 	}
 	client := map[string]string{}
