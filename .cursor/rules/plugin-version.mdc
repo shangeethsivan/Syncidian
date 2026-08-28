@@ -1,0 +1,17 @@
+---
+description: Bump the Obsidian plugin version whenever plugin files change or a release is tagged.
+globs: plugin/**,manifest.json,versions.json,internal/web/static/assets/obsidian/**
+alwaysApply: false
+---
+
+# Plugin version bump
+
+Any change to the Obsidian plugin that will land on `main`, and any plugin release, must increment the version **in the same PR**.
+
+- Bump `plugin/manifest.json` `version` (patch for fixes, minor for features).
+- Add the new key to `plugin/versions.json`.
+- Run `make plugin-manifest` so root `manifest.json`, `versions.json`, and `internal/web/static/assets/obsidian/` stay identical.
+- Match `plugin/package.json`, the lockfile, and `cmd/syncidian` `version`.
+- Git tags must equal that version with **no `v` prefix** (example: `0.1.2`).
+
+Do not merge plugin code with an unchanged version. Docs-only or server-only changes skip this bump.
