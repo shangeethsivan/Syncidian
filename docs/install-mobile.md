@@ -18,7 +18,7 @@ Obsidian ships with community plugins blocked until you turn **Restricted mode**
 
 Until Restricted mode is off, Syncidian will not appear, even if the files are already in the vault.
 
-## Option A — Community plugins (easiest, once listed)
+## Option A — Community plugins
 
 1. Restricted mode off (above).
 2. **Browse** → search **Syncidian** → **Install** → **Enable**.
