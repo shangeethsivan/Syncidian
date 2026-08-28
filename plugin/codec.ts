@@ -21,5 +21,7 @@ export function b64decode(s: string): Uint8Array {
 }
 
 export function toArrayBuffer(data: Uint8Array): ArrayBuffer {
-  return data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength) as ArrayBuffer;
+  const copy = new ArrayBuffer(data.byteLength);
+  new Uint8Array(copy).set(data);
+  return copy;
 }
