@@ -1,6 +1,6 @@
 {
   "name": "syncidian",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Obsidian plugin for the Syncidian sync server",
   "main": "main.js",
   "scripts": {
