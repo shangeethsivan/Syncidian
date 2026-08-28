@@ -158,7 +158,7 @@ If a previous run left a release with no plugin files (for example attestation f
 
 Publish:
 
-1. Edit the plugin under `plugin/`. After a version bump, copy metadata to the root:
+1. Edit the plugin under `plugin/`. **Bump `plugin/manifest.json` `version` in the same change** (required before merging plugin updates to `main`). Then copy metadata to the root:
 
    ```bash
    make plugin-manifest

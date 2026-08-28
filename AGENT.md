@@ -2,6 +2,10 @@
 
 This file tells coding agents how to keep documentation honest when the product changes.
 
+## Pull requests
+
+After a PR is **merged**, do not keep committing on that branch. Fetch `origin/main`, create a **new branch**, and open a **new PR** for the next change. Never push extra commits onto a merged PR, and never reopen work on a stale feature branch that already landed.
+
 ## When architecture or user-flow changes
 
 If you change any of the following, **update the docs in the same change**:
@@ -12,6 +16,7 @@ If you change any of the following, **update the docs in the same change**:
 * HTTP routes, data model, sync plan, MCP, or deployment topology
 * Multi-user isolation or token/session behavior
 * Whether the Obsidian plugin is desktop-only or mobile-capable (`isDesktopOnly`)
+* Plugin version (`plugin/manifest.json`) whenever plugin code or sideload assets change
 
 Do not ship a behavioral change that leaves `README.md`, `docs/github-app.md`, or `docs/architecture.md` describing the old flow.
 
@@ -47,6 +52,19 @@ Document and implement these unless a later change explicitly replaces them — 
 8. **Secrets at rest.** Access tokens and session IDs are hashed. GitHub App PEM, client secrets, and installation tokens are encrypted (`enc:v1:`). Bearer `sk_sync_` tokens cannot connect, disconnect, or mint more tokens. They may `POST /api/v1/github/sync` so Obsidian can match a GitHub-side vault restructure. Do not accept access tokens in query strings. `X-Syncidian-Client` identifies the plugin; it is not an auth check.
 9. **Obsidian plugin is mobile-capable.** `plugin/manifest.json` `isDesktopOnly` stays `false`. Do not import Node.js or Electron APIs. HTTP from the plugin uses `requestUrl`. Root `manifest.json` must match `plugin/manifest.json`, and `internal/web/static/assets/obsidian/` must match the three sideload files (`make plugin-manifest`). The running server serves those files at `GET /assets/obsidian/` and `GET /assets/obsidian.zip`. GitHub Release **Assets** are `main.js`, `manifest.json`, and `styles.css` (not a tests folder). `.github/workflows/release.yml` skips attestations on private repos so those files still upload. Phone enable steps: `docs/install-mobile.md`. Packaging notes: `docs/community-plugin.md`.
 10. **MCP does not store note bodies on the server.** MCP reads and writes the user’s GitHub repository. Create/update fail until GitHub is connected. Live Obsidian clients get `file_changed` (large binaries are pulled over HTTP). `move_note` / `bulk_move` apply to any vault file type.
+11. **Bump the plugin version in the same change.** Any PR that changes plugin behavior or files under `plugin/` (including compiled `main.js` / `styles.css`) must increment `plugin/manifest.json` `version` (patch for fixes, minor for features). Then run `make plugin-manifest` so root `manifest.json`, `versions.json`, and `internal/web/static/assets/obsidian/` match. Also set `plugin/package.json` (and lockfile) and `cmd/syncidian` `version` to the same string. Never push plugin changes to `main` with an unchanged version. A release tag must equal that version exactly, with no `v` prefix (`0.1.2`, not `v0.1.2`). Add the new version key to `plugin/versions.json` / `versions.json`.
+
+## Plugin version (required)
+
+When you change the Obsidian plugin or cut a release, **increment the version in the same change**. Do not merge plugin updates to `main` with the previous `version` string.
+
+1. Bump `plugin/manifest.json` `version` (patch `0.1.2` → `0.1.3` for fixes; minor for user-facing features).
+2. Add that version to `plugin/versions.json` (keep older keys).
+3. Run `make plugin-manifest` so root `manifest.json`, `versions.json`, and `internal/web/static/assets/obsidian/` match.
+4. Set `plugin/package.json`, `plugin/package-lock.json`, and `cmd/syncidian` `const version` to the same string.
+5. Release only with `git tag -a <version> -m "<version>"` (no `v` prefix). CI fails if the tag does not equal `plugin/manifest.json`.
+
+Docs-only or server-only PRs do not bump the plugin version.
 
 ## How to update diagrams
 
