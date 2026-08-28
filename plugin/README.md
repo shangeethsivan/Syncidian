@@ -8,13 +8,11 @@ Git-based community plugins (for example [Obsidian Git](https://github.com/denol
 
 Full Android and iOS steps (Restricted mode, Community plugins, BRAT, copying files, Connect): **[docs/install-mobile.md](../docs/install-mobile.md)**.
 
-**From Community plugins** (once listed): Settings → Community plugins → turn **Restricted mode** off → Browse → **Syncidian** → Install → Enable.
+**From Community plugins:** Settings → Community plugins → turn **Restricted mode** off → Browse → **Syncidian** → Install → Enable.
 
-Until then:
+**From a running server:** download `/assets/obsidian.zip` (or the three files under `/assets/obsidian/`) into `YourVault/.obsidian/plugins/syncidian/`. After a deploy, refresh with `./scripts/install-plugin.sh "/path/to/YourVault" "https://your-syncidian.example"`.
 
-1. From a running Syncidian server, download `/assets/obsidian.zip` (or the three files under `/assets/obsidian/`) into `{Vault}/.obsidian/plugins/syncidian/`. That is the fastest way to refresh a local install after a deploy: `./scripts/install-plugin.sh "/path/to/YourVault" "https://your-syncidian.example"`.
-2. Or copy `plugin/manifest.json`, `plugin/main.js`, and `plugin/styles.css` from this repo, or `./scripts/install-plugin.sh "/path/to/YourVault"`.
-3. In Obsidian: Settings → Community plugins → turn **Restricted mode** off → enable **Syncidian**.
+**From this repo:** copy `plugin/manifest.json`, `plugin/main.js`, and `plugin/styles.css`, or run `./scripts/install-plugin.sh "/path/to/YourVault"`. Then Settings → Community plugins → turn **Restricted mode** off → enable **Syncidian**.
 
 Those three files live in **`plugin/`** in this repo. They are not written to a `tests/` folder.
 

@@ -22,7 +22,7 @@ docker run -d \
   syncidian
 ```
 
-**Self-host Syncidian for free, or use the upcoming hosted service starting at $1/month.**
+**Self-host Syncidian for free.** A managed service is planned at $1/month; it is not available yet.
 
 ---
 
@@ -66,7 +66,7 @@ Health check: `GET /health`. Agents can also fetch `/robots.txt`, `/auth.md`, `/
 
 You still run a Syncidian server (step 1). The plugin is only the Obsidian client.
 
-**From Community plugins** (easiest, once listed):
+**From Community plugins:**
 
 1. Settings → Community plugins → turn **Restricted mode** off.
 2. Browse → search **Syncidian** → Install → Enable.
@@ -76,7 +76,7 @@ You still run a Syncidian server (step 1). The plugin is only the Obsidian clien
    * Device name: e.g. `MacBook Pro`
 4. Click **Connect**.
 
-**If it is not listed yet**, install [BRAT](https://github.com/TfTHacker/obsidian42-brat), then add `shangeethsivan/Syncidian`. BRAT needs a GitHub Release whose **tag** matches `manifest.json` `version` **and** whose **Assets** list includes `main.js`, `manifest.json`, and `styles.css` (not only the automatic source zip). See [Publishing](#-publishing-the-obsidian-plugin).
+If Browse does not show Syncidian yet, install [BRAT](https://github.com/TfTHacker/obsidian42-brat), then add `shangeethsivan/Syncidian`. BRAT needs a GitHub Release whose **tag** matches `manifest.json` `version` **and** whose **Assets** list includes `main.js`, `manifest.json`, and `styles.css` (not only the automatic source zip). See [Publishing](#-publishing-the-obsidian-plugin).
 
 **Sideload** from a running Syncidian server (no git clone) or from this repo:
 
@@ -177,7 +177,7 @@ Publish:
 
 4. Address automated review feedback, then bump the version and tag again. After approval, people install from Community plugins → Browse → **Syncidian**.
 
-Until that listing is live, testers can use [BRAT](https://github.com/TfTHacker/obsidian42-brat) pointed at this GitHub repo **after the three files are on the Release**, or `scripts/install-plugin.sh`. Keep `isDesktopOnly` **false** so Android and iOS can install it. Mobile install: [`docs/install-mobile.md`](docs/install-mobile.md). Packaging notes: [`docs/community-plugin.md`](docs/community-plugin.md).
+You can also install with [BRAT](https://github.com/TfTHacker/obsidian42-brat) pointed at this GitHub repo **after the three files are on the Release**, or with `scripts/install-plugin.sh`. Keep `isDesktopOnly` **false** so Android and iOS can install it. Mobile install: [`docs/install-mobile.md`](docs/install-mobile.md). Packaging notes: [`docs/community-plugin.md`](docs/community-plugin.md).
 
 Rebuilding the plugin after TypeScript changes:
 
@@ -354,32 +354,7 @@ docker run -d \
   syncidian
 ```
 
-A future release should also provide a pre-built Docker image so users can simply run:
-
-```bash
-docker run -d \
-  --name syncidian \
-  -p 8080:8080 \
-  ghcr.io/<owner>/syncidian:latest
-```
-
----
-
-# 🐳 One-Command Deployment
-
-The goal is for Syncidian to be deployable with minimal infrastructure knowledge.
-
-Eventually:
-
-```bash
-docker run -d \
-  --name syncidian \
-  -p 8080:8080 \
-  -v syncidian-data:/data \
-  ghcr.io/<owner>/syncidian:latest
-```
-
-The container should provide the complete Syncidian server:
+That container is the complete Syncidian server:
 
 * API
 * Sync engine
@@ -391,7 +366,7 @@ The container should provide the complete Syncidian server:
 * Conflict resolution
 * Health checks
 
-No separate services should be required for the basic deployment.
+No separate services are required for a basic deployment.
 
 ---
 
@@ -554,7 +529,7 @@ Access Token
 Device Name
 MacBook Pro
 
-[ Connect ]
+Connect
 
 Status: ● Connected
 ```
@@ -689,9 +664,9 @@ The first version can provide an Obsidian-native conflict UI.
 │ ─────────────     ─────────────         │
 │ Modified 10:32    Modified 10:34        │
 │                                         │
-│ [ Keep Local ] [ Keep Remote ]          │
+│ Keep Local            Keep Remote       │
 │                                         │
-│             [ Merge ]                   │
+│                 Merge                   │
 └─────────────────────────────────────────┘
 ```
 
@@ -1167,7 +1142,7 @@ GitHub sign-in and backup need a GitHub App for this instance. Operators follow 
 
 Don't want to manage your own server?
 
-A managed Syncidian service is **coming soon**.
+A managed Syncidian service is in development. It is not for sale yet.
 
 ### Planned pricing
 
@@ -1350,7 +1325,7 @@ Use small LLMs to automatically resolve safe conflicts and fall back to human re
 | Built-in MCP                    | ✅                 | ❌             |
 | AI knowledge bridge             | ✅                 | —             |
 | AI-assisted conflict resolution | 🚧 Planned        | —             |
-| Hosted service                  | 🚧 Coming soon    | ✅             |
+| Hosted service                  | Planned           | ✅             |
 | Self-hosted cost                | **Free**          | —             |
 | Hosted Syncidian                | **From $1/month** | —             |
 
