@@ -16,7 +16,7 @@ Mint a token in one of these ways:
 2. **Password exchange (agents / scripts):** `POST /api/v1/mcp/login` with JSON `{"username":"…","password":"…"}`. Vault users only. Admins are rejected. The response includes a one-time Bearer token. Use it on `POST /mcp`.
 3. **Admin mint (operators):** an admin can create a one-time token for a vault user from **Users**. Admins cannot call `/mcp` themselves.
 
-Tokens are stored hashed. They cannot manage GitHub, change MCP permissions, or mint more tokens. Those actions need a dashboard session cookie (`syncidian_session`).
+Tokens are stored hashed. They cannot connect or disconnect GitHub, change MCP permissions, or mint more tokens. They can `POST /api/v1/github/sync` so the Obsidian working copy matches GitHub after a remote restructure. Connect/disconnect and MCP settings need a dashboard session cookie (`syncidian_session`).
 
 ## MCP
 

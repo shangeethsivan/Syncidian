@@ -517,6 +517,10 @@ var SyncidianPlugin = class extends import_obsidian2.Plugin {
     try {
       if (!this.connected)
         await this.connect();
+      try {
+        await this.api("/api/v1/github/sync", { method: "POST", body: "{}" });
+      } catch {
+      }
       const local = await this.localManifest();
       const files = Object.keys(local).map(
         (path) => ({

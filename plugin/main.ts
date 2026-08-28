@@ -323,6 +323,11 @@ export default class SyncidianPlugin extends Plugin {
     this.setStatus("syncing");
     try {
       if (!this.connected) await this.connect();
+      try {
+        await this.api("/api/v1/github/sync", { method: "POST", body: "{}" });
+      } catch {
+        // GitHub backup is optional; device sync still runs against the server vault.
+      }
       const local = await this.localManifest();
       const files: { path: string; hash: string; base_hash: string; deleted?: boolean }[] = Object.keys(local).map(
         (path) => ({

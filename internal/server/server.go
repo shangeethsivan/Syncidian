@@ -68,6 +68,9 @@ func New(cfg config.Config, st *store.Store, log *slog.Logger) *Server {
 		s.hub.Broadcast(userID, "", msg)
 	}
 	s.MCP.OnBatch = func(userID string) {
+		if err := s.importGitHubVault(userID); err != nil {
+			s.Log.Error("import github after mcp batch", "user", userID, "err", err)
+		}
 		s.hub.Broadcast(userID, "", map[string]any{"type": "github_synced"})
 	}
 	return s
@@ -113,7 +116,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/github", s.sessionVaultAuthed(s.handleGetGitHub))
 	mux.HandleFunc("POST /api/v1/github", s.sessionVaultAuthed(s.handleSetGitHub))
 	mux.HandleFunc("DELETE /api/v1/github", s.sessionVaultAuthed(s.handleDeleteGitHub))
-	mux.HandleFunc("POST /api/v1/github/sync", s.sessionVaultAuthed(s.handleGitHubSyncNow))
+	mux.HandleFunc("POST /api/v1/github/sync", s.vaultAuthed(s.handleGitHubSyncNow))
 	mux.HandleFunc("POST /api/v1/github/app/start", s.sessionVaultAuthed(s.handleGitHubAppStart))
 	mux.HandleFunc("POST /api/v1/github/app/register/start", s.adminAuthed(s.handleGitHubAppRegisterStart))
 	mux.HandleFunc("POST /api/v1/github/app/register", s.adminAuthed(s.handleGitHubAppRegisterSave))
@@ -266,8 +269,8 @@ func (s *Server) vaultAuthed(fn func(http.ResponseWriter, *http.Request, *store.
 	})
 }
 
-// sessionVaultAuthed is dashboard-only. Access tokens cannot manage GitHub,
-// mint more tokens, or change MCP permissions — those bind the private repo.
+// sessionVaultAuthed is dashboard-only. Access tokens cannot connect/disconnect
+// GitHub, mint more tokens, or change MCP permissions — those bind the private repo.
 func (s *Server) sessionVaultAuthed(fn func(http.ResponseWriter, *http.Request, *store.User)) http.HandlerFunc {
 	return s.vaultAuthed(func(w http.ResponseWriter, r *http.Request, u *store.User) {
 		if bearerRequest(r) {

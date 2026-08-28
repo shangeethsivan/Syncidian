@@ -114,31 +114,43 @@ func (s *Server) handleDeleteGitHub(w http.ResponseWriter, r *http.Request, u *s
 }
 
 func (s *Server) handleGitHubSyncNow(w http.ResponseWriter, r *http.Request, u *store.User) {
-	cfg, err := s.Store.GetGitHub(u.ID)
-	if err != nil || !cfg.Configured() {
-		writeError(w, http.StatusBadRequest, "GitHub is not configured")
+	if err := s.importGitHubVault(u.ID); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
 		return
+	}
+	// Plugin fullSync already continues into plan after this call. Broadcasting
+	// would recurse (github_synced → fullSync → github/sync).
+	if !bearerRequest(r) {
+		s.hub.Broadcast(u.ID, "", map[string]any{"type": "github_synced"})
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+// importGitHubVault replaces the server working copy with GitHub's tree and
+// tombstones files that disappeared, so Obsidian can pull those deletes.
+func (s *Server) importGitHubVault(userID string) error {
+	cfg, err := s.Store.GetGitHub(userID)
+	if err != nil || !cfg.Configured() {
+		return fmt.Errorf("GitHub is not configured")
 	}
 	token, err := s.gitAccessToken(cfg)
 	if err != nil {
-		_ = s.Store.UpdateGitHubStatus(u.ID, false, false, err.Error())
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
+		_ = s.Store.UpdateGitHubStatus(userID, false, false, err.Error())
+		return err
 	}
-	dir := s.Store.VaultDir(u.ID)
-	if err := s.Git.Pull(dir, token, GitHubBranch); err != nil {
-		_ = s.Store.UpdateGitHubStatus(u.ID, false, false, err.Error())
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
+	mu := s.gitLock(userID)
+	mu.Lock()
+	defer mu.Unlock()
+	dir := s.Store.VaultDir(userID)
+	if err := s.Git.ResetToRemote(dir, cfg.Repo, token, GitHubBranch); err != nil {
+		_ = s.Store.UpdateGitHubStatus(userID, false, false, err.Error())
+		return err
 	}
-	if err := s.reindexVault(u.ID); err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
-		return
+	if err := s.reindexVault(userID); err != nil {
+		return err
 	}
-	_ = s.Store.UpdateGitHubStatus(u.ID, false, true, "")
-	commit, gitErr := s.commitAndMaybePush(u.ID, "Syncidian: pull from GitHub")
-	s.hub.Broadcast(u.ID, "", map[string]any{"type": "github_synced"})
-	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "commit": commit, "git_error": gitErr})
+	_ = s.Store.UpdateGitHubStatus(userID, false, true, "")
+	return nil
 }
 
 func (s *Server) reindexVault(userID string) error {

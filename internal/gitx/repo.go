@@ -123,6 +123,50 @@ func stageAll(wt *git.Worktree) error {
 	return nil
 }
 
+// ResetToRemote makes dir match origin/<branch>, discarding local commits and
+// untracked files. MCP writes GitHub via the Contents API, which diverges from
+// the server's git history; a normal pull then fails, and Obsidian stays on the
+// old working copy while GitHub already has the new layout.
+func (m *Manager) ResetToRemote(dir, ownerRepo, token, branch string) error {
+	if strings.TrimSpace(branch) == "" {
+		branch = "main"
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".git")); err != nil {
+		if err := m.CloneOrOpen(dir, ownerRepo, token, branch); err != nil {
+			return err
+		}
+	}
+	repo, err := git.PlainOpen(dir)
+	if err != nil {
+		return err
+	}
+	fetch := &git.FetchOptions{
+		RemoteName: "origin",
+		Force:      true,
+		RefSpecs:   []gitcfg.RefSpec{gitcfg.RefSpec("+refs/heads/" + branch + ":refs/remotes/origin/" + branch)},
+	}
+	if token != "" {
+		fetch.Auth = m.auth(token)
+	}
+	if err := repo.Fetch(fetch); err != nil && err != git.NoErrAlreadyUpToDate {
+		return fmt.Errorf("git fetch: %w", err)
+	}
+	ref, err := repo.Reference(plumbing.NewRemoteReferenceName("origin", branch), true)
+	if err != nil {
+		return fmt.Errorf("remote branch %s: %w", branch, err)
+	}
+	wt, err := repo.Worktree()
+	if err != nil {
+		return err
+	}
+	if err := wt.Reset(&git.ResetOptions{Mode: git.HardReset, Commit: ref.Hash()}); err != nil {
+		return fmt.Errorf("git reset: %w", err)
+	}
+	_ = wt.Clean(&git.CleanOptions{Dir: true})
+	head := plumbing.NewHashReference(plumbing.NewBranchReferenceName(branch), ref.Hash())
+	return repo.Storer.SetReference(head)
+}
+
 func (m *Manager) Push(dir, token, branch string) error {
 	repo, err := git.PlainOpen(dir)
 	if err != nil {
