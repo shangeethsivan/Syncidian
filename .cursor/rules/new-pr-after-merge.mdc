@@ -1,0 +1,14 @@
+---
+description: After a PR merges, start a new branch from main and open a new PR.
+alwaysApply: true
+---
+
+# New PR after merge
+
+When the previous pull request is merged, do not keep working on that branch.
+
+1. `git fetch origin main`
+2. Create a **new branch** from `origin/main`
+3. Open a **new pull request**
+
+Never push more commits to a merged PR. Never treat a merged feature branch as the base for the next change.

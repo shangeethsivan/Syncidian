@@ -2,6 +2,10 @@
 
 This file tells coding agents how to keep documentation honest when the product changes.
 
+## Pull requests
+
+After a PR is **merged**, do not keep committing on that branch. Fetch `origin/main`, create a **new branch**, and open a **new PR** for the next change. Never push extra commits onto a merged PR, and never reopen work on a stale feature branch that already landed.
+
 ## When architecture or user-flow changes
 
 If you change any of the following, **update the docs in the same change**:
