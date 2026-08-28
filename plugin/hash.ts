@@ -2,13 +2,13 @@
 
 function hex(bytes: Uint8Array): string {
   let out = "";
-  for (let i = 0; i < bytes.length; i++) out += bytes[i].toString(16).padStart(2, "0");
+  for (const byte of bytes) out += byte.toString(16).padStart(2, "0");
   return out;
 }
 
 export async function sha256(data: ArrayBuffer): Promise<string> {
   try {
-    const subtle = globalThis.crypto?.subtle;
+    const subtle = window.crypto?.subtle;
     if (subtle) {
       const buf = await subtle.digest("SHA-256", data);
       return hex(new Uint8Array(buf));
