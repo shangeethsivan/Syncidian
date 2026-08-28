@@ -184,7 +184,7 @@ func (s *Server) reindexVault(userID string) error {
 			continue
 		}
 		if err := s.Store.UpsertFile(store.FileMeta{
-			UserID: userID, Path: f.Path, Deleted: true, Mtime: now,
+			UserID: userID, Path: f.Path, Hash: "", Size: 0, Deleted: true, Mtime: now,
 		}); err != nil {
 			return err
 		}

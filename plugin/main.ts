@@ -346,10 +346,18 @@ export default class SyncidianPlugin extends Plugin {
     this.setStatus("syncing");
     try {
       if (!this.connected) await this.connect();
+      let githubLayout = false;
       try {
         await this.api("/api/v1/github/sync", { method: "POST", body: "{}" });
-      } catch {
-        // GitHub backup is optional; device sync still runs against the server vault.
+        githubLayout = true;
+      } catch (e) {
+        const msg = errorMessage(e);
+        if (!/GitHub is not configured/i.test(msg)) {
+          throw e;
+        }
+      }
+      if (githubLayout) {
+        await this.dropLocalNotOnServer();
       }
       const local = await this.localManifest();
       const files: { path: string; hash: string; base_hash: string; deleted?: boolean }[] = Object.keys(local).map(
@@ -381,6 +389,7 @@ export default class SyncidianPlugin extends Plugin {
         await this.pushBatch(toDelete, toPush);
       }
       await this.resolvePlanConflicts(stringArrayField(plan, "Conflicts"));
+      await this.pruneEmptyFolders();
       if (!this.activeConflictId && !this.conflictQueue.length) this.setStatus("ok");
       return true;
     } catch (e) {
@@ -439,6 +448,63 @@ export default class SyncidianPlugin extends Plugin {
         return;
       }
       parts.pop();
+    }
+  }
+
+  keepFolder(path: string): boolean {
+    path = normalizePath(path);
+    return (
+      path === ".obsidian" ||
+      path.startsWith(".obsidian/") ||
+      path === ".obsidian-mobile" ||
+      path.startsWith(".obsidian-mobile/") ||
+      path === ".trash" ||
+      path.startsWith(".trash/") ||
+      path === ".git" ||
+      path.startsWith(".git/")
+    );
+  }
+
+  /** After GitHub import, delete vault files that are not in the live server tree. */
+  async dropLocalNotOnServer() {
+    const man = await this.api("/api/v1/sync/manifest");
+    const remote = new Set<string>();
+    const listed = isRecord(man) ? man.files : null;
+    if (isUnknownArray(listed)) {
+      for (const item of listed) {
+        const path = normalizePath(stringField(item, "path"));
+        if (path) remote.add(path);
+      }
+    }
+    for (const file of this.app.vault.getFiles()) {
+      if (ignored(file.path) || remote.has(normalizePath(file.path))) continue;
+      await this.removeLocalPath(file.path);
+      delete this.settings.hashes[file.path];
+    }
+    await this.pruneEmptyFolders();
+    await this.saveSettings();
+  }
+
+  async pruneEmptyFolders() {
+    const folders: TFolder[] = [];
+    const walk = (folder: TFolder) => {
+      for (const child of folder.children) {
+        if (child instanceof TFolder) {
+          walk(child);
+          folders.push(child);
+        }
+      }
+    };
+    walk(this.app.vault.getRoot());
+    folders.sort((a, b) => b.path.length - a.path.length);
+    for (const folder of folders) {
+      if (this.keepFolder(folder.path)) continue;
+      if (folder.children.length > 0) continue;
+      try {
+        await this.app.vault.delete(folder);
+      } catch {
+        /* folder may already be gone */
+      }
     }
   }
 

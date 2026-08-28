@@ -173,4 +173,11 @@ func TestResetToRemoteDropsOldFolders(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(local, "Content", "keep.md")); err != nil {
 		t.Fatal(err)
 	}
+	writeRel(t, local, "Handy numbers/stale.md", "untracked leftover\n")
+	if err := m.ResetToRemote(local, "", "", "main"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(local, "Handy numbers", "stale.md")); !os.IsNotExist(err) {
+		t.Fatalf("untracked leftover folder should be purged: %v", err)
+	}
 }

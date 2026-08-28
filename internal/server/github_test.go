@@ -38,8 +38,8 @@ func TestReindexVaultTombstonesMissingFiles(t *testing.T) {
 		t.Fatal(err)
 	}
 	gone, err := st.GetFile(u.ID, "gone.md")
-	if err != nil || gone == nil || !gone.Deleted {
-		t.Fatalf("gone.md should be tombstoned: %+v %v", gone, err)
+	if err != nil || gone == nil || !gone.Deleted || gone.Hash != "" {
+		t.Fatalf("gone.md should be tombstoned with empty hash: %+v %v", gone, err)
 	}
 	keep, err := st.GetFile(u.ID, "keep.md")
 	if err != nil || keep == nil || keep.Deleted || keep.Hash == "oldkeep" {
