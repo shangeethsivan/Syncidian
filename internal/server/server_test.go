@@ -1225,6 +1225,13 @@ func TestBearerTokenCannotManageGitHub(t *testing.T) {
 	if res.StatusCode != http.StatusBadRequest {
 		t.Fatalf("bearer github/sync without repo: want 400, got %d %v", res.StatusCode, m)
 	}
+	res, m = doJSON(t, http.MethodGet, hs.URL+"/api/v1/github/tree", nil, nil, token)
+	if res.StatusCode == http.StatusForbidden {
+		t.Fatalf("bearer github/tree should list GitHub files for the plugin, got 403 %v", m)
+	}
+	if res.StatusCode != http.StatusBadRequest {
+		t.Fatalf("bearer github/tree without repo: want 400, got %d %v", res.StatusCode, m)
+	}
 	res, m = doJSON(t, http.MethodPost, hs.URL+"/api/v1/tokens", map[string]string{"name": "another"}, nil, token)
 	if res.StatusCode != http.StatusForbidden {
 		t.Fatalf("bearer mint token: want 403, got %d %v", res.StatusCode, m)

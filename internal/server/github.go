@@ -2,7 +2,11 @@ package server
 
 import (
 	"fmt"
+	"io/fs"
 	"net/http"
+	"os"
+	"path"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -113,8 +117,18 @@ func (s *Server) handleDeleteGitHub(w http.ResponseWriter, r *http.Request, u *s
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
+func (s *Server) handleGitHubTree(w http.ResponseWriter, r *http.Request, u *store.User) {
+	paths, err := s.githubTreePaths(u.ID)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"files": paths})
+}
+
 func (s *Server) handleGitHubSyncNow(w http.ResponseWriter, r *http.Request, u *store.User) {
-	if err := s.importGitHubVault(u.ID); err != nil {
+	paths, err := s.importGitHubVault(u.ID)
+	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -123,33 +137,143 @@ func (s *Server) handleGitHubSyncNow(w http.ResponseWriter, r *http.Request, u *
 	if !bearerRequest(r) {
 		s.hub.Broadcast(u.ID, "", map[string]any{"type": "github_synced"})
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "files": paths})
+}
+
+func (s *Server) githubTreePaths(userID string) ([]string, error) {
+	cfg, err := s.Store.GetGitHub(userID)
+	if err != nil || !cfg.Configured() {
+		return nil, fmt.Errorf("GitHub is not configured")
+	}
+	token, err := s.gitAccessToken(cfg)
+	if err != nil {
+		return nil, err
+	}
+	return githubapp.ListFiles(token, cfg.Repo, GitHubBranch)
 }
 
 // importGitHubVault replaces the server working copy with GitHub's tree and
 // tombstones files that disappeared, so Obsidian can pull those deletes.
-func (s *Server) importGitHubVault(userID string) error {
+// GitHub's Contents/git tree is the authority: leftover notes still on disk
+// are removed even when git reset leaves untracked folders behind.
+func (s *Server) importGitHubVault(userID string) ([]string, error) {
 	cfg, err := s.Store.GetGitHub(userID)
 	if err != nil || !cfg.Configured() {
-		return fmt.Errorf("GitHub is not configured")
+		return nil, fmt.Errorf("GitHub is not configured")
 	}
 	token, err := s.gitAccessToken(cfg)
 	if err != nil {
 		_ = s.Store.UpdateGitHubStatus(userID, false, false, err.Error())
-		return err
+		return nil, err
 	}
 	mu := s.gitLock(userID)
 	mu.Lock()
 	defer mu.Unlock()
 	dir := s.Store.VaultDir(userID)
-	if err := s.Git.ResetToRemote(dir, cfg.Repo, token, GitHubBranch); err != nil {
-		_ = s.Store.UpdateGitHubStatus(userID, false, false, err.Error())
+	githubPaths, listErr := githubapp.ListFiles(token, cfg.Repo, GitHubBranch)
+	resetErr := s.Git.ResetToRemote(dir, cfg.Repo, token, GitHubBranch)
+	if resetErr != nil {
+		_ = s.Store.UpdateGitHubStatus(userID, false, false, resetErr.Error())
+	}
+	if len(githubPaths) > 0 {
+		if err := s.constrainVaultToGitHub(userID, githubPaths); err != nil {
+			return githubPaths, err
+		}
+		_ = s.Store.UpdateGitHubStatus(userID, false, true, "")
+		return githubPaths, nil
+	}
+	if resetErr != nil {
+		if listErr != nil {
+			return nil, fmt.Errorf("git reset: %w; list GitHub: %v", resetErr, listErr)
+		}
+		return nil, resetErr
+	}
+	if err := s.reindexVault(userID); err != nil {
+		return nil, err
+	}
+	_ = s.Store.UpdateGitHubStatus(userID, false, true, "")
+	return githubPaths, nil
+}
+
+func githubKeepSet(keep []string) map[string]struct{} {
+	keepSet := map[string]struct{}{}
+	for _, p := range keep {
+		p = path.Clean("/" + strings.ReplaceAll(p, "\\", "/"))
+		p = strings.TrimPrefix(p, "/")
+		if p == "" || p == "." || syncengine.Ignore(p) {
+			continue
+		}
+		keepSet[p] = struct{}{}
+	}
+	return keepSet
+}
+
+// constrainVaultToGitHub deletes working-copy files that are not in GitHub's
+// tree, reindexes, then tombstones any live SQLite row still missing from GitHub.
+func (s *Server) constrainVaultToGitHub(userID string, keep []string) error {
+	keepSet := githubKeepSet(keep)
+	root := s.Store.VaultDir(userID)
+	var dirs []string
+	if err := filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(root, p)
+		if err != nil {
+			return err
+		}
+		rel = filepath.ToSlash(rel)
+		if rel == "." {
+			return nil
+		}
+		if rel == ".git" || strings.HasPrefix(rel, ".git/") {
+			if d.IsDir() && rel == ".git" {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if d.IsDir() {
+			dirs = append(dirs, p)
+			return nil
+		}
+		if syncengine.Ignore(rel) {
+			return nil
+		}
+		if _, ok := keepSet[rel]; ok {
+			return nil
+		}
+		return os.Remove(p)
+	}); err != nil {
 		return err
+	}
+	for i := len(dirs) - 1; i >= 0; i-- {
+		entries, err := os.ReadDir(dirs[i])
+		if err != nil || len(entries) > 0 {
+			continue
+		}
+		_ = os.Remove(dirs[i])
 	}
 	if err := s.reindexVault(userID); err != nil {
 		return err
 	}
-	_ = s.Store.UpdateGitHubStatus(userID, false, true, "")
+	live, err := s.Store.ListFiles(userID, false)
+	if err != nil {
+		return err
+	}
+	now := time.Now().Unix()
+	for _, f := range live {
+		if _, ok := keepSet[f.Path]; ok {
+			continue
+		}
+		if syncengine.Ignore(f.Path) {
+			continue
+		}
+		if err := s.Store.UpsertFile(store.FileMeta{
+			UserID: userID, Path: f.Path, Hash: "", Size: 0, Deleted: true, Mtime: now,
+		}); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 

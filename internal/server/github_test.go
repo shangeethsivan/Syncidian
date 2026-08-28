@@ -46,3 +46,47 @@ func TestReindexVaultTombstonesMissingFiles(t *testing.T) {
 		t.Fatalf("keep.md should stay live and be rehashed: %+v %v", keep, err)
 	}
 }
+
+func TestConstrainVaultToGitHubDropsLeftovers(t *testing.T) {
+	dir := t.TempDir()
+	st, err := store.Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+	srv := New(config.Config{Addr: ":0", DataDir: dir}, st, nil)
+	u, err := st.CreateUser("alice", "hash", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	root := st.VaultDir(u.ID)
+	if err := os.MkdirAll(filepath.Join(root, "Books to read"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "keep.md"), []byte("keep"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "Books to read", "old.md"), []byte("stale"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.UpsertFile(store.FileMeta{UserID: u.ID, Path: "keep.md", Hash: "k"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.UpsertFile(store.FileMeta{UserID: u.ID, Path: "Books to read/old.md", Hash: "o"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := srv.constrainVaultToGitHub(u.ID, []string{"keep.md", "Content/note.md"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "Books to read", "old.md")); !os.IsNotExist(err) {
+		t.Fatalf("leftover file should be gone: %v", err)
+	}
+	gone, err := st.GetFile(u.ID, "Books to read/old.md")
+	if err != nil || gone == nil || !gone.Deleted || gone.Hash != "" {
+		t.Fatalf("leftover should be tombstoned: %+v %v", gone, err)
+	}
+	keep, err := st.GetFile(u.ID, "keep.md")
+	if err != nil || keep == nil || keep.Deleted {
+		t.Fatalf("keep.md should stay live: %+v %v", keep, err)
+	}
+}
