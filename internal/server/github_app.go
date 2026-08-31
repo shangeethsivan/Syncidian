@@ -2,6 +2,7 @@ package server
 
 import (
 	"crypto/rand"
+	"crypto/subtle"
 	"encoding/hex"
 	"io"
 	"net/http"
@@ -185,6 +186,15 @@ func (s *Server) handleGitHubAppSetup(w http.ResponseWriter, r *http.Request) {
 		s.dashboardRedirect(w, r, url.Values{"github": {"error"}, "message": {"GitHub did not return an installation."}})
 		return
 	}
+	// GitHub documents that setup URLs can be hit with a spoofed installation_id.
+	// Require the nonce we put on the install URL (and in the state cookie).
+	if !s.validGitHubState(r, r.URL.Query().Get("state")) {
+		s.dashboardRedirect(w, r, url.Values{
+			"github":  {"error"},
+			"message": {"GitHub App setup expired. Try again."},
+		})
+		return
+	}
 	user, _ := s.authenticate(r)
 	if user == nil {
 		http.SetCookie(w, &http.Cookie{
@@ -341,7 +351,10 @@ func (s *Server) validGitHubState(r *http.Request, state string) bool {
 	if err != nil || c.Value == "" || state == "" {
 		return false
 	}
-	return c.Value == state
+	if len(c.Value) != len(state) {
+		return false
+	}
+	return subtle.ConstantTimeCompare([]byte(c.Value), []byte(state)) == 1
 }
 
 func randomHex(n int) (string, error) {
