@@ -630,7 +630,14 @@ let needsSetup = false;
 let page = "overview";
 let publicInfo = null;
 
+function isAdminHost() {
+  const host = (location.hostname || "").replace(/^www\./, "").toLowerCase();
+  const configured = publicInfo && publicInfo.admin_host ? String(publicInfo.admin_host).toLowerCase() : "";
+  if (configured && host === configured) return true;
+  return host === "admin.syncidian.com";
+}
 function isAdminPath() {
+  if (isAdminHost()) return true;
   const p = location.pathname.replace(/\/+$/, "") || "/";
   return p !== "/";
 }
@@ -707,6 +714,10 @@ function waitlistOn() {
   if (publicInfo && typeof publicInfo.waitlist === "boolean") return publicInfo.waitlist;
   return isHostedPublicSite();
 }
+function waitlistAdminOn() {
+  if (publicInfo && typeof publicInfo.waitlist_admin === "boolean") return publicInfo.waitlist_admin;
+  return waitlistOn() && isAdminPath();
+}
 function pluginServerHint() {
   if (isHostedPublicSite()) return "leave <b>Syncidian.com</b> selected";
   return `choose <b>Custom Domain</b> and enter <code>${esc(location.origin)}</code>`;
@@ -729,7 +740,7 @@ const HELP_STEPS = [
   {
     title: "1. Start the Syncidian server",
     html: () => `
-      <p>The public site is a one-page story. Vault users sign in with GitHub. The operator page is unlisted (default <code>/admin</code>, or <code>SYNCIDIAN_ADMIN_PATH</code>).</p>
+      <p>The public site is a one-page story. Vault users sign in with GitHub. Operators use a private hostname (<code>SYNCIDIAN_ADMIN_HOST</code>, for example <code>admin.syncidian.com</code> on Tailscale) or an unlisted path (default <code>/admin</code>).</p>
       <h2>Docker</h2>
       <pre>git clone https://github.com/shangeethsivan/Syncidian.git
 cd Syncidian
@@ -749,7 +760,7 @@ docker compose up --build -d</pre>
   {
     title: "2. Authenticate",
     html: () => `
-      <p>The first account is an admin, created on the operator page (default <code>/admin</code>). Admins manage users only — they do not connect a GitHub repository and never see another person’s vault, tokens, or GitHub credentials. Vault users sign in with GitHub from the public site, or with email.</p>
+      <p>The first account is an admin, created on the private operator hostname or unlisted path (default <code>/admin</code>). Admins manage users only — they do not connect a GitHub repository and never see another person’s vault, tokens, or GitHub credentials. Vault users sign in with GitHub from the public site, or with email.</p>
       <ol>
         <li>Open the operator path (not linked from the public site).</li>
         <li>Choose a username.</li>
@@ -911,7 +922,7 @@ function navItems() {
       ["overview", "Overview"],
       ["users", "Users"],
     ];
-    if (waitlistOn()) items.push(["waitlist", "Waitlist"]);
+    if (waitlistAdminOn()) items.push(["waitlist", "Waitlist"]);
     return items;
   }
   return [

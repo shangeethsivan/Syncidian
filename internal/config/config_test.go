@@ -13,6 +13,9 @@ func TestFromEnvDefaults(t *testing.T) {
 	t.Setenv("RAILWAY_VOLUME_MOUNT_PATH", "")
 	t.Setenv("SYNCIDIAN_PUBLIC_URL", "")
 	t.Setenv("RAILWAY_PUBLIC_DOMAIN", "")
+	t.Setenv("SYNCIDIAN_ADMIN_HOST", "")
+	t.Setenv("SYNCIDIAN_ADMIN_LISTEN_IP", "")
+	t.Setenv("TAILSCALE_IP", "")
 
 	c := FromEnv()
 	if c.Addr != ":8080" {
@@ -26,6 +29,12 @@ func TestFromEnvDefaults(t *testing.T) {
 	}
 	if c.AdminPath != "/admin" {
 		t.Fatalf("AdminPath=%q, want /admin", c.AdminPath)
+	}
+	if c.AdminHost != "" {
+		t.Fatalf("AdminHost=%q, want empty", c.AdminHost)
+	}
+	if c.AdminListenIP != "" {
+		t.Fatalf("AdminListenIP=%q, want empty", c.AdminListenIP)
 	}
 }
 
@@ -121,5 +130,96 @@ func TestNormalizeAdminPath(t *testing.T) {
 	c := FromEnv()
 	if c.AdminPath != "/gate-9f3" {
 		t.Fatalf("from env: %q", c.AdminPath)
+	}
+}
+
+func TestFromEnvAdminHostAndListenIP(t *testing.T) {
+	t.Setenv("SYNCIDIAN_ADMIN_HOST", "https://admin.syncidian.com/")
+	t.Setenv("SYNCIDIAN_ADMIN_LISTEN_IP", "100.64.1.20")
+	t.Setenv("TAILSCALE_IP", "100.99.99.99")
+	c := FromEnv()
+	if c.AdminHost != "admin.syncidian.com" {
+		t.Fatalf("AdminHost=%q", c.AdminHost)
+	}
+	if c.AdminListenIP != "100.64.1.20" {
+		t.Fatalf("AdminListenIP=%q (SYNCIDIAN_ADMIN_LISTEN_IP should win)", c.AdminListenIP)
+	}
+
+	t.Setenv("SYNCIDIAN_ADMIN_LISTEN_IP", "")
+	c = FromEnv()
+	if c.AdminListenIP != "100.99.99.99" {
+		t.Fatalf("TAILSCALE_IP fallback: %q", c.AdminListenIP)
+	}
+}
+
+func TestNormalizeAdminHost(t *testing.T) {
+	if got := NormalizeAdminHost(""); got != "" {
+		t.Fatalf("empty: %q", got)
+	}
+	if got := NormalizeAdminHost("admin.syncidian.com"); got != "admin.syncidian.com" {
+		t.Fatalf("plain: %q", got)
+	}
+	if got := NormalizeAdminHost("https://Admin.Syncidian.com:443/ops"); got != "admin.syncidian.com" {
+		t.Fatalf("url: %q", got)
+	}
+	if got := NormalizeAdminHost("127.0.0.1"); got != "" {
+		t.Fatalf("loopback IP should be rejected: %q", got)
+	}
+	if got := NormalizeAdminHost("localhost"); got != "" {
+		t.Fatalf("localhost should be rejected: %q", got)
+	}
+}
+
+func TestNormalizeListenIP(t *testing.T) {
+	if got := NormalizeListenIP("100.64.1.5"); got != "100.64.1.5" {
+		t.Fatalf("tailscale: %q", got)
+	}
+	if got := NormalizeListenIP("100.64.1.5:8080"); got != "100.64.1.5" {
+		t.Fatalf("with port: %q", got)
+	}
+	for _, bad := range []string{"", "0.0.0.0", "127.0.0.1", "::", "not-an-ip", "localhost"} {
+		if got := NormalizeListenIP(bad); got != "" {
+			t.Fatalf("%q should be empty, got %q", bad, got)
+		}
+	}
+}
+
+func TestListenAddrs(t *testing.T) {
+	c := Config{Addr: ":8080"}
+	if got := c.ListenAddrs(); len(got) != 1 || got[0] != ":8080" {
+		t.Fatalf("default: %v", got)
+	}
+
+	c = Config{Addr: ":8080", AdminListenIP: "100.64.1.5"}
+	got := c.ListenAddrs()
+	if len(got) != 2 || got[0] != "127.0.0.1:8080" || got[1] != "100.64.1.5:8080" {
+		t.Fatalf("tailscale split (must drop 0.0.0.0): %v", got)
+	}
+
+	c = Config{Addr: "192.168.1.10:8080", AdminListenIP: "100.64.1.5"}
+	got = c.ListenAddrs()
+	if len(got) != 2 || got[0] != "192.168.1.10:8080" || got[1] != "100.64.1.5:8080" {
+		t.Fatalf("explicit LAN + tailscale: %v", got)
+	}
+
+	c = Config{Addr: "100.64.1.5:8080", AdminListenIP: "100.64.1.5"}
+	got = c.ListenAddrs()
+	if len(got) != 1 || got[0] != "100.64.1.5:8080" {
+		t.Fatalf("already bound to tailscale: %v", got)
+	}
+
+	c = Config{Addr: ":9090", AdminListenIP: "100.64.1.5"}
+	got = c.ListenAddrs()
+	if len(got) != 2 || got[0] != "127.0.0.1:9090" || got[1] != "100.64.1.5:9090" {
+		t.Fatalf("custom port: %v", got)
+	}
+}
+
+func TestHostname(t *testing.T) {
+	if got := Hostname("Admin.Syncidian.com:443"); got != "admin.syncidian.com" {
+		t.Fatalf("got %q", got)
+	}
+	if got := Hostname("admin.syncidian.com."); got != "admin.syncidian.com" {
+		t.Fatalf("trailing dot: %q", got)
 	}
 }

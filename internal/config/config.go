@@ -19,6 +19,8 @@ type Config struct {
 	DataDir            string
 	PublicURL          string
 	AdminPath          string
+	AdminHost          string
+	AdminListenIP      string
 	GitName            string
 	GitEmail           string
 	GitHubAppID        int64
@@ -34,6 +36,8 @@ func FromEnv() Config {
 		DataDir:            resolveDataDir(),
 		PublicURL:          publicURL(),
 		AdminPath:          NormalizeAdminPath(env("SYNCIDIAN_ADMIN_PATH", "")),
+		AdminHost:          NormalizeAdminHost(env("SYNCIDIAN_ADMIN_HOST", "")),
+		AdminListenIP:      NormalizeListenIP(firstEnv("SYNCIDIAN_ADMIN_LISTEN_IP", "TAILSCALE_IP")),
 		GitName:            env("SYNCIDIAN_GIT_NAME", "Syncidian"),
 		GitEmail:           env("SYNCIDIAN_GIT_EMAIL", "syncidian@localhost"),
 		GitHubAppSlug:      githubapp.NormalizeAppSlug(env("SYNCIDIAN_GITHUB_APP_SLUG", "")),

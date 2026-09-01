@@ -188,7 +188,7 @@ func (s *Server) Handler() http.Handler {
 		mux.HandleFunc("GET /.well-known/ai-catalog.json", s.handleAICatalog)
 	}
 
-	return s.cors(mux)
+	return s.adminHostGate(s.cors(mux))
 }
 
 func (s *Server) cors(next http.Handler) http.Handler {
@@ -219,6 +219,12 @@ func (s *Server) originMayUseCookies(origin string) bool {
 	}
 	if s.Cfg.PublicURL != "" && origin == strings.TrimRight(s.Cfg.PublicURL, "/") {
 		return true
+	}
+	if s.Cfg.AdminHost != "" {
+		adminOrigin := "https://" + s.Cfg.AdminHost
+		if origin == adminOrigin || origin == "http://"+s.Cfg.AdminHost {
+			return true
+		}
 	}
 	host := rHost(origin)
 	return host == "localhost" || strings.HasPrefix(host, "127.0.0.1") || strings.HasPrefix(host, "[::1]")

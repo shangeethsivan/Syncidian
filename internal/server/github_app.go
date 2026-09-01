@@ -25,6 +25,9 @@ func githubErr(r *http.Request) string {
 
 func (s *Server) adminAuthed(fn func(http.ResponseWriter, *http.Request, *store.User)) http.HandlerFunc {
 	return s.authed(func(w http.ResponseWriter, r *http.Request, u *store.User) {
+		if s.requireAdminHost(w, r) {
+			return
+		}
 		if !u.IsAdmin {
 			writeError(w, http.StatusForbidden, "admin required")
 			return
@@ -40,7 +43,7 @@ func (s *Server) handleGitHubAppRegisterStart(w http.ResponseWriter, r *http.Req
 		return
 	}
 	s.setGitHubStateCookie(w, r, state)
-	base := s.requestBase(r)
+	base := s.githubBase(r)
 	manifest := githubapp.NewManifest(base, "Syncidian")
 	writeJSON(w, http.StatusOK, map[string]any{
 		"github_url": "https://github.com/settings/apps/new?state=" + url.QueryEscape(state),
@@ -100,7 +103,7 @@ func (s *Server) handleGitHubAppStart(w http.ResponseWriter, r *http.Request, u 
 			"github_url": githubapp.InstallURL(inst.Slug, state),
 			"existing":   true,
 			"branch":     GitHubBranch,
-			"urls":       githubapp.AppURLs(s.requestBase(r)),
+			"urls":       githubapp.AppURLs(s.githubBase(r)),
 		})
 		return
 	}
@@ -112,7 +115,7 @@ func (s *Server) handleGitHubAppStart(w http.ResponseWriter, r *http.Request, u 
 		})
 		return
 	}
-	base := s.requestBase(r)
+	base := s.githubBase(r)
 	name := "Syncidian-" + strings.ReplaceAll(u.ID, "-", "")
 	if len(name) > 34 {
 		name = name[:34]
@@ -268,7 +271,7 @@ func (s *Server) handleGitHubAppWebhook(w http.ResponseWriter, r *http.Request) 
 func (s *Server) handleGitHubAppURLs(w http.ResponseWriter, r *http.Request) {
 	app := s.instanceGitHubApp()
 	writeJSON(w, http.StatusOK, map[string]any{
-		"urls":       githubapp.AppURLs(s.requestBase(r)),
+		"urls":       githubapp.AppURLs(s.githubBase(r)),
 		"configured": app.Configured(),
 		"slug":       app.Slug,
 		"branch":     GitHubBranch,
@@ -286,6 +289,17 @@ func (s *Server) requestBase(r *http.Request) string {
 		proto = "https"
 	}
 	return proto + "://" + host
+}
+
+// githubBase is the origin GitHub can reach (callback, setup, webhook).
+// Operator UI on a Tailscale-only hostname must still advertise the public URL.
+func (s *Server) githubBase(r *http.Request) string {
+	if s.isAdminHost(r) {
+		if u := strings.TrimRight(s.Cfg.PublicURL, "/"); u != "" {
+			return u
+		}
+	}
+	return s.requestBase(r)
 }
 
 func (s *Server) dashboardRedirect(w http.ResponseWriter, r *http.Request, vals url.Values) {
