@@ -42,4 +42,4 @@ CI fails if `plugin/main.js` `require()`s Node or Electron modules.
 - Plugin source lives in [`plugin/`](../plugin/). Entry: `main.ts`. Helpers: `hash.ts`, `codec.ts`, `mobile.ts`.
 - Description is sentence case, ends with a period, no emoji, under 250 characters.
 - Settings UI has no extra “Syncidian” heading.
-- On a phone, Server URL must be public HTTPS. `localhost` is the device, not the computer.
+- On a phone, leave Syncidian.com selected or set Custom Domain to public HTTPS. `localhost` is the device, not the computer.

@@ -10,12 +10,15 @@ import {
   TAbstractFile,
   TFile,
   TFolder,
+  TextComponent,
   normalizePath,
   requestUrl,
 } from "obsidian";
 import { b64decode, b64encode, toArrayBuffer } from "./codec";
 import { sha256 } from "./hash";
 import {
+  HOSTED_SERVER_URL,
+  applyServerMode,
   boolField,
   errorMessage,
   isRecord,
@@ -24,6 +27,7 @@ import {
   parseJson,
   stringArrayField,
   stringField,
+  type PluginSettings,
 } from "./json";
 import {
   devicePlatform,
@@ -34,16 +38,12 @@ import {
   pushBatchSize,
 } from "./mobile";
 
-interface SyncidianSettings {
-  serverUrl: string;
-  token: string;
-  deviceName: string;
-  deviceId: string;
-  hashes: Record<string, string>;
-}
+type SyncidianSettings = PluginSettings;
 
 const DEFAULT_SETTINGS: SyncidianSettings = {
-  serverUrl: "http://localhost:8080",
+  serverUrl: HOSTED_SERVER_URL,
+  useCustomDomain: false,
+  customServerUrl: "",
   token: "",
   deviceName: "Obsidian",
   deviceId: "",
@@ -212,7 +212,7 @@ export default class SyncidianPlugin extends Plugin {
 
   /** Normalize URL/token before every request (trim paste noise). */
   normalizeCredentials() {
-    this.settings.serverUrl = (this.settings.serverUrl || "").trim().replace(/\/$/, "");
+    applyServerMode(this.settings);
     this.settings.token = (this.settings.token || "").trim().replace(/\s+/g, "");
   }
 
@@ -242,7 +242,7 @@ export default class SyncidianPlugin extends Plugin {
       text = res.text;
     } catch (e) {
       throw new Error(
-        `Cannot reach ${this.settings.serverUrl || "(no server URL)"}. On a phone, use a public HTTPS URL, not localhost. (${errorMessage(e)})`
+        `Cannot reach ${this.settings.serverUrl || "(no server URL)"}. On a phone, use Syncidian.com or a public HTTPS custom domain, not localhost. (${errorMessage(e)})`
       );
     }
     let data: unknown = null;
@@ -272,7 +272,7 @@ export default class SyncidianPlugin extends Plugin {
   mobileUrlError(): string | null {
     if (!isMobileApp()) return null;
     if (isLoopbackUrl(this.settings.serverUrl)) {
-      return "On Android and iOS, localhost is this device, not your computer. Set Server URL to your public HTTPS address (for example your Railway domain).";
+      return "On Android and iOS, localhost is this device, not your computer. Choose Custom Domain and set a public HTTPS address, or use the Syncidian.com option.";
     }
     return null;
   }
@@ -284,7 +284,7 @@ export default class SyncidianPlugin extends Plugin {
       this.normalizeCredentials();
       if (!this.settings.token || !this.settings.serverUrl) {
         this.setStatus("offline");
-        new Notice("Syncidian: set server URL and access token first");
+        new Notice("Syncidian: set access token first (and a custom domain if you are not using Syncidian.com)");
         return false;
       }
       if (!this.settings.token.startsWith("sk_sync_")) {
@@ -1049,8 +1049,9 @@ export default class SyncidianPlugin extends Plugin {
     this.settings = mergeSettings(await this.loadData() as unknown, DEFAULT_SETTINGS);
     if (!this.settings.hashes) this.settings.hashes = {};
     this.normalizeCredentials();
-    if (isMobileApp() && isLoopbackUrl(this.settings.serverUrl)) {
+    if (isMobileApp() && this.settings.useCustomDomain && isLoopbackUrl(this.settings.serverUrl)) {
       this.settings.serverUrl = "";
+      this.settings.customServerUrl = "";
     }
   }
 
@@ -1128,6 +1129,8 @@ class ConflictModal extends Modal {
 
 class SyncidianSettingTab extends PluginSettingTab {
   plugin: SyncidianPlugin;
+  private domainSelect: HTMLSelectElement | null = null;
+  private customUrl: TextComponent | null = null;
   private urlInput: HTMLInputElement | null = null;
   private tokenInput: HTMLInputElement | null = null;
   private nameInput: HTMLInputElement | null = null;
@@ -1138,25 +1141,75 @@ class SyncidianSettingTab extends PluginSettingTab {
   }
 
   private setupIntro(): string {
-    return "Install from Community plugins (or BRAT). Point this vault at your Syncidian server. GitHub is configured per user in the dashboard, not here. Unlike Git plugins, this one uses only the Obsidian API and works on Android and iOS.";
+    return "Install from Community plugins (or BRAT). Syncidian.com is selected by default. Choose Custom Domain to use your own server. GitHub is configured per user in the dashboard, not here. Unlike Git plugins, this one uses only the Obsidian API and works on Android and iOS.";
   }
 
   private mobileDesc(): string {
-    return "Use a public HTTPS server URL. localhost is this phone or tablet, not your computer. iOS often blocks plain http://.";
+    return "The hosted Syncidian.com option uses HTTPS. A custom domain on a phone must be a public HTTPS URL. localhost is this phone or tablet, not your computer. iOS often blocks plain http://.";
   }
 
-  private serverUrlDesc(): string {
+  private serverChoiceDesc(): string {
+    return "Syncidian.com is the hosted service. Custom Domain is your own server.";
+  }
+
+  private customDomainDesc(): string {
     return isMobileApp()
-      ? "HTTPS address of your Syncidian server, for example https://sync.example.com"
-      : "Example: http://localhost:8080 or https://sync.example.com";
+      ? "Enabled when Custom Domain is selected. Use a public HTTPS address, for example https://sync.example.com"
+      : "Enabled when Custom Domain is selected. Example: http://localhost:8080 or https://sync.example.com";
   }
 
-  private bindServerUrl(setting: Setting) {
-    setting.setDesc(this.serverUrlDesc()).addText((t) => {
-      this.urlInput = t.inputEl;
-      t.setPlaceholder(isMobileApp() ? "https://sync.example.com" : "http://localhost:8080")
-        .setValue(this.plugin.settings.serverUrl)
+  private customDomainValue(): string {
+    return this.plugin.settings.useCustomDomain
+      ? this.plugin.settings.customServerUrl || this.plugin.settings.serverUrl
+      : HOSTED_SERVER_URL;
+  }
+
+  private bindServerChoice(setting: Setting) {
+    setting.setDesc(this.serverChoiceDesc()).addDropdown((d) => {
+      this.domainSelect = d.selectEl;
+      d.addOption("hosted", "Syncidian.com")
+        .addOption("custom", "Custom Domain")
+        .setValue(this.plugin.settings.useCustomDomain ? "custom" : "hosted")
         .onChange(async (v) => {
+          await this.applyServerChoice(v === "custom");
+        });
+    });
+  }
+
+  private async applyServerChoice(custom: boolean) {
+    this.plugin.settings.useCustomDomain = custom;
+    if (custom) {
+      this.plugin.settings.serverUrl = this.plugin.settings.customServerUrl;
+    } else {
+      this.plugin.settings.serverUrl = HOSTED_SERVER_URL;
+    }
+    await this.plugin.saveSettings();
+    this.setCustomDomainEnabled(custom);
+  }
+
+  private setCustomDomainEnabled(custom: boolean) {
+    this.customUrl?.setDisabled(!custom);
+    if (this.urlInput) {
+      this.urlInput.value = custom
+        ? this.plugin.settings.customServerUrl
+        : HOSTED_SERVER_URL;
+    }
+    if (custom) this.urlInput?.focus();
+  }
+
+  private bindCustomDomain(setting: Setting) {
+    const custom = this.plugin.settings.useCustomDomain;
+    setting.setDesc(this.customDomainDesc()).addText((t) => {
+      this.customUrl = t;
+      this.urlInput = t.inputEl;
+      t.inputEl.spellcheck = false;
+      t.inputEl.autocomplete = "off";
+      t.setPlaceholder("https://sync.example.com")
+        .setValue(this.customDomainValue())
+        .setDisabled(!custom)
+        .onChange(async (v) => {
+          if (!this.plugin.settings.useCustomDomain) return;
+          this.plugin.settings.customServerUrl = v.trim();
           this.plugin.settings.serverUrl = v.trim();
           await this.plugin.saveSettings();
         });
@@ -1197,10 +1250,22 @@ class SyncidianSettingTab extends PluginSettingTab {
   private async connectFromSettings() {
     // Read inputs directly so Connect works even if the last keystroke/paste
     // has not flushed through onChange yet.
-    if (this.urlInput) this.plugin.settings.serverUrl = this.urlInput.value.trim();
+    if (this.domainSelect) {
+      this.plugin.settings.useCustomDomain = this.domainSelect.value === "custom";
+    }
+    if (this.plugin.settings.useCustomDomain) {
+      if (this.urlInput) this.plugin.settings.customServerUrl = this.urlInput.value.trim();
+    } else {
+      this.plugin.settings.customServerUrl = this.plugin.settings.customServerUrl || "";
+      this.plugin.settings.serverUrl = HOSTED_SERVER_URL;
+    }
     if (this.tokenInput) this.plugin.settings.token = this.tokenInput.value.trim().replace(/\s+/g, "");
     if (this.nameInput) this.plugin.settings.deviceName = this.nameInput.value.trim() || "Obsidian";
     await this.plugin.saveSettings();
+    if (this.plugin.settings.useCustomDomain && !this.plugin.settings.serverUrl) {
+      new Notice("Syncidian: enter a custom domain, or switch back to Syncidian.com");
+      return;
+    }
     const mobileErr = this.plugin.mobileUrlError();
     if (mobileErr) {
       new Notice(`Syncidian: ${mobileErr}`);
@@ -1222,9 +1287,16 @@ class SyncidianSettingTab extends PluginSettingTab {
         visible: () => isMobileApp(),
       },
       {
-        name: "Server URL",
-        desc: this.serverUrlDesc(),
-        render: (setting) => this.bindServerUrl(setting),
+        name: "Server",
+        desc: this.serverChoiceDesc(),
+        aliases: ["domain", "syncidian.com", "hosted"],
+        render: (setting) => this.bindServerChoice(setting),
+      },
+      {
+        name: "Custom domain",
+        desc: this.customDomainDesc(),
+        aliases: ["server url", "self-host"],
+        render: (setting) => this.bindCustomDomain(setting),
       },
       {
         name: "Access token",
@@ -1251,7 +1323,8 @@ class SyncidianSettingTab extends PluginSettingTab {
     if (isMobileApp()) {
       new Setting(containerEl).setName("Mobile").setDesc(this.mobileDesc());
     }
-    this.bindServerUrl(new Setting(containerEl).setName("Server URL"));
+    this.bindServerChoice(new Setting(containerEl).setName("Server"));
+    this.bindCustomDomain(new Setting(containerEl).setName("Custom domain"));
     this.bindToken(new Setting(containerEl).setName("Access token"));
     this.bindDeviceName(new Setting(containerEl).setName("Device name"));
     this.bindConnect(new Setting(containerEl).setName("Connect"));

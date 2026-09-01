@@ -461,7 +461,7 @@
           <div class="notch"></div>
           <div class="chip">
             <b style="display:block;margin-bottom:8px">On the phone</b>
-            Restricted mode off. Community plugin or three files. Server URL is this host — never localhost.
+            Restricted mode off. Community plugin or three files. Syncidian.com by default, or Custom Domain for this host.
           </div>
         </div>
       </div>
@@ -627,6 +627,14 @@ function asList(v) {
 function esc(s) {
   return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;" }[c]));
 }
+function isHostedPublicSite() {
+  const host = (location.hostname || "").replace(/^www\./, "").toLowerCase();
+  return host === "syncidian.com";
+}
+function pluginServerHint() {
+  if (isHostedPublicSite()) return "leave <b>Syncidian.com</b> selected";
+  return `choose <b>Custom Domain</b> and enter <code>${esc(location.origin)}</code>`;
+}
 function when(t) {
   if (!t) return "—";
   const d = new Date(t);
@@ -748,14 +756,14 @@ docker compose up --build -d</pre>
         <li>Open the vault in Obsidian. Settings → Community plugins → <b>Turn off restricted mode</b>.</li>
         <li>Prefer Browse → <b>Syncidian</b>, or BRAT as above. To copy files: put <code>manifest.json</code>, <code>main.js</code>, and <code>styles.css</code> in the vault’s <code>.obsidian/plugins/syncidian/</code> folder (Files app with hidden files on, USB, Syncthing, or a desktop that already has the vault). Folder name must be <code>syncidian</code>.</li>
         <li>Enable <b>Syncidian</b> on the installed plugins list.</li>
-        <li>Settings → Syncidian: Server URL must be a public <code>https://</code> address (this page’s origin). <code>localhost</code> is this phone, not your computer. Paste a <code>sk_sync_…</code> token, tap <b>Connect</b>.</li>
+        <li>Settings → Syncidian: ${pluginServerHint()}. A custom domain on a phone must be public <code>https://</code>. <code>localhost</code> is this phone, not your computer. Paste a <code>sk_sync_…</code> token, tap <b>Connect</b>.</li>
       </ol>
       <h2>iOS / iPadOS</h2>
       <ol>
         <li>Settings → Community plugins → <b>Turn off restricted mode</b>.</li>
         <li>Prefer Community plugins or BRAT. Otherwise put the three files in <code>.obsidian/plugins/syncidian/</code> via the Files app (iCloud Drive → Obsidian → your vault) or by copying from a Mac into the same iCloud vault, then reopen Obsidian.</li>
         <li>Enable <b>Syncidian</b>.</li>
-        <li>Server URL must be HTTPS reachable from the phone (this page’s origin — not <code>localhost</code>, and often not plain <code>http://</code>). Paste the token, tap <b>Connect</b>.</li>
+        <li>${pluginServerHint()}. A custom domain must be HTTPS reachable from the phone (not <code>localhost</code>, and often not plain <code>http://</code>). Paste the token, tap <b>Connect</b>.</li>
       </ol>
     `,
   },
@@ -764,7 +772,7 @@ docker compose up --build -d</pre>
     html: () => `
       <p>In Obsidian (desktop, Android, or iOS): Settings → Syncidian.</p>
       <ol>
-        <li>Server URL: <code>${esc(location.origin)}</code></li>
+        <li>Server: ${pluginServerHint()}</li>
         <li>Access token: the <code>sk_sync_…</code> value from that user’s Tokens page</li>
         <li>Device name: for example <code>MacBook Pro</code>, <code>Pixel</code>, or <code>iPhone</code></li>
         <li>Click <b>Connect</b></li>
@@ -1192,12 +1200,12 @@ async function overview(main) {
       <p><b>Obsidian on desktop</b> from a checkout of this repo:</p>
       <pre>./scripts/install-plugin.sh "/path/to/YourVault"</pre>
       <p>Or copy <code>plugin/manifest.json</code>, <code>plugin/main.js</code>, and <code>plugin/styles.css</code> into <code>{Vault}/.obsidian/plugins/syncidian/</code> (those files live in <code>plugin/</code>, not in <code>tests/</code>).</p>
-      <p><b>Android</b> — same Restricted mode step, then Community plugins, BRAT, or copy the three files into <code>.obsidian/plugins/syncidian/</code> (show hidden files in the Files app). Server URL: <code>${esc(location.origin)}</code> — not <code>localhost</code>.</p>
-      <p><b>iOS</b> — Restricted mode off, then Community plugins, BRAT, or drop the same folder into the iCloud vault via the Files app. Server URL must be HTTPS from the phone (<code>${esc(location.origin)}</code>).</p>
+      <p><b>Android</b> — same Restricted mode step, then Community plugins, BRAT, or copy the three files into <code>.obsidian/plugins/syncidian/</code> (show hidden files in the Files app). Server: ${pluginServerHint()} — not <code>localhost</code>.</p>
+      <p><b>iOS</b> — Restricted mode off, then Community plugins, BRAT, or drop the same folder into the iCloud vault via the Files app. Server: ${pluginServerHint()}.</p>
       <h2 style="font-size:16px;margin-top:14px">3. Connect in Obsidian</h2>
       <ol>
         <li>Settings → Syncidian</li>
-        <li>Server URL: <code>${esc(location.origin)}</code></li>
+        <li>Server: ${pluginServerHint()}</li>
         <li>Paste the access token, set a device name, click <b>Connect</b></li>
       </ol>
       <button class="btn secondary" id="open-help" type="button">Open setup walkthrough</button>
