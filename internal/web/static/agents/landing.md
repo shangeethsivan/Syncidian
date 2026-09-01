@@ -6,7 +6,8 @@ Syncidian is a self-hosted sync server and MCP bridge for Obsidian. The same plu
 
 ## Sign in
 
-- **GitHub:** [Continue with GitHub](/api/v1/auth/github/start?next=install)
+- **Waitlist (Syncidian.com):** use the form on the [homepage](/). Hosted GitHub sign-in is hidden until you tap the app name six times, and only allowlisted emails can complete it until public launch.
+- **GitHub (self-host, or after revealing it):** [Continue with GitHub](/api/v1/auth/github/start?next=install)
 - **Email:** use the Email button on the [homepage](/)
 
 ## For AI agents

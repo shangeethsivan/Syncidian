@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/shangeethsivan/Syncidian/internal/config"
 	"github.com/shangeethsivan/Syncidian/internal/githubapp"
 	"github.com/shangeethsivan/Syncidian/internal/store"
 )
@@ -70,7 +71,10 @@ func (s *Server) handleGitHubAuthStart(w http.ResponseWriter, r *http.Request) {
 		"client_id":    {app.ClientID},
 		"redirect_uri": {urls.Callback},
 		"state":        {state},
-		"allow_signup": {"true"},
+		"allow_signup": {"false"},
+	}
+	if !s.githubSignInRestricted() {
+		q.Set("allow_signup", "true")
 	}
 	http.Redirect(w, r, "https://github.com/login/oauth/authorize?"+q.Encode(), http.StatusFound)
 }
@@ -120,6 +124,13 @@ func (s *Server) handleGitHubAuthCallback(w http.ResponseWriter, r *http.Request
 	ghUser, err := githubapp.GetUser(token)
 	if err != nil {
 		s.dashboardRedirect(w, r, url.Values{"github": {"error"}, "message": {err.Error()}})
+		return
+	}
+	if !s.githubSignInAllowed(ghUser) {
+		s.dashboardRedirect(w, r, url.Values{
+			"github":  {"error"},
+			"message": {"GitHub sign-in is not available for this account yet."},
+		})
 		return
 	}
 	u, err := s.upsertGitHubUser(ghUser)
@@ -183,6 +194,28 @@ func (s *Server) installationOwnedByApp(installationID int64) bool {
 	}
 	inst, err := githubapp.GetInstallation(app.AppID, []byte(app.PEM), installationID)
 	return err == nil && inst != nil && inst.ID == installationID
+}
+
+func (s *Server) githubSignInRestricted() bool {
+	return len(s.Cfg.GitHubAllowedEmails) > 0
+}
+
+func (s *Server) githubSignInHidden(r *http.Request) bool {
+	// Hosted Syncidian.com hides GitHub until public launch. An allowlist
+	// also hides it on any host. PRODUCTION: stop hiding on the hosted
+	// domain and unset SYNCIDIAN_GITHUB_ALLOWED_EMAIL so everyone can sign in.
+	return s.isHostedPublic(r) || s.githubSignInRestricted()
+}
+
+func (s *Server) githubSignInAllowed(gh *githubapp.User) bool {
+	if !s.githubSignInRestricted() {
+		return true
+	}
+	if gh == nil {
+		return false
+	}
+	emails := append([]string{gh.Email}, gh.Emails...)
+	return config.EmailAllowed(s.Cfg.GitHubAllowedEmails, emails...)
 }
 
 func (s *Server) upsertGitHubUser(gh *githubapp.User) (*store.User, error) {

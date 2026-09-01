@@ -10,10 +10,11 @@ import (
 )
 
 type User struct {
-	ID    int64  `json:"id"`
-	Login string `json:"login"`
-	Name  string `json:"name"`
-	Email string `json:"email"`
+	ID     int64    `json:"id"`
+	Login  string   `json:"login"`
+	Name   string   `json:"name"`
+	Email  string   `json:"email"`
+	Emails []string `json:"-"`
 }
 
 func ExchangeOAuth(clientID, clientSecret, code, redirectURI string) (string, error) {
@@ -69,18 +70,18 @@ func GetUser(token string) (*User, error) {
 	if u.ID == 0 || u.Login == "" {
 		return nil, fmt.Errorf("GitHub did not return a user")
 	}
-	if u.Email == "" {
-		if emails, err := userEmails(token); err == nil {
-			u.Email = emails
-		}
+	verified := verifiedEmails(token)
+	u.Emails = mergeEmails(u.Email, verified)
+	if u.Email == "" && len(u.Emails) > 0 {
+		u.Email = u.Emails[0]
 	}
 	return u, nil
 }
 
-func userEmails(token string) (string, error) {
+func verifiedEmails(token string) []string {
 	body, err := do(http.MethodGet, "https://api.github.com/user/emails", "Bearer "+token, nil)
 	if err != nil {
-		return "", err
+		return nil
 	}
 	var list []struct {
 		Email    string `json:"email"`
@@ -88,16 +89,41 @@ func userEmails(token string) (string, error) {
 		Verified bool   `json:"verified"`
 	}
 	if err := json.Unmarshal(body, &list); err != nil {
-		return "", err
+		return nil
 	}
-	var fallback string
+	var primary, rest []string
 	for _, e := range list {
-		if e.Primary && e.Verified {
-			return e.Email, nil
+		email := strings.TrimSpace(e.Email)
+		if !e.Verified || email == "" {
+			continue
 		}
-		if e.Verified && fallback == "" {
-			fallback = e.Email
+		if e.Primary {
+			primary = append(primary, email)
+		} else {
+			rest = append(rest, email)
 		}
 	}
-	return fallback, nil
+	return append(primary, rest...)
+}
+
+func mergeEmails(profile string, verified []string) []string {
+	seen := make(map[string]struct{})
+	var out []string
+	add := func(email string) {
+		email = strings.TrimSpace(email)
+		if email == "" {
+			return
+		}
+		key := strings.ToLower(email)
+		if _, ok := seen[key]; ok {
+			return
+		}
+		seen[key] = struct{}{}
+		out = append(out, email)
+	}
+	add(profile)
+	for _, e := range verified {
+		add(e)
+	}
+	return out
 }
