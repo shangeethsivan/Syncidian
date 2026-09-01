@@ -40,6 +40,10 @@ func (s *Server) handleSetupStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleSetup(w http.ResponseWriter, r *http.Request) {
+	if s.denySetup(w, r) {
+		return
+	}
+	s.noteSetup(r)
 	n, err := s.Store.UserCount()
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
@@ -91,11 +95,17 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid json")
 		return
 	}
-	u, err := s.Store.GetUserByUsername(strings.TrimSpace(req.Username))
+	username := strings.TrimSpace(req.Username)
+	if s.denyPassword(w, r, username) {
+		return
+	}
+	u, err := s.Store.GetUserByUsername(username)
 	if err != nil || u == nil || u.PasswordHash == "" || !checkPassword(u.PasswordHash, req.Password) {
+		s.notePasswordFail(r, username)
 		writeError(w, http.StatusUnauthorized, "invalid credentials")
 		return
 	}
+	s.notePasswordOK(username)
 	sess, err := s.Store.CreateSession(u.ID, 30*24*time.Hour)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
@@ -106,6 +116,9 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleSignup(w http.ResponseWriter, r *http.Request) {
+	if s.denySignup(w, r) {
+		return
+	}
 	n, err := s.Store.UserCount()
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
@@ -126,6 +139,7 @@ func (s *Server) handleSignup(w http.ResponseWriter, r *http.Request) {
 	}
 	req.Username = strings.TrimSpace(req.Username)
 	req.Email = strings.TrimSpace(strings.ToLower(req.Email))
+	s.noteSignup(r)
 	if req.Username == "" || len(req.Password) < 8 {
 		writeError(w, http.StatusBadRequest, "username required and password must be at least 8 characters")
 		return
@@ -405,11 +419,16 @@ func (s *Server) handleMCPLogin(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "username and password required")
 		return
 	}
+	if s.denyPassword(w, r, req.Username) {
+		return
+	}
 	u, err := s.Store.GetUserByUsername(req.Username)
 	if err != nil || u == nil || u.PasswordHash == "" || !checkPassword(u.PasswordHash, req.Password) {
+		s.notePasswordFail(r, req.Username)
 		writeError(w, http.StatusUnauthorized, "invalid credentials")
 		return
 	}
+	s.notePasswordOK(req.Username)
 	if u.IsAdmin {
 		writeError(w, http.StatusForbidden, "admins cannot use MCP; sign in as a vault user")
 		return

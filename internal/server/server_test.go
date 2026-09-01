@@ -1599,6 +1599,87 @@ func TestMCPUsageShowsOnDashboard(t *testing.T) {
 	}
 }
 
+func TestGitHubAppSetupRejectsSpoofedInstallation(t *testing.T) {
+	hs, done := newTestServer(t)
+	defer done()
+	adminCookies := setupAdmin(t, hs)
+	bob := createAndLoginUser(t, hs, adminCookies, "bob")
+
+	getSetup := func(cookies []*http.Cookie, rawQuery string) *http.Response {
+		t.Helper()
+		req, err := http.NewRequest(http.MethodGet, hs.URL+"/api/v1/github/app/setup?"+rawQuery, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, c := range cookies {
+			req.AddCookie(c)
+		}
+		res, err := noFollowClient().Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return res
+	}
+
+	res := getSetup(bob, "installation_id=99999")
+	res.Body.Close()
+	if res.StatusCode != http.StatusFound {
+		t.Fatalf("missing state: want 302, got %d", res.StatusCode)
+	}
+	loc := res.Header.Get("Location")
+	if !strings.Contains(loc, "github=error") || !strings.Contains(loc, "expired") {
+		t.Fatalf("missing state should fail closed, got %q", loc)
+	}
+	for _, c := range res.Cookies() {
+		if c.Name == "syncidian_pending_install" && c.Value != "" && c.MaxAge >= 0 {
+			t.Fatalf("must not stash a spoofed installation_id: %+v", c)
+		}
+	}
+
+	bob = append(bob, &http.Cookie{Name: "syncidian_github_state", Value: "nonce-from-connect"})
+	res = getSetup(bob, "installation_id=99999&state=attacker-guess")
+	res.Body.Close()
+	if loc = res.Header.Get("Location"); !strings.Contains(loc, "github=error") {
+		t.Fatalf("mismatched state should fail closed, got %q", loc)
+	}
+
+	res = getSetup(bob, "installation_id=99999&state=nonce-from-connect")
+	res.Body.Close()
+	loc = res.Header.Get("Location")
+	if strings.Contains(loc, "expired") {
+		t.Fatalf("matching state should pass CSRF check, got %q", loc)
+	}
+	if !strings.Contains(loc, "github=error") {
+		t.Fatalf("without an app, matching state should still error on missing credentials, got %q", loc)
+	}
+
+	anon := getSetup(nil, "installation_id=99999")
+	anon.Body.Close()
+	if loc = anon.Header.Get("Location"); !strings.Contains(loc, "github=error") {
+		t.Fatalf("anonymous spoof should fail closed, got %q", loc)
+	}
+	for _, c := range anon.Cookies() {
+		if c.Name == "syncidian_pending_install" && c.Value != "" && c.MaxAge >= 0 {
+			t.Fatalf("anonymous spoof must not set pending_install: %+v", c)
+		}
+	}
+
+	anonOK := getSetup([]*http.Cookie{{Name: "syncidian_github_state", Value: "nonce-from-connect"}}, "installation_id=4242&state=nonce-from-connect")
+	anonOK.Body.Close()
+	if loc = anonOK.Header.Get("Location"); !strings.Contains(loc, "/api/v1/auth/github/start") {
+		t.Fatalf("anonymous with valid state should continue to GitHub login, got %q", loc)
+	}
+	gotPending := false
+	for _, c := range anonOK.Cookies() {
+		if c.Name == "syncidian_pending_install" && c.Value == "4242" {
+			gotPending = true
+		}
+	}
+	if !gotPending {
+		t.Fatalf("anonymous with valid state should stash installation, cookies=%v", anonOK.Cookies())
+	}
+}
+
 func TestCORSAllowsObsidianMobileOrigins(t *testing.T) {
 	hs, done := newTestServer(t)
 	defer done()
@@ -1636,6 +1717,62 @@ func TestCORSAllowsObsidianMobileOrigins(t *testing.T) {
 		if !strings.Contains(methods, "POST") {
 			t.Fatalf("%s Allow-Methods: %q", origin, methods)
 		}
+		if res.Header.Get("Access-Control-Allow-Credentials") != "true" {
+			t.Fatalf("%s missing Allow-Credentials", origin)
+		}
+	}
+}
+
+func TestCORSDoesNotReflectArbitraryOrigins(t *testing.T) {
+	hs, done := newTestServer(t)
+	defer done()
+	evil := "https://evil.example"
+	paths := []string{"/api/v1/auth/login", "/api/v1/mcp/login", "/api/v1/devices/register"}
+	for _, path := range paths {
+		req, err := http.NewRequest(http.MethodOptions, hs.URL+path, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.Header.Set("Origin", evil)
+		req.Header.Set("Access-Control-Request-Method", "POST")
+		req.Header.Set("Access-Control-Request-Headers", "content-type")
+		res, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		res.Body.Close()
+		if got := res.Header.Get("Access-Control-Allow-Origin"); got != "" {
+			t.Fatalf("%s reflected Origin %q", path, got)
+		}
+
+		req, err = http.NewRequest(http.MethodPost, hs.URL+path, strings.NewReader(`{"username":"x","password":"y"}`))
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.Header.Set("Origin", evil)
+		req.Header.Set("Content-Type", "application/json")
+		res, err = http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		res.Body.Close()
+		if got := res.Header.Get("Access-Control-Allow-Origin"); got != "" {
+			t.Fatalf("%s POST reflected Origin %q", path, got)
+		}
+	}
+
+	req, err := http.NewRequest(http.MethodOptions, hs.URL+"/api/v1/mcp/login", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Origin", "http://localhost")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res.Body.Close()
+	if got := res.Header.Get("Access-Control-Allow-Origin"); got != "http://localhost" {
+		t.Fatalf("allowlisted origin: got %q", got)
 	}
 }
 

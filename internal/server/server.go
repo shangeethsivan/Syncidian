@@ -28,15 +28,16 @@ import (
 var errInvalidToken = errors.New("invalid or revoked access token")
 
 type Server struct {
-	Cfg     config.Config
-	Store   *store.Store
-	Git     *gitx.Manager
-	MCP     *mcp.Server
-	Log     *slog.Logger
-	hub     *Hub
-	start   time.Time
-	gitMu   sync.Map // userID -> *sync.Mutex
-	tickets sync.Map // ticket hash -> wsTicket
+	Cfg       config.Config
+	Store     *store.Store
+	Git       *gitx.Manager
+	MCP       *mcp.Server
+	Log       *slog.Logger
+	hub       *Hub
+	start     time.Time
+	gitMu     sync.Map // userID -> *sync.Mutex
+	tickets   sync.Map // ticket hash -> wsTicket
+	authLimit *authLimiter
 }
 
 func New(cfg config.Config, st *store.Store, log *slog.Logger) *Server {
@@ -44,13 +45,14 @@ func New(cfg config.Config, st *store.Store, log *slog.Logger) *Server {
 		log = slog.Default()
 	}
 	s := &Server{
-		Cfg:   cfg,
-		Store: st,
-		Git:   &gitx.Manager{Name: cfg.GitName, Email: cfg.GitEmail},
-		MCP:   &mcp.Server{Store: st},
-		Log:   log,
-		hub:   NewHub(),
-		start: time.Now(),
+		Cfg:       cfg,
+		Store:     st,
+		Git:       &gitx.Manager{Name: cfg.GitName, Email: cfg.GitEmail},
+		MCP:       &mcp.Server{Store: st},
+		Log:       log,
+		hub:       NewHub(),
+		start:     time.Now(),
+		authLimit: newAuthLimiter(defaultAuthLimits),
 	}
 	s.MCP.Notes = &githubNotes{s: s}
 	s.MCP.OnChange = func(userID, path, hash string, deleted bool, content []byte) {
@@ -190,15 +192,13 @@ func (s *Server) Handler() http.Handler {
 func (s *Server) cors(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		origin := r.Header.Get("Origin")
-		if origin != "" {
+		if s.originMayUseCookies(origin) {
 			w.Header().Set("Access-Control-Allow-Origin", origin)
 			w.Header().Set("Vary", "Origin")
-			if s.originMayUseCookies(origin) {
-				w.Header().Set("Access-Control-Allow-Credentials", "true")
-			}
+			w.Header().Set("Access-Control-Allow-Credentials", "true")
+			w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Syncidian-Client")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
 		}
-		w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Syncidian-Client")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)
 			return
