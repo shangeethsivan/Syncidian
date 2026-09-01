@@ -4,7 +4,7 @@ The Syncidian plugin is **not desktop-only**. The same `syncidian` plugin runs i
 
 You still need a running Syncidian **server** (Railway, Docker, or similar) and a vault-user token (`sk_sync_…`) from that server’s dashboard. The plugin never talks to GitHub itself.
 
-On a phone, **Server URL must be a public `https://` address** (for example your Railway domain). `http://localhost:8080` is the phone, not your computer. iOS often blocks plain `http://`.
+On a phone, leave **Syncidian.com** selected or choose **Custom Domain** with a public `https://` address (for example your Railway domain). `http://localhost:8080` is the phone, not your computer. iOS often blocks plain `http://`.
 
 ## Turn Restricted mode off (required on every device)
 
@@ -86,7 +86,7 @@ If Syncidian does not appear: confirm the folder is named `syncidian` (plugin `i
 ## Connect the plugin
 
 1. **Settings → Syncidian**.
-2. **Server URL:** `https://your-public-host` (the same origin as the web dashboard). Do not use `localhost` on a phone.
+2. **Server:** leave **Syncidian.com** selected, or choose **Custom Domain** and enter `https://your-public-host` (the same origin as the web dashboard). Do not use `localhost` on a phone.
 3. **Access token:** a vault-user `sk_sync_…` token from the dashboard (Tokens page). Admins cannot sync as admin.
 4. **Device name:** filled in from the device (Android, iPhone, iPad). You can rename it.
 5. Tap **Connect**.

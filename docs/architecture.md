@@ -548,7 +548,7 @@ Railway: mount a volume at `/data`. `railway.json` sets `requiredMountPath` to `
 | GitHub App self-host setup | [`docs/github-app.md`](github-app.md) |
 | MCP tools | [`internal/mcp/`](../internal/mcp/) (`mcp.go`, `links.go`, `organize.go`) |
 | Live updates | [`internal/server/ws.go`](../internal/server/ws.go) |
-| Persistence | [`internal/store/store.go`](../internal/store/store.go), [`internal/store/crypt.go`](../internal/store/crypt.go), [`internal/config/persist.go`](../internal/config/persist.go), [`railway.json`](../railway.json) |
+| Persistence | [`internal/store/store.go`](../internal/store/store.go), [`internal/store/crypt.go`](../internal/store/crypt.go), [`internal/store/waitlist.go`](../internal/store/waitlist.go), [`internal/config/persist.go`](../internal/config/persist.go), [`railway.json`](../railway.json) |
 | Dashboard UI | [`internal/web/static/index.html`](../internal/web/static/index.html) |
 | Sideload plugin from the server | [`internal/web/static/assets/obsidian/`](../internal/web/static/assets/obsidian/) (`GET /assets/obsidian/`, `GET /assets/obsidian.zip`) |
 | Obsidian plugin (desktop + Android/iOS) | [`plugin/main.ts`](../plugin/main.ts), [`plugin/mobile.ts`](../plugin/mobile.ts), [`plugin/manifest.json`](../plugin/manifest.json) (`isDesktopOnly: false`) |

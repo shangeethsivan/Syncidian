@@ -71,7 +71,8 @@ You still run a Syncidian server (step 1). The plugin is only the Obsidian clien
 1. Settings → Community plugins → turn **Restricted mode** off.
 2. Browse → search **Syncidian** → Install → Enable.
 3. Settings → Syncidian:
-   * Server URL: `http://localhost:8080` (or your deployed URL)
+   * Server: **Syncidian.com** (default), or **Custom Domain** if you self-host
+   * Custom domain: your server URL (enabled only when Custom Domain is selected)
    * Access token: the `sk_sync_…` value from the dashboard
    * Device name: e.g. `MacBook Pro`
 4. Click **Connect**.
@@ -114,7 +115,7 @@ Repeat the token (and install, if you sideloaded) on each device (Windows, Mac, 
 
 Step-by-step (Restricted mode, Community plugins / BRAT / copying files, then Connect): **[Enable on Android and iOS](docs/install-mobile.md)**.
 
-On a phone, **Server URL must be a public `https://` address** (your Railway domain or similar). `http://localhost:8080` is the phone itself, not your computer. iOS often blocks plain `http://`.
+On a phone, leave **Syncidian.com** selected or choose **Custom Domain** with a public `https://` address. `http://localhost:8080` is the phone itself, not your computer. iOS often blocks plain `http://`.
 
 ## 3. Optional: GitHub backup (per user)
 
@@ -321,7 +322,7 @@ Syncidian is designed to work wherever Obsidian plugins are supported.
 * 🤖 Android
 * 📱 iOS
 
-The plugin is **not** desktop-only. It uses the Obsidian Vault API and `requestUrl` so it loads on phones; Git community plugins that depend on Node or a local `git` binary cannot. On Android and iOS, point the plugin at a public HTTPS server URL (not `localhost`). Enable steps: [`docs/install-mobile.md`](docs/install-mobile.md).
+The plugin is **not** desktop-only. It uses the Obsidian Vault API and `requestUrl` so it loads on phones; Git community plugins that depend on Node or a local `git` binary cannot. On Android and iOS, leave **Syncidian.com** selected or point **Custom Domain** at a public HTTPS server (not `localhost`). Enable steps: [`docs/install-mobile.md`](docs/install-mobile.md).
 
 The goal is to maintain one consistent synchronization experience across all supported platforms.
 
@@ -520,8 +521,11 @@ The plugin configuration should remain intentionally small:
 Syncidian
 ────────────────────────────────
 
-Server URL
-https://sync.example.com
+Server
+Syncidian.com          Custom Domain
+
+Custom domain
+https://sync.example.com   (enabled when Custom Domain is selected)
 
 Access Token
 ••••••••••••••••••
@@ -956,7 +960,10 @@ The server tracks:
 Syncidian uses access tokens to authenticate Obsidian clients.
 
 ```text
-Server URL:
+Server:
+Syncidian.com   (default)
+
+or Custom Domain:
 https://sync.example.com
 
 Access Token:

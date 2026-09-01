@@ -85,6 +85,8 @@ func (s *Server) Handler() http.Handler {
 
 	mux.HandleFunc("GET /api/v1/setup", s.handleSetupStatus)
 	mux.HandleFunc("POST /api/v1/setup", s.handleSetup)
+	mux.HandleFunc("POST /api/v1/waitlist", s.handleJoinWaitlist)
+	mux.HandleFunc("GET /api/v1/waitlist", s.adminAuthed(s.handleListWaitlist))
 	mux.HandleFunc("POST /api/v1/auth/login", s.handleLogin)
 	mux.HandleFunc("POST /api/v1/auth/signup", s.handleSignup)
 	mux.HandleFunc("POST /api/v1/auth/logout", s.authed(s.handleLogout))

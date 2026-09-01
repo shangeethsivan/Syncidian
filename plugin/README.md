@@ -1,6 +1,6 @@
 # Syncidian (Obsidian plugin)
 
-Syncidian is an Obsidian community plugin that syncs a vault through a self-hosted Syncidian server. It is **not desktop-only**. The same plugin runs on Windows, macOS, Linux, **Android**, and **iOS**.
+Syncidian is an Obsidian community plugin that syncs a vault through Syncidian.com or your own server. It is **not desktop-only**. The same plugin runs on Windows, macOS, Linux, **Android**, and **iOS**.
 
 Git-based community plugins (for example [Obsidian Git](https://github.com/denolehov/obsidian-git)) set `isDesktopOnly: true` because they call Node.js, Electron, or a local `git` binary. Those APIs do not exist in the Android and iOS apps, so those plugins never appear on mobile. Syncidian never shells out to Git and never imports Node or Electron. Vault I/O uses the Obsidian Vault API. HTTP uses Obsidian `requestUrl` (no CORS). Live updates use WebSockets with an HTTP poll fallback.
 
@@ -18,11 +18,12 @@ Those three files live in **`plugin/`** in this repo. They are not written to a 
 
 [BRAT](https://github.com/TfTHacker/obsidian42-brat): add `shangeethsivan/Syncidian` only after a GitHub Release whose tag matches `manifest.json` `version` **and** whose **Assets** include `main.js`, `manifest.json`, and `styles.css`. A tag without those attachments is not enough. See [docs/community-plugin.md](../docs/community-plugin.md).
 
-On a phone, **Server URL** must be a public `https://` address. `http://localhost:8080` is the phone itself, not your computer. iOS often blocks plain `http://`.
+On a phone, leave **Syncidian.com** selected or choose **Custom Domain** with a public `https://` address. `http://localhost:8080` is the phone itself, not your computer. iOS often blocks plain `http://`.
 
 ## Settings
 
-- **Server URL** — your Syncidian instance (`https://sync.example.com`).
+- **Server** — **Syncidian.com** (default) or **Custom Domain**.
+- **Custom domain** — your self-hosted URL. The field is enabled when Custom Domain is selected.
 - **Access token** — a vault-user `sk_sync_…` token from the dashboard (not an admin account).
 - **Device name** — filled in from the Obsidian `Platform` API (Android, iPhone, iPad, macOS, …).
 
