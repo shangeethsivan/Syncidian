@@ -84,6 +84,7 @@
     }
     * { box-sizing: border-box; }
     html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text); font: 17px/1.47 ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif; }
+    html { scroll-behavior: smooth; scroll-padding-top: 84px; }
     a { color: var(--text); }
     button, input, select, textarea { font: inherit; }
     .wrap { max-width: 1080px; margin: 0 auto; padding: 24px; }
@@ -289,14 +290,35 @@
     }
     .landing-flash { max-width: 36em; margin: 0 auto; }
     .landing-flash:not(:empty) { margin-bottom: 28px; }
-    .story, .devices {
+    .story, .devices, .privacy {
       position: relative; z-index: 2; max-width: 1080px; margin: 0 auto;
       padding: 24px 24px 72px; width: 100%;
     }
-    .story h2, .devices h2 {
+    .story h2, .devices h2, .privacy h2 {
       font-size: clamp(28px, 5vw, 42px); letter-spacing: -.03em; margin: 0 0 12px; text-align: center;
     }
     .story > p, .devices > p { text-align: center; color: var(--muted); max-width: 36em; margin: 0 auto 32px; }
+    .privacy-inner {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 28px; align-items: start;
+    }
+    .privacy-claim { text-align: left; padding-top: 8px; }
+    .privacy-claim .eyebrow { text-align: left; margin-bottom: 12px; }
+    .privacy-claim h2 { text-align: left; font-size: clamp(32px, 5vw, 48px); margin: 0 0 16px; letter-spacing: -.04em; }
+    .privacy-claim p { color: var(--muted); font-size: 18px; max-width: 28em; margin: 0; }
+    .privacy-store {
+      text-align: left; padding: 28px 28px 24px; border: 1px solid var(--line); border-radius: 28px;
+      background: color-mix(in srgb, var(--card) 72%, transparent); backdrop-filter: blur(18px);
+    }
+    .privacy-store h3 { margin: 0 0 8px; font-size: 15px; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+    .privacy-store > p { margin: 0 0 16px; color: var(--text); font-size: 16px; }
+    .privacy-store ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 10px; }
+    .privacy-store li {
+      padding: 10px 0; border-top: 1px solid var(--line); font-size: 15px;
+    }
+    .privacy-store li:first-child { border-top: 0; padding-top: 0; }
+    .privacy-store li b { display: block; margin-bottom: 2px; }
+    .privacy-store li span { color: var(--muted); font-size: 14px; }
+    .privacy-aside { margin: 18px 0 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
     .device-stage {
       display: grid; grid-template-columns: 1.2fr .8fr; gap: 28px; align-items: center;
     }
@@ -409,6 +431,7 @@
       .waitlist-row { flex-direction: column; }
       .waitlist-row .btn { width: 100%; min-height: 44px; }
       .device-stage { grid-template-columns: 1fr; }
+      .privacy-inner { grid-template-columns: 1fr; }
       .footer-giant { font-size: 22vw; }
     }
   </style>
@@ -420,6 +443,7 @@
       <a class="brand" href="/"><span class="dot"></span> Syncidian</a>
       <div class="row">
         <button class="ghost theme-toggle" type="button">Theme</button>
+        <a class="ghost" href="#privacy">Privacy</a>
         <a class="ghost" href="/api/v1/auth/github/start">Log in</a>
       </div>
     </header>
@@ -493,6 +517,25 @@
         </div>
       </div>
     </section>
+    <section class="privacy" id="privacy">
+      <div class="privacy-inner">
+        <div class="privacy-claim">
+          <p class="eyebrow">Privacy first</p>
+          <h2>We never store your personal data.</h2>
+          <p>No profiles. No ads. No mining your notes. Your vault stays yours — in Obsidian, and in the GitHub repository you connect.</p>
+        </div>
+        <div class="privacy-store">
+          <h3>What we store</h3>
+          <p>Only what it takes to know your devices are connected and in sync.</p>
+          <ul>
+            <li><b>Connected devices</b><span>How many devices are linked, and the name you gave each one.</span></li>
+            <li><b>Platform</b><span>macOS, Windows, Linux, Android, or iOS — plus the plugin version on that device.</span></li>
+            <li><b>Sync health</b><span>Last seen, last successful sync, sync count, and how many files moved. Counts, not the notes themselves.</span></li>
+          </ul>
+          <p class="privacy-aside">Access tokens are stored hashed. GitHub App secrets are encrypted. MCP never stores note bodies. Operators cannot open another person’s vault.</p>
+        </div>
+      </div>
+    </section>
     <div class="cinematic-footer-wrap" id="cinematic-footer">
       <footer class="cinematic-footer">
         <div class="footer-aurora"></div>
@@ -500,14 +543,15 @@
         <div class="footer-giant">SYNCIDIAN</div>
         <div class="footer-marquee">
           <div class="footer-marquee-track">
-            <span>Your vault ✦ Your GitHub ✦ Every device ✦ MCP on your terms ✦</span>
-            <span>Your vault ✦ Your GitHub ✦ Every device ✦ MCP on your terms ✦</span>
+            <span>Your vault ✦ Your GitHub ✦ Every device ✦ Privacy first ✦ MCP on your terms ✦</span>
+            <span>Your vault ✦ Your GitHub ✦ Every device ✦ Privacy first ✦ MCP on your terms ✦</span>
           </div>
         </div>
         <div class="footer-center">
           <h2>Ready to begin?</h2>
           <div class="footer-pills">
             <a class="footer-pill hidden" id="waitlist-footer" href="#waitlist-form">Join the waitlist</a>
+            <a class="footer-pill" href="#privacy">Privacy</a>
             <a class="footer-pill" href="/api/v1/auth/github/start?next=install">Continue with GitHub</a>
             <a class="footer-pill" href="#start">Email signup</a>
             <a class="footer-pill" href="https://github.com/shangeethsivan/Syncidian" target="_blank" rel="noopener">Source</a>
@@ -947,6 +991,13 @@ function showLanding() {
   if (waitlistForm) waitlistForm.classList.toggle("hidden", !showWaitlist);
   const waitlistFooter = $("waitlist-footer");
   if (waitlistFooter) waitlistFooter.classList.toggle("hidden", !showWaitlist);
+  const hash = location.hash;
+  if (hash === "#privacy" || hash === "#waitlist-form" || hash === "#how" || hash === "#look" || hash === "#start") {
+    requestAnimationFrame(() => {
+      const el = document.querySelector(hash);
+      if (el) el.scrollIntoView();
+    });
+  }
   const q = window.__githubQuery;
   if (q && q.flag === "error") {
     const box = $("landing-flash");
