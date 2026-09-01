@@ -474,6 +474,7 @@ func TestDashboardServed(t *testing.T) {
 		`id="landing"`,
 		`Continue with GitHub`,
 		`Your vault.`,
+		`Your data<br>stays with you.`,
 		`id="hero-canvas"`,
 		`snoise`,
 		`id="auth-btn" type="button">Sign in</button`,
