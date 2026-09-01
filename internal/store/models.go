@@ -170,6 +170,12 @@ type MCPUsage struct {
 	Tools         []MCPToolStat `json:"tools"`
 }
 
+type WaitlistEntry struct {
+	ID        string    `json:"id"`
+	Email     string    `json:"email"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
 type Stats struct {
 	TotalSyncs     int        `json:"total_syncs"`
 	FilesSynced    int        `json:"files_synced"`

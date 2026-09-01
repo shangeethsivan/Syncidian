@@ -25,6 +25,7 @@ func (s *Server) handleSetupStatus(w http.ResponseWriter, r *http.Request) {
 		"public_url":   s.Cfg.PublicURL,
 		"github_login": app.Configured(),
 		"persistence":  s.persistence(),
+		"waitlist":     s.isHostedPublic(r),
 		"github_app": map[string]any{
 			"configured": app.Configured(),
 			"slug":       "",

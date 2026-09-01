@@ -271,6 +271,22 @@
     .arch b { display: block; font-size: 15px; margin-bottom: 8px; }
     .arch span { color: var(--muted); font-size: 15px; }
     .email-box { max-width: 420px; margin: 28px auto 0; text-align: left; }
+    .waitlist-box {
+      max-width: 520px; margin: 0 auto 28px; text-align: left;
+      background: color-mix(in srgb, var(--card) 72%, transparent);
+      backdrop-filter: blur(18px);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 16px 18px;
+    }
+    .waitlist-copy { margin: 0 0 12px; color: var(--muted); font-size: 15px; }
+    .waitlist-row { display: flex; gap: 8px; align-items: stretch; }
+    .waitlist-row input { flex: 1; min-width: 0; }
+    .waitlist-row .btn { flex-shrink: 0; }
+    .sr-only {
+      position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+      overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+    }
     .landing-flash { max-width: 36em; margin: 0 auto; }
     .landing-flash:not(:empty) { margin-bottom: 28px; }
     .story, .devices {
@@ -390,6 +406,8 @@
       .site-head { padding: 16px; }
       .arch { grid-template-columns: 1fr; }
       .hero-actions { flex-direction: column; align-items: center; }
+      .waitlist-row { flex-direction: column; }
+      .waitlist-row .btn { width: 100%; min-height: 44px; }
       .device-stage { grid-template-columns: 1fr; }
       .footer-giant { font-size: 22vw; }
     }
@@ -412,6 +430,15 @@
         <p class="lede">Notes on every device. One repository you own.</p>
         <div id="landing-persist" class="landing-flash"></div>
         <div id="landing-flash" class="landing-flash"></div>
+        <form id="waitlist-form" class="waitlist-box hidden">
+          <p class="waitlist-copy">Get a note when hosted Syncidian is ready for you.</p>
+          <div class="waitlist-row">
+            <label class="sr-only" for="waitlist-email">Email</label>
+            <input id="waitlist-email" type="email" name="email" autocomplete="email" required placeholder="you@example.com" />
+            <button class="btn" id="waitlist-btn" type="submit">Join the waitlist</button>
+          </div>
+          <div id="waitlist-flash"></div>
+        </form>
         <div class="hero-actions">
           <a class="btn" id="gh-signup" href="/api/v1/auth/github/start?next=install">Continue with GitHub</a>
           <button class="btn secondary" id="show-email" type="button">Email</button>
@@ -480,6 +507,7 @@
         <div class="footer-center">
           <h2>Ready to begin?</h2>
           <div class="footer-pills">
+            <a class="footer-pill hidden" id="waitlist-footer" href="#waitlist-form">Join the waitlist</a>
             <a class="footer-pill" href="/api/v1/auth/github/start?next=install">Continue with GitHub</a>
             <a class="footer-pill" href="#start">Email signup</a>
             <a class="footer-pill" href="https://github.com/shangeethsivan/Syncidian" target="_blank" rel="noopener">Source</a>
@@ -630,6 +658,10 @@ function esc(s) {
 function isHostedPublicSite() {
   const host = (location.hostname || "").replace(/^www\./, "").toLowerCase();
   return host === "syncidian.com";
+}
+function waitlistOn() {
+  if (publicInfo && typeof publicInfo.waitlist === "boolean") return publicInfo.waitlist;
+  return isHostedPublicSite();
 }
 function pluginServerHint() {
   if (isHostedPublicSite()) return "leave <b>Syncidian.com</b> selected";
@@ -831,10 +863,12 @@ document.addEventListener("keydown", (e) => {
 
 function navItems() {
   if (isAdmin()) {
-    return [
+    const items = [
       ["overview", "Overview"],
       ["users", "Users"],
     ];
+    if (waitlistOn()) items.push(["waitlist", "Waitlist"]);
+    return items;
   }
   return [
     ["overview", "Overview"],
@@ -908,6 +942,11 @@ function showLanding() {
   heroScene.start();
   const persistBox = $("landing-persist");
   if (persistBox) persistBox.innerHTML = needsSetup ? persistWarningHTML() : "";
+  const showWaitlist = waitlistOn();
+  const waitlistForm = $("waitlist-form");
+  if (waitlistForm) waitlistForm.classList.toggle("hidden", !showWaitlist);
+  const waitlistFooter = $("waitlist-footer");
+  if (waitlistFooter) waitlistFooter.classList.toggle("hidden", !showWaitlist);
   const q = window.__githubQuery;
   if (q && q.flag === "error") {
     const box = $("landing-flash");
@@ -968,6 +1007,24 @@ $("logout").onclick = async () => {
 };
 
 $("show-email").onclick = () => $("email-form").classList.remove("hidden");
+const waitlistForm = $("waitlist-form");
+if (waitlistForm) {
+  waitlistForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const btn = $("waitlist-btn");
+    flash($("waitlist-flash"), "");
+    try {
+      if (btn) btn.disabled = true;
+      await api("/api/v1/waitlist", { method: "POST", body: JSON.stringify({ email: $("waitlist-email").value }) });
+      flash($("waitlist-flash"), "You're on the list. We'll write when it's ready.", "ok");
+      $("waitlist-email").value = "";
+    } catch (err) {
+      flash($("waitlist-flash"), err.message);
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  });
+}
 $("su-btn").onclick = async () => {
   try {
     await api("/api/v1/auth/signup", { method: "POST", body: JSON.stringify({
@@ -991,6 +1048,7 @@ async function render() {
   try {
     if (isAdmin()) {
       if (page === "users") await users(main);
+      else if (page === "waitlist") await waitlistAdmin(main);
       else await adminOverview(main);
       return;
     }
@@ -1020,6 +1078,7 @@ async function adminOverview(main) {
       <h2>What you can do</h2>
       <ul>
         <li>Create regular users on the <b>Users</b> page, or let them sign up with GitHub.</li>
+        ${waitlistOn() ? "<li>Review hosted waitlist emails on the <b>Waitlist</b> page.</li>" : ""}
         <li>${nerdsOn() ? "Register the instance GitHub App using the URLs below." : "Turn on <b>Stats for Nerds</b> to register the instance GitHub App."}</li>
         <li>You never open another user’s notes.</li>
       </ul>
@@ -1453,6 +1512,23 @@ async function mcp(main) {
       flash($("m-flash"), "Saved.", "ok");
     } catch (e) { flash($("m-flash"), e.message); }
   };
+}
+
+async function waitlistAdmin(main) {
+  const data = await api("/api/v1/waitlist");
+  const list = asList(data.emails);
+  main.innerHTML = `
+    <h1>Waitlist</h1>
+    <p class="muted">Emails collected on Syncidian.com. Each address is encrypted in this instance’s database.</p>
+    <div class="grid">
+      <div class="stat">Joined<b>${esc(String(data.count ?? list.length))}</b></div>
+    </div>
+    <div class="card"><table><thead><tr><th>Email</th><th>Joined</th></tr></thead>
+    <tbody>${list.length ? list.map((e) => `<tr>
+      <td>${esc(e.email)}</td>
+      <td>${when(e.created_at)}</td>
+    </tr>`).join("") : `<tr><td colspan="2" class="muted">No one has joined yet.</td></tr>`}</tbody></table>
+    </div>`;
 }
 
 async function users(main) {

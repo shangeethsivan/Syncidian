@@ -17,6 +17,7 @@ var migrations = []migration{
 	{version: 1, name: "initial_schema", up: migration001InitialSchema},
 	{version: 2, name: "github_app", up: migration002GitHubApp},
 	{version: 3, name: "mcp_usage", up: migration003MCPUsage},
+	{version: 4, name: "waitlist", up: migration004Waitlist},
 }
 
 func (s *Store) migrate() error {
@@ -141,6 +142,9 @@ func (s *Store) applyLegacyUpgrades() error {
 		return err
 	}
 	if err := migration003MCPUsage(tx); err != nil {
+		return err
+	}
+	if err := migration004Waitlist(tx); err != nil {
 		return err
 	}
 	return tx.Commit()
@@ -319,5 +323,17 @@ func migration003MCPUsage(tx *sql.Tx) error {
 )`,
 		`CREATE INDEX IF NOT EXISTS idx_mcp_clients_user ON mcp_clients(user_id, last_seen_at DESC)`,
 		`CREATE INDEX IF NOT EXISTS idx_mcp_calls_user ON mcp_calls(user_id, created_at DESC)`,
+	})
+}
+
+func migration004Waitlist(tx *sql.Tx) error {
+	return execAll(tx, []string{
+		`CREATE TABLE IF NOT EXISTS waitlist (
+  id TEXT PRIMARY KEY,
+  email_hash TEXT UNIQUE NOT NULL,
+  email_enc TEXT NOT NULL,
+  created_at TEXT NOT NULL
+)`,
+		`CREATE INDEX IF NOT EXISTS idx_waitlist_created ON waitlist(created_at DESC)`,
 	})
 }

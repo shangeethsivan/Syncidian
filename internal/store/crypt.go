@@ -3,7 +3,9 @@ package store
 import (
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/hmac"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
@@ -133,6 +135,16 @@ func (s *Store) seal(plain string) string {
 		return plain
 	}
 	return out
+}
+
+func (c *crypter) MAC(plain string) string {
+	if c == nil {
+		sum := sha256.Sum256([]byte(plain))
+		return hex.EncodeToString(sum[:])
+	}
+	mac := hmac.New(sha256.New, c.key[:])
+	_, _ = mac.Write([]byte(plain))
+	return hex.EncodeToString(mac.Sum(nil))
 }
 
 func (s *Store) openSecret(stored string) (string, error) {
