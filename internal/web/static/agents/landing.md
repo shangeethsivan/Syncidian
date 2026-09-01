@@ -1,6 +1,6 @@
 # Syncidian
 
-Your Obsidian vault, privately synced. Notes on every device. One GitHub repository you own.
+Your data stays with you. Notes on every device. One GitHub repository you own.
 
 Syncidian is a self-hosted sync server and MCP bridge for Obsidian. The same plugin runs on Windows, macOS, Linux, Android, and iOS. GitHub is optional backup: after you sign in, you can install the instance GitHub App on one repository. The plugin never sees GitHub credentials.
 

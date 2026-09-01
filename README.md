@@ -1,6 +1,6 @@
 # Syncidian
 
-> **Sync your knowledge. Back it up. Connect your AI. Own your data.**
+> **Your data stays with you.** Sync your knowledge. Back it up. Connect your AI.
 
 **Obsidian plugin:** install **Syncidian** from Community plugins (or [BRAT](https://github.com/TfTHacker/obsidian42-brat) / sideload). Point it at your Syncidian server with a `sk_sync_…` token. This plugin does not use Obsidian Sync.
 
@@ -1422,5 +1422,5 @@ See [`LICENSE`](LICENSE) for the full license text.
 
 <p align="center">
   <strong>Syncidian</strong><br>
-  Sync your knowledge. Back it up. Connect your AI.
+  Your data stays with you.
 </p>
