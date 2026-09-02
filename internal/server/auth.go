@@ -28,6 +28,7 @@ func (s *Server) handleSetupStatus(w http.ResponseWriter, r *http.Request) {
 		"persistence":          s.persistence(),
 		"waitlist":             s.isHostedPublic(r),
 		"waitlist_admin":       s.hostedWaitlistAdmin(r),
+		"admin_private":        s.Cfg.AdminPrivate || s.adminHostConfigured(),
 		"github_app": map[string]any{
 			"configured": app.Configured(),
 			"slug":       "",

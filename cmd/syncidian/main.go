@@ -77,10 +77,12 @@ Environment:
   SYNCIDIAN_BOOTSTRAP_USER       Create this admin on first boot
   SYNCIDIAN_BOOTSTRAP_PASSWORD   Password for the bootstrap admin
   SYNCIDIAN_ADMIN_PATH           Unlisted operator path (default /admin). Not linked from the public site.
-  SYNCIDIAN_ADMIN_HOST           Private operator hostname (e.g. admin.syncidian.com). When set,
-                                 operator UI and admin APIs are served only on that Host.
-  SYNCIDIAN_ADMIN_LISTEN_IP      Unicast IP to bind instead of 0.0.0.0 (Tailscale 100.x). Also
-                                 reads TAILSCALE_IP. Binds 127.0.0.1 (tunnels) plus this address.
+  SYNCIDIAN_ADMIN_PRIVATE        0 = skip Tailscale and use /admin (self-host default).
+                                 Unset = on only if SYNCIDIAN_ADMIN_HOST is set.
+  SYNCIDIAN_ADMIN_HOST           Optional private operator hostname (e.g. admin.syncidian.com).
+                                 When set, operator UI and admin APIs are served only on that Host.
+  SYNCIDIAN_ADMIN_LISTEN_IP      Unicast IP to bind instead of 0.0.0.0 (Tailscale 100.x).
+                                 Reads TAILSCALE_IP only when ADMIN_HOST is also set.
   SYNCIDIAN_GITHUB_APP_ID        GitHub App ID (optional; operator page can create the app)
   SYNCIDIAN_GITHUB_APP_SLUG      GitHub App slug
   SYNCIDIAN_GITHUB_CLIENT_ID     GitHub App OAuth client ID

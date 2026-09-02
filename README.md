@@ -40,7 +40,7 @@ cd Syncidian
 docker compose up --build -d
 ```
 
-To keep **`admin.syncidian.com`** off the public internet (Tailscale-only, CGNAT, no public A-record), follow **[Hide admin.syncidian.com on Tailscale](docs/tailscale-admin.md)**.
+Self-host operators open [`/admin`](http://localhost:8080/admin). You can skip Tailscale — leave `SYNCIDIAN_ADMIN_HOST` unset, or set `SYNCIDIAN_ADMIN_PRIVATE=0`. Optional mesh lock-down: **[Hide admin.syncidian.com on Tailscale](docs/tailscale-admin.md)**.
 
 Open [http://localhost:8080](http://localhost:8080). The public page explains Syncidian and, on a self-hosted instance, lets people **Sign up using GitHub**. On Syncidian.com the GitHub buttons stay hidden until you tap the app name six times. Operators open [`/admin`](http://localhost:8080/admin) (or `SYNCIDIAN_ADMIN_PATH`), or a private hostname (`SYNCIDIAN_ADMIN_HOST`, see [Hide admin.syncidian.com on Tailscale](docs/tailscale-admin.md)) to create the first admin and register the GitHub App — that surface is not advertised on the landing page. Follow [Set up the GitHub App](docs/github-app.md) if you are self-hosting. A **Help** button on the operator page and the signed-in dashboard walks through the rest. After GitHub sign-in, a regular user connects **one GitHub repository**, then creates an access token (`sk_sync_…`). Admins can also mint a one-time token for a vault user from **Users** (they still cannot sync as admin). Copy the token once — it is not shown again.
 

@@ -634,8 +634,7 @@ let publicInfo = null;
 function isAdminHost() {
   const host = (location.hostname || "").replace(/^www\./, "").toLowerCase();
   const configured = publicInfo && publicInfo.admin_host ? String(publicInfo.admin_host).toLowerCase() : "";
-  if (configured && host === configured) return true;
-  return host === "admin.syncidian.com";
+  return !!(configured && host === configured);
 }
 function isAdminPath() {
   if (isAdminHost()) return true;
@@ -772,7 +771,9 @@ const HELP_STEPS = [
   {
     title: "1. Start the Syncidian server",
     html: () => `
-      <p>The public site is a one-page story. Vault users sign in with GitHub (on Syncidian.com, tap the app name six times to reveal it). Operators use a private hostname (<code>SYNCIDIAN_ADMIN_HOST</code>, for example <code>admin.syncidian.com</code> on Tailscale) or an unlisted path (default <code>/admin</code>).</p>
+      <p>The public site is a one-page story. Vault users sign in with GitHub (on Syncidian.com, tap the app name six times to reveal it).</p>
+      <p><b>Self-host operators:</b> open <code>/admin</code> on this same URL. Skip Tailscale — leave <code>SYNCIDIAN_ADMIN_HOST</code> unset, or set <code>SYNCIDIAN_ADMIN_PRIVATE=0</code>.</p>
+      <p>A Tailscale-only hostname (<code>admin.syncidian.com</code>) is optional. See <code>docs/tailscale-admin.md</code>.</p>
       <h2>Docker</h2>
       <pre>git clone https://github.com/shangeethsivan/Syncidian.git
 cd Syncidian

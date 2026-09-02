@@ -1,6 +1,25 @@
 # Private operator hostname (Tailscale)
 
-Hide the Syncidian operator UI from the public internet. Vault users keep using the public site (`https://syncidian.com` or your public URL). Operators open **`https://admin.syncidian.com`** only while connected to your Tailscale mesh.
+## Self-host: skip this
+
+You do **not** need Tailscale to run Syncidian.
+
+```bash
+docker compose up --build -d
+# open http://localhost:8080/admin
+```
+
+Leave `SYNCIDIAN_ADMIN_HOST`, `SYNCIDIAN_ADMIN_LISTEN_IP`, and `TAILSCALE_IP` unset. To ignore a copied `.env` that already has those values:
+
+```bash
+SYNCIDIAN_ADMIN_PRIVATE=0
+```
+
+That keeps the operator UI at `/admin` on the same URL as the public site.
+
+---
+
+Hide the Syncidian operator UI from the public internet **only if you want that extra lock**. Vault users keep using the public site (`https://syncidian.com` or your public URL). Operators open **`https://admin.syncidian.com`** only while connected to your Tailscale mesh.
 
 This is the right pattern behind **CGNAT** (no public IP, no port-forward, no public A-record for the admin name).
 
@@ -275,4 +294,4 @@ This should fail to connect (no public listener, no public DNS). `https://syncid
 - GitHub App URLs copied on the operator page still use `SYNCIDIAN_PUBLIC_URL` so GitHub can reach callback / setup / webhook.
 - `robots.txt` on the public site does not mention `/admin` when a private admin host is configured.
 
-Path-based `/admin` (or `SYNCIDIAN_ADMIN_PATH`) still works when `SYNCIDIAN_ADMIN_HOST` is unset.
+Path-based `/admin` (or `SYNCIDIAN_ADMIN_PATH`) is the self-host default when `SYNCIDIAN_ADMIN_HOST` is unset, or when `SYNCIDIAN_ADMIN_PRIVATE=0`. `TAILSCALE_IP` in the environment is ignored unless `SYNCIDIAN_ADMIN_HOST` is also set.

@@ -934,6 +934,9 @@ func TestPublicLandingAdminAndGitHubAppURLs(t *testing.T) {
 	if res.StatusCode != 200 || m["needs_setup"] != true || m["github_login"] != false {
 		t.Fatalf("setup status: %v", m)
 	}
+	if m["admin_private"] != false {
+		t.Fatalf("self-host default must skip Tailscale admin: %v", m["admin_private"])
+	}
 	ghApp, _ := m["github_app"].(map[string]any)
 	if ghApp == nil {
 		t.Fatalf("setup missing github_app: %v", m)

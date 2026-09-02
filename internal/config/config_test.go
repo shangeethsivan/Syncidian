@@ -15,6 +15,7 @@ func TestFromEnvDefaults(t *testing.T) {
 	t.Setenv("RAILWAY_PUBLIC_DOMAIN", "")
 	t.Setenv("SYNCIDIAN_ADMIN_HOST", "")
 	t.Setenv("SYNCIDIAN_ADMIN_LISTEN_IP", "")
+	t.Setenv("SYNCIDIAN_ADMIN_PRIVATE", "")
 	t.Setenv("TAILSCALE_IP", "")
 	t.Setenv("SYNCIDIAN_GITHUB_ALLOWED_EMAIL", "")
 
@@ -36,6 +37,9 @@ func TestFromEnvDefaults(t *testing.T) {
 	}
 	if c.AdminListenIP != "" {
 		t.Fatalf("AdminListenIP=%q, want empty", c.AdminListenIP)
+	}
+	if c.AdminPrivate {
+		t.Fatal("AdminPrivate should be off by default (self-host skip)")
 	}
 	if len(c.GitHubAllowedEmails) != 0 {
 		t.Fatalf("GitHubAllowedEmails=%v, want empty", c.GitHubAllowedEmails)
@@ -187,6 +191,52 @@ func TestFromEnvAdminHostAndListenIP(t *testing.T) {
 	c = FromEnv()
 	if c.AdminListenIP != "100.99.99.99" {
 		t.Fatalf("TAILSCALE_IP fallback: %q", c.AdminListenIP)
+	}
+	if !c.AdminPrivate {
+		t.Fatal("AdminPrivate should be on when AdminHost is set")
+	}
+}
+
+func TestTailscaleIPIgnoredWithoutAdminHost(t *testing.T) {
+	t.Setenv("SYNCIDIAN_ADMIN_HOST", "")
+	t.Setenv("SYNCIDIAN_ADMIN_LISTEN_IP", "")
+	t.Setenv("SYNCIDIAN_ADMIN_PRIVATE", "")
+	t.Setenv("TAILSCALE_IP", "100.64.1.20")
+	c := FromEnv()
+	if c.AdminListenIP != "" || c.AdminHost != "" || c.AdminPrivate {
+		t.Fatalf("self-host must ignore TAILSCALE_IP: %+v", c)
+	}
+}
+
+func TestParseOptionalBool(t *testing.T) {
+	t.Setenv("SYNCIDIAN_ADMIN_PRIVATE", "")
+	if ok, _ := ParseOptionalBool("SYNCIDIAN_ADMIN_PRIVATE"); ok {
+		t.Fatal("unset should not be ok")
+	}
+	t.Setenv("SYNCIDIAN_ADMIN_PRIVATE", "0")
+	ok, val := ParseOptionalBool("SYNCIDIAN_ADMIN_PRIVATE")
+	if !ok || val {
+		t.Fatalf("0: ok=%v val=%v", ok, val)
+	}
+	t.Setenv("SYNCIDIAN_ADMIN_PRIVATE", "false")
+	ok, val = ParseOptionalBool("SYNCIDIAN_ADMIN_PRIVATE")
+	if !ok || val {
+		t.Fatalf("false: ok=%v val=%v", ok, val)
+	}
+	t.Setenv("SYNCIDIAN_ADMIN_PRIVATE", "1")
+	ok, val = ParseOptionalBool("SYNCIDIAN_ADMIN_PRIVATE")
+	if !ok || !val {
+		t.Fatalf("1: ok=%v val=%v", ok, val)
+	}
+}
+
+func TestAdminPrivateSkip(t *testing.T) {
+	t.Setenv("SYNCIDIAN_ADMIN_HOST", "admin.syncidian.com")
+	t.Setenv("SYNCIDIAN_ADMIN_LISTEN_IP", "100.64.1.20")
+	t.Setenv("SYNCIDIAN_ADMIN_PRIVATE", "0")
+	c := FromEnv()
+	if c.AdminHost != "" || c.AdminListenIP != "" || c.AdminPrivate {
+		t.Fatalf("SYNCIDIAN_ADMIN_PRIVATE=0 must skip Tailscale: host=%q ip=%q private=%v", c.AdminHost, c.AdminListenIP, c.AdminPrivate)
 	}
 }
 

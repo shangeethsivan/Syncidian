@@ -4,7 +4,7 @@ Anyone running their own Syncidian instance needs **one GitHub App** for that in
 
 Do this after the server is reachable at a URL you will keep (for example `https://syncidian.example.com` or `http://localhost:8080` for a private laptop).
 
-The operator UI is **`SYNCIDIAN_ADMIN_HOST`** (for example **`https://admin.syncidian.com`** on Tailscale) or **`SYNCIDIAN_ADMIN_PATH`** (default **`/admin`**) when that host is unset. It is not linked from `/`. Enable **Stats for Nerds** on that page to see GitHub App URLs and credential paste. To keep `admin.syncidian.com` off the public internet behind CGNAT, follow **[Hide admin.syncidian.com on Tailscale](tailscale-admin.md)**.
+The operator UI is **`SYNCIDIAN_ADMIN_PATH`** (default **`/admin`**) on the same URL as the public site. Self-hosters can skip Tailscale: leave `SYNCIDIAN_ADMIN_HOST` unset, or set `SYNCIDIAN_ADMIN_PRIVATE=0`. A private hostname (`SYNCIDIAN_ADMIN_HOST`, for example **`https://admin.syncidian.com`**) is optional. It is not linked from `/`. Enable **Stats for Nerds** on that page to see GitHub App URLs and credential paste. Mesh lock-down: **[Hide admin.syncidian.com on Tailscale](tailscale-admin.md)**.
 
 ---
 
