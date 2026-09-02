@@ -18,6 +18,7 @@ func TestFromEnvDefaults(t *testing.T) {
 	t.Setenv("SYNCIDIAN_ADMIN_PRIVATE", "")
 	t.Setenv("TAILSCALE_IP", "")
 	t.Setenv("SYNCIDIAN_GITHUB_ALLOWED_EMAIL", "")
+	t.Setenv("SYNCIDIAN_GA_ID", "")
 
 	c := FromEnv()
 	if c.Addr != ":8080" {
@@ -152,6 +153,26 @@ func TestFromEnvGitHubAllowedEmail(t *testing.T) {
 	c := FromEnv()
 	if len(c.GitHubAllowedEmails) != 1 || c.GitHubAllowedEmails[0] != "shangeeth95@gmail.com" {
 		t.Fatalf("GitHubAllowedEmails=%v", c.GitHubAllowedEmails)
+	}
+}
+
+func TestNormalizeGAID(t *testing.T) {
+	if got := NormalizeGAID(""); got != "" {
+		t.Fatalf("empty: %q", got)
+	}
+	if got := NormalizeGAID("not-a-ga-id"); got != "" {
+		t.Fatalf("invalid: %q", got)
+	}
+	if got := NormalizeGAID("  g-abc123xyz  "); got != "G-ABC123XYZ" {
+		t.Fatalf("valid: %q", got)
+	}
+}
+
+func TestFromEnvGAID(t *testing.T) {
+	t.Setenv("SYNCIDIAN_GA_ID", "G-TESTID99")
+	c := FromEnv()
+	if c.GAID != "G-TESTID99" {
+		t.Fatalf("GAID=%q", c.GAID)
 	}
 }
 

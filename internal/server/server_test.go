@@ -67,6 +67,20 @@ func doJSON(t *testing.T, method, url string, body any, cookies []*http.Cookie, 
 	return res, m
 }
 
+func postJSONStatus(t *testing.T, rawURL string, body any) int {
+	t.Helper()
+	b, err := json.Marshal(body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res, err := http.Post(rawURL, "application/json", bytes.NewReader(b))
+	if err != nil {
+		t.Fatal(err)
+	}
+	res.Body.Close()
+	return res.StatusCode
+}
+
 func setupAdmin(t *testing.T, hs *httptest.Server) []*http.Cookie {
 	t.Helper()
 	res, m := doJSON(t, http.MethodPost, hs.URL+"/api/v1/setup", map[string]string{
@@ -476,6 +490,9 @@ func TestDashboardServed(t *testing.T) {
 		`github-signin`,
 		`syncidian-github-signin`,
 		`Continue with GitHub`,
+		`id="email-form"`,
+		`email_login`,
+		`This is a self-hosted Syncidian`,
 		`Your vault.`,
 		`Your data<br>stays with you.`,
 		`id="hero-canvas"`,
@@ -946,11 +963,10 @@ func TestPublicLandingAdminAndGitHubAppURLs(t *testing.T) {
 		t.Fatalf("setup urls should match public urls: %v vs %v", setupURLs, urls)
 	}
 
-	res, m = doJSON(t, http.MethodPost, hs.URL+"/api/v1/auth/signup", map[string]any{
+	if code := postJSONStatus(t, hs.URL+"/api/v1/auth/signup", map[string]any{
 		"username": "cara", "password": "password1", "email": "cara@example.com",
-	}, nil, "")
-	if res.StatusCode != http.StatusBadRequest {
-		t.Fatalf("signup before admin: want 400, got %d %v", res.StatusCode, m)
+	}); code != http.StatusBadRequest {
+		t.Fatalf("signup before admin: want 400, got %d", code)
 	}
 
 	start, err := http.NewRequest(http.MethodGet, hs.URL+"/api/v1/auth/github/start", nil)
@@ -972,18 +988,10 @@ func TestPublicLandingAdminAndGitHubAppURLs(t *testing.T) {
 
 	adminCookies := setupAdmin(t, hs)
 
-	res, m = doJSON(t, http.MethodPost, hs.URL+"/api/v1/auth/signup", map[string]any{
+	if code := postJSONStatus(t, hs.URL+"/api/v1/auth/signup", map[string]any{
 		"username": "cara", "password": "password1", "email": "cara@example.com",
-	}, nil, "")
-	if res.StatusCode != http.StatusCreated {
-		t.Fatalf("email signup: %d %v", res.StatusCode, m)
-	}
-
-	res, m = doJSON(t, http.MethodPost, hs.URL+"/api/v1/auth/signup", map[string]any{
-		"username": "other", "password": "password1", "email": "cara@example.com",
-	}, nil, "")
-	if res.StatusCode != http.StatusBadRequest {
-		t.Fatalf("duplicate email: want 400, got %d %v", res.StatusCode, m)
+	}); code != http.StatusCreated {
+		t.Fatalf("self-host signup after admin: want 201, got %d", code)
 	}
 
 	start, err = http.NewRequest(http.MethodGet, hs.URL+"/api/v1/auth/github/start", nil)

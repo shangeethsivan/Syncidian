@@ -35,6 +35,9 @@ type Config struct {
 	// until public launch. PRODUCTION: unset it (and show the landing GitHub
 	// buttons) when opening sign-in to everyone. See AGENT.md.
 	GitHubAllowedEmails []string
+	// GAID is a Google Analytics 4 measurement ID (G-…). Empty disables gtag.
+	// Set SYNCIDIAN_GA_ID on hosted Railway to count landing CTA clicks.
+	GAID string
 }
 
 func FromEnv() Config {
@@ -53,6 +56,7 @@ func FromEnv() Config {
 		GitHubClientSecret:  env("SYNCIDIAN_GITHUB_CLIENT_SECRET", ""),
 		GitHubAppPEM:        strings.ReplaceAll(env("SYNCIDIAN_GITHUB_APP_PRIVATE_KEY", ""), `\n`, "\n"),
 		GitHubAllowedEmails: ParseEmailList(env("SYNCIDIAN_GITHUB_ALLOWED_EMAIL", "")),
+		GAID:                NormalizeGAID(env("SYNCIDIAN_GA_ID", "")),
 	}
 	if id, err := strconv.ParseInt(env("SYNCIDIAN_GITHUB_APP_ID", "0"), 10, 64); err == nil {
 		c.GitHubAppID = id
@@ -143,6 +147,21 @@ func adminPrivateFromEnv() (host, listenIP string, on bool) {
 		listenIP = NormalizeListenIP(env("TAILSCALE_IP", ""))
 	}
 	return host, listenIP, host != "" || listenIP != ""
+}
+
+// NormalizeGAID accepts a GA4 measurement ID (G-XXXXXXXX). Anything else is empty.
+func NormalizeGAID(raw string) string {
+	s := strings.ToUpper(strings.TrimSpace(raw))
+	if !strings.HasPrefix(s, "G-") || len(s) < 4 {
+		return ""
+	}
+	for _, c := range s[2:] {
+		ok := (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')
+		if !ok {
+			return ""
+		}
+	}
+	return s
 }
 
 // ParseEmailList splits a comma-separated email list, lowercased and trimmed.

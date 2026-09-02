@@ -90,6 +90,7 @@ Environment:
   SYNCIDIAN_GITHUB_APP_PRIVATE_KEY  PEM; use \n for newlines
   SYNCIDIAN_GITHUB_ALLOWED_EMAIL Comma-separated GitHub emails allowed to sign in.
                                  Empty = any GitHub user. Production: unset this.
+  SYNCIDIAN_GA_ID                Google Analytics 4 ID (G-…). Landing CTA clicks only when set.
 `)
 }
 
