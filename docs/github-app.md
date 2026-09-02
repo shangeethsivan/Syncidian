@@ -4,7 +4,7 @@ Anyone running their own Syncidian instance needs **one GitHub App** for that in
 
 Do this after the server is reachable at a URL you will keep (for example `https://syncidian.example.com` or `http://localhost:8080` for a private laptop).
 
-The operator UI is **`SYNCIDIAN_ADMIN_PATH`** (default **`/admin`**), not the public landing page. It is not linked from `/`. Enable **Stats for Nerds** on that page to see GitHub App URLs and credential paste.
+The operator UI is **`SYNCIDIAN_ADMIN_PATH`** (default **`/admin`**) on the same URL as the public site. Self-hosters can skip Tailscale: leave `SYNCIDIAN_ADMIN_HOST` unset, or set `SYNCIDIAN_ADMIN_PRIVATE=0`. A private hostname (`SYNCIDIAN_ADMIN_HOST`, for example **`https://admin.syncidian.com`**) is optional. It is not linked from `/`. Enable **Stats for Nerds** on that page to see GitHub App URLs and credential paste. Mesh lock-down: **[Hide admin.syncidian.com on Tailscale](tailscale-admin.md)**.
 
 ---
 
@@ -24,7 +24,7 @@ Copy the filled-in values from `/admin` after you create the first admin, or fro
 GET {base}/api/v1/github/app/urls
 ```
 
-Set `SYNCIDIAN_PUBLIC_URL` to `{base}` if the server sits behind a reverse proxy, so the URLs on `/admin` match the hostname people actually use.
+Set `SYNCIDIAN_PUBLIC_URL` to `{base}` if the server sits behind a reverse proxy, so the GitHub App URLs (callback, setup, webhook) match the hostname GitHub can reach. A Tailscale-only operator hostname is not that origin.
 
 ---
 

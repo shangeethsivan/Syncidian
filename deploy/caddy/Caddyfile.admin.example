@@ -1,0 +1,11 @@
+# Operator hostname bound only to a Tailscale IP.
+# Copy and set the env vars, then: caddy run --config Caddyfile.admin.example
+#
+# Public syncidian.com must NOT be in this file if that site already listens
+# on 0.0.0.0 (use Cloudflare Tunnel or a separate public Caddyfile instead).
+
+{$SYNCIDIAN_ADMIN_HOST:admin.syncidian.com} {
+	bind {$SYNCIDIAN_ADMIN_LISTEN_IP}
+	encode gzip
+	reverse_proxy 127.0.0.1:8080
+}

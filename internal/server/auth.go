@@ -19,7 +19,7 @@ func (s *Server) handleSetupStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	app := s.instanceGitHubApp()
-	urls := githubapp.AppURLs(s.requestBase(r))
+	urls := githubapp.AppURLs(s.githubBase(r))
 	out := map[string]any{
 		"needs_setup":          n == 0,
 		"public_url":           s.Cfg.PublicURL,
@@ -27,11 +27,16 @@ func (s *Server) handleSetupStatus(w http.ResponseWriter, r *http.Request) {
 		"github_signin_hidden": s.githubSignInHidden(r),
 		"persistence":          s.persistence(),
 		"waitlist":             s.isHostedPublic(r),
+		"waitlist_admin":       s.hostedWaitlistAdmin(r),
+		"admin_private":        s.Cfg.AdminPrivate || s.adminHostConfigured(),
 		"github_app": map[string]any{
 			"configured": app.Configured(),
 			"slug":       "",
 			"urls":       urls,
 		},
+	}
+	if s.isAdminHost(r) && s.Cfg.AdminHost != "" {
+		out["admin_host"] = s.Cfg.AdminHost
 	}
 	if app.Configured() {
 		gh, _ := out["github_app"].(map[string]any)
@@ -42,6 +47,9 @@ func (s *Server) handleSetupStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleSetup(w http.ResponseWriter, r *http.Request) {
+	if s.requireAdminHost(w, r) {
+		return
+	}
 	if s.denySetup(w, r) {
 		return
 	}
@@ -83,7 +91,7 @@ func (s *Server) handleSetup(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	setSessionCookie(w, sess.ID, r.TLS != nil)
+	setSessionCookie(w, sess.ID, r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https"))
 	_ = s.Store.AddActivity(store.Activity{UserID: u.ID, Action: "setup", Detail: "server initialized"})
 	writeJSON(w, http.StatusCreated, map[string]any{"user": publicUser(u)})
 }
@@ -107,13 +115,23 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, "invalid credentials")
 		return
 	}
+	if s.adminHostConfigured() {
+		if u.IsAdmin && !s.isAdminHost(r) {
+			http.NotFound(w, r)
+			return
+		}
+		if !u.IsAdmin && s.isAdminHost(r) {
+			writeError(w, http.StatusForbidden, "operators only")
+			return
+		}
+	}
 	s.notePasswordOK(username)
 	sess, err := s.Store.CreateSession(u.ID, 30*24*time.Hour)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	setSessionCookie(w, sess.ID, r.TLS != nil)
+	setSessionCookie(w, sess.ID, r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https"))
 	writeJSON(w, http.StatusOK, map[string]any{"user": publicUser(u)})
 }
 
@@ -198,6 +216,11 @@ func (s *Server) handleStats(w http.ResponseWriter, r *http.Request, u *store.Us
 }
 
 func (s *Server) handleListUsers(w http.ResponseWriter, r *http.Request, u *store.User) {
+	if u.IsAdmin {
+		if s.requireAdminHost(w, r) {
+			return
+		}
+	}
 	if !u.IsAdmin {
 		writeJSON(w, http.StatusOK, []any{adminUserSummary(u)})
 		return
@@ -216,6 +239,9 @@ func (s *Server) handleListUsers(w http.ResponseWriter, r *http.Request, u *stor
 }
 
 func (s *Server) handleCreateUser(w http.ResponseWriter, r *http.Request, actor *store.User) {
+	if s.requireAdminHost(w, r) {
+		return
+	}
 	if !actor.IsAdmin {
 		writeError(w, http.StatusForbidden, "admin required")
 		return

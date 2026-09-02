@@ -4,11 +4,16 @@ services:
     image: syncidian:local
     container_name: syncidian
     ports:
-      - "8080:8080"
+      # Default publishes on all interfaces. Set SYNCIDIAN_BIND_IP to a Tailscale
+      # 100.x address so Docker does not listen on 0.0.0.0 (see docs/tailscale-admin.md).
+      - "${SYNCIDIAN_BIND_IP:-0.0.0.0}:8080:8080"
     environment:
       SYNCIDIAN_ADDR: ":8080"
       SYNCIDIAN_DATA: /data
       SYNCIDIAN_PUBLIC_URL: ${SYNCIDIAN_PUBLIC_URL:-http://localhost:8080}
+      SYNCIDIAN_ADMIN_HOST: ${SYNCIDIAN_ADMIN_HOST:-}
+      SYNCIDIAN_ADMIN_LISTEN_IP: ${SYNCIDIAN_ADMIN_LISTEN_IP:-}
+      SYNCIDIAN_ADMIN_PRIVATE: ${SYNCIDIAN_ADMIN_PRIVATE:-}
       SYNCIDIAN_BOOTSTRAP_USER: ${SYNCIDIAN_BOOTSTRAP_USER:-}
       SYNCIDIAN_BOOTSTRAP_PASSWORD: ${SYNCIDIAN_BOOTSTRAP_PASSWORD:-}
       SYNCIDIAN_GITHUB_APP_ID: ${SYNCIDIAN_GITHUB_APP_ID:-}

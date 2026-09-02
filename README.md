@@ -8,7 +8,7 @@ Syncidian is an open-source, self-hostable **Obsidian synchronization and AI bri
 
 It runs as an Obsidian plugin on your devices and connects to a lightweight Syncidian server that coordinates synchronization between them.
 
-Each signed-in user can connect **one private GitHub repository**. GitHub is the durable, versioned **source of truth** for that user's vault. The public site is a one-page story: join the waitlist (on Syncidian.com), optionally sign up with email, then connect one repository after identity. GitHub sign-in is hidden on the hosted landing (tap the app name six times to reveal it) and limited to `SYNCIDIAN_GITHUB_ALLOWED_EMAIL` until public launch. Operators use an unlisted path (`SYNCIDIAN_ADMIN_PATH`, default `/admin`) — it is not linked from the landing page. Admins manage users and the instance GitHub App, and never see vault or GitHub data.
+Each signed-in user can connect **one private GitHub repository**. GitHub is the durable, versioned **source of truth** for that user's vault. The public site is a one-page story: join the waitlist (on Syncidian.com), optionally sign up with email, then connect one repository after identity. GitHub sign-in is hidden on the hosted landing (tap the app name six times to reveal it) and limited to `SYNCIDIAN_GITHUB_ALLOWED_EMAIL` until public launch. Operators use a private hostname (`SYNCIDIAN_ADMIN_HOST`, for example `admin.syncidian.com` on Tailscale) or an unlisted path (`SYNCIDIAN_ADMIN_PATH`, default `/admin`) — neither is linked from the landing page. Admins manage users and the instance GitHub App, and never see vault or GitHub data.
 
 Syncidian also includes a built-in **MCP server**, allowing compatible AI tools and agents to securely interact with your Obsidian knowledge base.
 
@@ -40,7 +40,9 @@ cd Syncidian
 docker compose up --build -d
 ```
 
-Open [http://localhost:8080](http://localhost:8080). The public page explains Syncidian and, on a self-hosted instance, lets people **Sign up using GitHub**. On Syncidian.com the GitHub buttons stay hidden until you tap the app name six times. Operators open [`/admin`](http://localhost:8080/admin) (or `SYNCIDIAN_ADMIN_PATH`) to create the first admin and register the GitHub App — that path is not advertised on the landing page. Follow [Set up the GitHub App](docs/github-app.md) if you are self-hosting. A **Help** button on the operator page and the signed-in dashboard walks through the rest. After GitHub sign-in, a regular user connects **one GitHub repository**, then creates an access token (`sk_sync_…`). Admins can also mint a one-time token for a vault user from **Users** (they still cannot sync as admin). Copy the token once — it is not shown again.
+Self-host operators open [`/admin`](http://localhost:8080/admin). You can skip Tailscale — leave `SYNCIDIAN_ADMIN_HOST` unset, or set `SYNCIDIAN_ADMIN_PRIVATE=0`. Optional mesh lock-down: **[Hide admin.syncidian.com on Tailscale](docs/tailscale-admin.md)**.
+
+Open [http://localhost:8080](http://localhost:8080). The public page explains Syncidian and, on a self-hosted instance, lets people **Sign up using GitHub**. On Syncidian.com the GitHub buttons stay hidden until you tap the app name six times. Operators open [`/admin`](http://localhost:8080/admin) (or `SYNCIDIAN_ADMIN_PATH`), or a private hostname (`SYNCIDIAN_ADMIN_HOST`, see [Hide admin.syncidian.com on Tailscale](docs/tailscale-admin.md)) to create the first admin and register the GitHub App — that surface is not advertised on the landing page. Follow [Set up the GitHub App](docs/github-app.md) if you are self-hosting. A **Help** button on the operator page and the signed-in dashboard walks through the rest. After GitHub sign-in, a regular user connects **one GitHub repository**, then creates an access token (`sk_sync_…`). Admins can also mint a one-time token for a vault user from **Users** (they still cannot sync as admin). Copy the token once — it is not shown again.
 
 **Without Docker (Go 1.22+):**
 
@@ -230,7 +232,7 @@ Eventually, Syncidian should be able to detect a conflict, have a small LLM reso
 
 # 🗺️ App workflow
 
-The public site is a one-pager. Hosted visitors join a waitlist. GitHub sign-in is hidden (tap the app name six times) and allowlisted via `SYNCIDIAN_GITHUB_ALLOWED_EMAIL` until public launch. Vault users can also use email. Operators use an unlisted path (`SYNCIDIAN_ADMIN_PATH`, default `/admin`).
+The public site is a one-pager. Hosted visitors join a waitlist. GitHub sign-in is hidden (tap the app name six times) and allowlisted via `SYNCIDIAN_GITHUB_ALLOWED_EMAIL` until public launch. Vault users can also use email. Operators use a private hostname (`SYNCIDIAN_ADMIN_HOST`) or an unlisted path (`SYNCIDIAN_ADMIN_PATH`, default `/admin`).
 
 ```mermaid
 flowchart TD
@@ -238,7 +240,7 @@ flowchart TD
   Land --> Wait["Hosted: join the waitlist"]
   Land --> GHSign["GitHub sign-in hidden until app name tapped 6 times"]
   Land --> Email["Optional: sign up with email"]
-  Ops["Unlisted operator path"] --> First{"Any users yet?"}
+  Ops["Private operator host or unlisted path"] --> First{"Any users yet?"}
   First -->|no| Admin["Create first admin"]
   First -->|yes| AdminLogin["Admin sign in"]
   Admin --> App["Register instance GitHub App<br/>callback · setup · webhook"]
@@ -419,7 +421,7 @@ Optional env vars if you prefer not to use the in-dashboard manifest flow: `SYNC
 
 Rules:
 
-* **Public landing, unlisted operator path.** Create the first admin and the GitHub App at `SYNCIDIAN_ADMIN_PATH` (default `/admin`). Vault users sign in with GitHub (or email) from `/`. On hosted Syncidian.com, GitHub sign-in is hidden until the app name is tapped six times and limited by `SYNCIDIAN_GITHUB_ALLOWED_EMAIL`.
+* **Public landing, private operator surface.** Create the first admin and the GitHub App at `SYNCIDIAN_ADMIN_HOST` (Tailscale) or `SYNCIDIAN_ADMIN_PATH` (default `/admin`). Vault users sign in with GitHub (or email) from `/`. On hosted Syncidian.com, GitHub sign-in is hidden until the app name is tapped six times and limited by `SYNCIDIAN_GITHUB_ALLOWED_EMAIL`.
 * **One repository per user.** `github_config` is keyed by `user_id`.
 * **GitHub App only.** Connect with GitHub, install on a repository, Contents read and write. No personal access tokens and no deploy keys.
 * **Main branch only.** Syncidian always uses `main`.

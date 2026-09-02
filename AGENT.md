@@ -42,7 +42,7 @@ If a diagram no longer matches the code, rewrite it. Do not leave comments like 
 
 Document and implement these unless a later change explicitly replaces them — and if you replace them, update this list too:
 
-1. **Public landing, unlisted admin path.** Unauthenticated visitors see a one-page story with optional email signup. On hosted Syncidian.com (and whenever `SYNCIDIAN_GITHUB_ALLOWED_EMAIL` is set), GitHub sign-in is hidden until the visitor taps the app name six times. There is no public Admin link. Operators create the first admin and register the instance GitHub App at `SYNCIDIAN_ADMIN_PATH` (default `/admin`). Repository install stays per user after identity.
+1. **Public landing, private operator surface.** Unauthenticated visitors see a one-page story with optional email signup. On hosted Syncidian.com (and whenever `SYNCIDIAN_GITHUB_ALLOWED_EMAIL` is set), GitHub sign-in is hidden until the visitor taps the app name six times. There is no public Admin link. Self-host operators use `SYNCIDIAN_ADMIN_PATH` (default `/admin`) and skip Tailscale (`SYNCIDIAN_ADMIN_PRIVATE=0` or leave `SYNCIDIAN_ADMIN_HOST` unset). A Tailscale hostname (`SYNCIDIAN_ADMIN_HOST`, for example `admin.syncidian.com`) is optional. Repository install stays per user after identity.
 2. **GitHub is per user, after identity.** One repository per `user_id`. `GET/POST /api/v1/github` requires `authenticate()`.
 3. **Admin login does not need repo sync.** Admins manage users. Vault/GitHub/token-list/device/activity/MCP routes use `vaultAuthed` or `sessionVaultAuthed` and return 403 for admins. Admins may mint a **one-time** `sk_sync_` token for a vault user via `POST /api/v1/users/tokens` (by username) or `issue_token` on user create — they still cannot list existing tokens or read vault/GitHub/MCP usage data.
 4. **Admin user list is public fields only:** `username`, `is_admin`, `created_at` (no `id`, vault, tokens, or GitHub).
@@ -90,8 +90,8 @@ Do not leave the six-tap hide or the allowlist in place after public launch.
 
 ## Tests
 
-When you change auth, GitHub scoping, admin privacy, or where data is stored across deploys, extend `internal/server/server_test.go`, `internal/store/store_test.go`, and `internal/config` persistence tests rather than only updating prose.
+When you change auth, GitHub scoping, admin privacy, operator hostname/Tailscale bind, or where data is stored across deploys, extend `internal/server/server_test.go`, `internal/server/adminhost_test.go`, `internal/store/store_test.go`, and `internal/config` persistence tests rather than only updating prose.
 
 ## Help walkthrough
 
-The dashboard **Help** button must describe the same workflow as the diagrams: public landing with waitlist on hosted Syncidian.com, GitHub sign-in hidden until the app name is tapped six times, optional email, unlisted operator path (`SYNCIDIAN_ADMIN_PATH`, default `/admin`), persist `/data` so deploys do not wipe users, register the instance GitHub App (`docs/github-app.md`), then optional per-user GitHub, admin without repo sync. Plugin install is Community plugins first, with BRAT or `scripts/install-plugin.sh` as fallback until the listing is live. Dashboard MCP/call/conflict stats stay behind **Stats for Nerds**.
+The dashboard **Help** button must describe the same workflow as the diagrams: public landing with waitlist on hosted Syncidian.com, GitHub sign-in hidden until the app name is tapped six times, optional email, self-host operators at `/admin` (skip Tailscale with `SYNCIDIAN_ADMIN_PRIVATE=0` or unset `SYNCIDIAN_ADMIN_HOST`), optional Tailscale hostname, persist `/data` so deploys do not wipe users, register the instance GitHub App (`docs/github-app.md`), then optional per-user GitHub, admin without repo sync. Plugin install is Community plugins first, with BRAT or `scripts/install-plugin.sh` as fallback until the listing is live. Dashboard MCP/call/conflict stats stay behind **Stats for Nerds**.

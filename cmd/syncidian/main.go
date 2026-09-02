@@ -3,9 +3,11 @@ package main
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"flag"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"strings"
@@ -75,6 +77,12 @@ Environment:
   SYNCIDIAN_BOOTSTRAP_USER       Create this admin on first boot
   SYNCIDIAN_BOOTSTRAP_PASSWORD   Password for the bootstrap admin
   SYNCIDIAN_ADMIN_PATH           Unlisted operator path (default /admin). Not linked from the public site.
+  SYNCIDIAN_ADMIN_PRIVATE        0 = skip Tailscale and use /admin (self-host default).
+                                 Unset = on only if SYNCIDIAN_ADMIN_HOST is set.
+  SYNCIDIAN_ADMIN_HOST           Optional private operator hostname (e.g. admin.syncidian.com).
+                                 When set, operator UI and admin APIs are served only on that Host.
+  SYNCIDIAN_ADMIN_LISTEN_IP      Unicast IP to bind instead of 0.0.0.0 (Tailscale 100.x).
+                                 Reads TAILSCALE_IP only when ADMIN_HOST is also set.
   SYNCIDIAN_GITHUB_APP_ID        GitHub App ID (optional; operator page can create the app)
   SYNCIDIAN_GITHUB_APP_SLUG      GitHub App slug
   SYNCIDIAN_GITHUB_CLIENT_ID     GitHub App OAuth client ID
@@ -100,18 +108,64 @@ func runServe(log *slog.Logger) error {
 	defer st.Close()
 	srv := server.New(cfg, st, log)
 	srv.BootstrapFromEnv()
-	httpSrv := &http.Server{
-		Addr:              cfg.Addr,
-		Handler:           srv.Handler(),
-		ReadHeaderTimeout: 10 * time.Second,
-	}
 	p := config.PersistenceStatus(cfg.DataDir)
 	if !p.OK {
 		log.Error("data directory is not persistent; users, GitHub App credentials, and vault files will be lost on the next deploy",
 			"data", cfg.DataDir, "hint", p.Hint)
 	}
-	log.Info("syncidian listening", "addr", cfg.Addr, "data", cfg.DataDir, "url", cfg.PublicURL, "persistence", p.Kind)
-	return httpSrv.ListenAndServe()
+	addrs := cfg.ListenAddrs()
+	log.Info("syncidian listening", "addr", strings.Join(addrs, ","), "data", cfg.DataDir, "url", cfg.PublicURL, "admin_host", cfg.AdminHost, "persistence", p.Kind)
+	return serveHTTP(log, addrs, srv.Handler())
+}
+
+func serveHTTP(log *slog.Logger, addrs []string, handler http.Handler) error {
+	if len(addrs) == 0 {
+		return errors.New("no listen addresses")
+	}
+	errc := make(chan error, len(addrs))
+	for _, addr := range addrs {
+		addr := addr
+		go func() {
+			errc <- listenAndServe(log, addr, handler)
+		}()
+	}
+	return <-errc
+}
+
+func listenAndServe(log *slog.Logger, addr string, handler http.Handler) error {
+	ln, err := listenWithRetry(log, addr)
+	if err != nil {
+		return err
+	}
+	httpSrv := &http.Server{
+		Addr:              addr,
+		Handler:           handler,
+		ReadHeaderTimeout: 10 * time.Second,
+	}
+	return httpSrv.Serve(ln)
+}
+
+func listenWithRetry(log *slog.Logger, addr string) (net.Listener, error) {
+	ln, err := net.Listen("tcp", addr)
+	if err == nil {
+		return ln, nil
+	}
+	host, _, splitErr := net.SplitHostPort(addr)
+	if splitErr != nil || host == "" || host == "127.0.0.1" || host == "::1" {
+		return nil, err
+	}
+	// Tailscale userspace/CGNAT: the 100.x address appears a few seconds after tailscaled.
+	const attempts = 15
+	log.Info("waiting for listen address (Tailscale IP may not be up yet)", "addr", addr, "err", err)
+	for i := 1; i < attempts; i++ {
+		time.Sleep(2 * time.Second)
+		ln, err = net.Listen("tcp", addr)
+		if err == nil {
+			log.Info("listen address ready", "addr", addr)
+			return ln, nil
+		}
+	}
+	return nil, err
 }
 
 func openStore() (*store.Store, error) {

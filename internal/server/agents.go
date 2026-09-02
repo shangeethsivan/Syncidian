@@ -106,9 +106,11 @@ func (s *Server) handleRobots(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(&b, "Sitemap: %s/sitemap.xml\n", origin)
 	fmt.Fprintf(&b, "Agentmap: %s/.well-known/ai-catalog.json\n\n", origin)
 	b.WriteString("User-agent: *\nAllow: /\n")
-	fmt.Fprintf(&b, "Disallow: %s\n", s.adminPath())
-	if s.adminPath() != "/admin" {
-		b.WriteString("Disallow: /admin\n")
+	if !s.adminHostConfigured() {
+		fmt.Fprintf(&b, "Disallow: %s\n", s.adminPath())
+		if s.adminPath() != "/admin" {
+			b.WriteString("Disallow: /admin\n")
+		}
 	}
 	b.WriteString("Content-Signal: search=yes, ai-train=yes, ai-input=yes\n\n")
 	for _, bot := range strings.Split(aiBots, ", ") {

@@ -2,7 +2,7 @@
 
 This document describes the **current MVP** as implemented in this repository. GitHub renders the Mermaid diagrams below — open this file on GitHub to visualize them.
 
-The plugin is the client (Windows, macOS, Linux, Android, and iOS — `isDesktopOnly` is false). HTTP from the plugin uses Obsidian `requestUrl`. The Go server is the coordination layer. A per-user vault on disk plus SQLite metadata is the working copy. GitHub is an **optional, per-user** durable source of truth — after identity, a user installs the App on one repository. On hosted Syncidian.com, GitHub sign-in is hidden (tap the app name six times) and allowlisted via `SYNCIDIAN_GITHUB_ALLOWED_EMAIL` until public launch. Operators use an unlisted path (`SYNCIDIAN_ADMIN_PATH`, default `/admin`). MCP is the AI bridge.
+The plugin is the client (Windows, macOS, Linux, Android, and iOS — `isDesktopOnly` is false). HTTP from the plugin uses Obsidian `requestUrl`. The Go server is the coordination layer. A per-user vault on disk plus SQLite metadata is the working copy. GitHub is an **optional, per-user** durable source of truth — after identity, a user installs the App on one repository. On hosted Syncidian.com, GitHub sign-in is hidden (tap the app name six times) and allowlisted via `SYNCIDIAN_GITHUB_ALLOWED_EMAIL` until public launch. Operators use a private hostname (`SYNCIDIAN_ADMIN_HOST`, for example `admin.syncidian.com` on Tailscale) or an unlisted path (`SYNCIDIAN_ADMIN_PATH`, default `/admin`). MCP is the AI bridge.
 
 When you change this architecture, update the Mermaid diagrams in this file and in `README.md`. See [`AGENT.md`](../AGENT.md).
 
@@ -88,7 +88,7 @@ flowchart TB
   subgraph public [Unauthenticated — public site]
     H["GET /health · /ready"]
     UI["GET /  HTML or text/markdown"]
-    AdminUI["GET SYNCIDIAN_ADMIN_PATH<br/>default /admin · unlisted"]
+    AdminUI["GET SYNCIDIAN_ADMIN_HOST /<br/>or SYNCIDIAN_ADMIN_PATH<br/>default /admin · not public"]
     Robots["GET /robots.txt · /sitemap.xml · /auth.md"]
     Discover["GET /.well-known/api-catalog · mcp/server-card.json<br/>oauth-protected-resource · agent-skills · ai-catalog"]
     OpenAPI["GET /openapi.json"]
@@ -143,7 +143,7 @@ flowchart TD
   Land --> GH["GitHub sign-in hidden until app name tapped 6 times"]
   Land --> Email["Optional email signup"]
 
-  Ops["GET SYNCIDIAN_ADMIN_PATH<br/>unlisted · default /admin"] --> Auth{"Authenticated admin?"}
+  Ops["GET SYNCIDIAN_ADMIN_HOST<br/>or SYNCIDIAN_ADMIN_PATH"] --> Auth{"Authenticated admin?"}
   Auth -->|no, empty DB| Form["Create first admin"]
   Auth -->|no| Login["POST /api/v1/auth/login"]
   Form --> Cookie["HttpOnly cookie"]
@@ -330,7 +330,7 @@ flowchart LR
   end
 
   subgraph admin [Operators]
-    AdminUI["GET SYNCIDIAN_ADMIN_PATH"] --> Setup["First-boot: create admin"]
+    AdminUI["GET private admin host<br/>or SYNCIDIAN_ADMIN_PATH"] --> Setup["First-boot: create admin"]
     AdminUI --> Login["POST /api/v1/auth/login"]
     Setup --> Cookie
     Login --> Cookie
@@ -350,7 +350,7 @@ flowchart LR
   Authed --> User["store.User"]
 ```
 
-GitHub OAuth is how vault users sign in. Admins sign in on the unlisted operator path (`SYNCIDIAN_ADMIN_PATH`, default `/admin`) with username and password. The instance GitHub App needs a callback URL, a setup URL, and a webhook URL so GitHub can redirect and ping. GitHub App URL paste and MCP/call stats in the dashboard sit behind **Stats for Nerds**.
+GitHub OAuth is how vault users sign in. Admins sign in on a private operator hostname (`SYNCIDIAN_ADMIN_HOST`, for example `admin.syncidian.com` reachable only on Tailscale) or the unlisted path (`SYNCIDIAN_ADMIN_PATH`, default `/admin`) with username and password. The instance GitHub App needs a callback URL, a setup URL, and a webhook URL so GitHub can redirect and ping — those stay on `SYNCIDIAN_PUBLIC_URL`. GitHub App URL paste and MCP/call stats in the dashboard sit behind **Stats for Nerds**.
 
 ---
 
@@ -518,21 +518,30 @@ Admins can create users and list `adminUserSummary` fields (`username`, `is_admi
 
 ```mermaid
 flowchart LR
-  subgraph host [Docker host / Railway / VPS]
-    C["syncidian container<br/>listen :8080 or $PORT"]
+  subgraph public [Public origin]
+    Cpub["listener 127.0.0.1:PORT<br/>or :PORT when no Tailscale bind"]
+  end
+  subgraph mesh [Tailscale 100.x]
+    Cpriv["listener TAILSCALE_IP:PORT<br/>Host SYNCIDIAN_ADMIN_HOST"]
+  end
+  subgraph data [Volume]
     V[("Required volume /data<br/>SQLite users · GitHub App · vaults")]
-    C --> V
   end
 
-  Browser["Browser dashboard"] --> C
-  Plugin["Obsidian plugin<br/>desktop + Android + iOS"] --> C
-  MCP["MCP client"] --> C
-  C -->|"optional"| GH["GitHub"]
+  Browser["Browser dashboard"] --> Cpub
+  Plugin["Obsidian plugin"] --> Cpub
+  MCP["MCP client"] --> Cpub
+  Ops["Operator browser on Tailscale"] --> Cpriv
+  Cpub --> V
+  Cpriv --> V
+  Cpub -->|"optional"| GH["GitHub"]
 ```
 
-One container. No extra services for the basic install. Users, tokens, the instance GitHub App, per-user GitHub installs, and vault files all live under `SYNCIDIAN_DATA` (SQLite `syncidian.db` plus `vaults/`). A new deploy **replaces the container filesystem**, so that directory must be a named volume.
+One process. No extra services for the basic install. When `SYNCIDIAN_ADMIN_LISTEN_IP` or `TAILSCALE_IP` is set, the process **does not listen on 0.0.0.0**: it binds loopback (tunnels) plus the Tailscale address. `SYNCIDIAN_ADMIN_HOST` (for example `admin.syncidian.com`) is the only Host that serves operator UI and admin APIs. Step-by-step: [`docs/tailscale-admin.md`](tailscale-admin.md).
 
-Railway: mount a volume at `/data`. `railway.json` sets `requiredMountPath` to `/data` (deploys without a volume fail instead of wiping the instance) and `overlapSeconds` to `0` (SQLite is not opened by two replicas during a rollout). The image default `SYNCIDIAN_DATA=/data` no longer hides `RAILWAY_VOLUME_MOUNT_PATH` if the volume is mounted somewhere else. The Dockerfile does not declare `VOLUME` (that broke some builders). `/admin` and `GET /api/v1/setup` report when the data directory looks ephemeral.
+Users, tokens, the instance GitHub App, per-user GitHub installs, and vault files all live under `SYNCIDIAN_DATA` (SQLite `syncidian.db` plus `vaults/`). A new deploy **replaces the container filesystem**, so that directory must be a named volume.
+
+Railway: mount a volume at `/data`. `railway.json` sets `requiredMountPath` to `/data` (deploys without a volume fail instead of wiping the instance) and `overlapSeconds` to `0` (SQLite is not opened by two replicas during a rollout). The image default `SYNCIDIAN_DATA=/data` no longer hides `RAILWAY_VOLUME_MOUNT_PATH` if the volume is mounted somewhere else. The Dockerfile does not declare `VOLUME` (that broke some builders). `/admin` and `GET /api/v1/setup` report when the data directory looks ephemeral. Leave `SYNCIDIAN_ADMIN_LISTEN_IP` unset on Railway so the public `PORT` still binds as today.
 
 ---
 
@@ -542,6 +551,7 @@ Railway: mount a volume at `/data`. `railway.json` sets `requiredMountPath` to `
 | --- | --- |
 | Process entry | [`cmd/syncidian/main.go`](../cmd/syncidian/main.go) |
 | HTTP routes + auth | [`internal/server/server.go`](../internal/server/server.go), [`internal/server/auth.go`](../internal/server/auth.go), [`internal/server/auth_github.go`](../internal/server/auth_github.go) |
+| Private operator host / Tailscale bind | [`internal/config/listen.go`](../internal/config/listen.go), [`internal/server/adminhost.go`](../internal/server/adminhost.go), [`docs/tailscale-admin.md`](tailscale-admin.md) |
 | Agent discovery | [`internal/server/agents.go`](../internal/server/agents.go) (`/robots.txt`, `/auth.md`, `/.well-known/…`) |
 | Plan / push / devices | [`internal/server/sync.go`](../internal/server/sync.go) |
 | Sync decisions | [`internal/syncengine/plan.go`](../internal/syncengine/plan.go), [`internal/syncengine/merge.go`](../internal/syncengine/merge.go) |

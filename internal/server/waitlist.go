@@ -80,7 +80,7 @@ func (s *Server) handleJoinWaitlist(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleListWaitlist(w http.ResponseWriter, r *http.Request, _ *store.User) {
-	if !s.isHostedPublic(r) {
+	if !s.hostedWaitlistAdmin(r) {
 		writeError(w, http.StatusNotFound, "not found")
 		return
 	}

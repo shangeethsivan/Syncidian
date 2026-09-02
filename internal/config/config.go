@@ -19,6 +19,9 @@ type Config struct {
 	DataDir            string
 	PublicURL          string
 	AdminPath          string
+	AdminHost          string
+	AdminListenIP      string
+	AdminPrivate       bool
 	GitName            string
 	GitEmail           string
 	GitHubAppID        int64
@@ -40,6 +43,9 @@ func FromEnv() Config {
 		DataDir:             resolveDataDir(),
 		PublicURL:           publicURL(),
 		AdminPath:           NormalizeAdminPath(env("SYNCIDIAN_ADMIN_PATH", "")),
+		AdminHost:           "",
+		AdminListenIP:       "",
+		AdminPrivate:        false,
 		GitName:             env("SYNCIDIAN_GIT_NAME", "Syncidian"),
 		GitEmail:            env("SYNCIDIAN_GIT_EMAIL", "syncidian@localhost"),
 		GitHubAppSlug:       githubapp.NormalizeAppSlug(env("SYNCIDIAN_GITHUB_APP_SLUG", "")),
@@ -51,6 +57,7 @@ func FromEnv() Config {
 	if id, err := strconv.ParseInt(env("SYNCIDIAN_GITHUB_APP_ID", "0"), 10, 64); err == nil {
 		c.GitHubAppID = id
 	}
+	c.AdminHost, c.AdminListenIP, c.AdminPrivate = adminPrivateFromEnv()
 	if c.Addr == "" {
 		c.Addr = ":8080"
 	} else if !strings.HasPrefix(c.Addr, ":") && !strings.Contains(c.Addr, ":") {
@@ -105,6 +112,37 @@ func env(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+// ParseOptionalBool reads a 0/1 (or true/false/on/off) env var.
+// ok is false when the variable is unset or empty.
+func ParseOptionalBool(key string) (ok, val bool) {
+	v := strings.ToLower(strings.TrimSpace(os.Getenv(key)))
+	if v == "" {
+		return false, false
+	}
+	switch v {
+	case "0", "false", "no", "off":
+		return true, false
+	case "1", "true", "yes", "on":
+		return true, true
+	default:
+		return true, true
+	}
+}
+
+// adminPrivateFromEnv is opt-in. Self-hosters skip Tailscale by leaving these
+// unset, or set SYNCIDIAN_ADMIN_PRIVATE=0 to ignore a copied host/IP.
+func adminPrivateFromEnv() (host, listenIP string, on bool) {
+	if set, val := ParseOptionalBool("SYNCIDIAN_ADMIN_PRIVATE"); set && !val {
+		return "", "", false
+	}
+	host = NormalizeAdminHost(env("SYNCIDIAN_ADMIN_HOST", ""))
+	listenIP = NormalizeListenIP(env("SYNCIDIAN_ADMIN_LISTEN_IP", ""))
+	if listenIP == "" && host != "" {
+		listenIP = NormalizeListenIP(env("TAILSCALE_IP", ""))
+	}
+	return host, listenIP, host != "" || listenIP != ""
 }
 
 // ParseEmailList splits a comma-separated email list, lowercased and trimmed.
