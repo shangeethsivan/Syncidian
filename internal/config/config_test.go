@@ -13,6 +13,7 @@ func TestFromEnvDefaults(t *testing.T) {
 	t.Setenv("RAILWAY_VOLUME_MOUNT_PATH", "")
 	t.Setenv("SYNCIDIAN_PUBLIC_URL", "")
 	t.Setenv("RAILWAY_PUBLIC_DOMAIN", "")
+	t.Setenv("SYNCIDIAN_GITHUB_ALLOWED_EMAIL", "")
 
 	c := FromEnv()
 	if c.Addr != ":8080" {
@@ -101,6 +102,40 @@ func TestFromEnvGitHubAppSlugNormalizesURL(t *testing.T) {
 	c := FromEnv()
 	if c.GitHubAppSlug != "syncidian" {
 		t.Fatalf("GitHubAppSlug=%q, want syncidian", c.GitHubAppSlug)
+	}
+}
+
+func TestParseEmailList(t *testing.T) {
+	if got := ParseEmailList(""); got != nil {
+		t.Fatalf("empty: %v", got)
+	}
+	got := ParseEmailList("  Shangeeth95@gmail.com, other@example.com, SHANGEETH95@gmail.com ")
+	if len(got) != 2 || got[0] != "shangeeth95@gmail.com" || got[1] != "other@example.com" {
+		t.Fatalf("got %v", got)
+	}
+}
+
+func TestEmailAllowed(t *testing.T) {
+	if !EmailAllowed(nil, "anyone@example.com") {
+		t.Fatal("empty allowlist should allow all")
+	}
+	list := []string{"shangeeth95@gmail.com"}
+	if EmailAllowed(list, "other@example.com") {
+		t.Fatal("other email must be denied")
+	}
+	if !EmailAllowed(list, "Shangeeth95@gmail.com") {
+		t.Fatal("case-insensitive match")
+	}
+	if !EmailAllowed(list, "noreply@users.noreply.github.com", "shangeeth95@gmail.com") {
+		t.Fatal("any matching email in the list should pass")
+	}
+}
+
+func TestFromEnvGitHubAllowedEmail(t *testing.T) {
+	t.Setenv("SYNCIDIAN_GITHUB_ALLOWED_EMAIL", "Shangeeth95@gmail.com")
+	c := FromEnv()
+	if len(c.GitHubAllowedEmails) != 1 || c.GitHubAllowedEmails[0] != "shangeeth95@gmail.com" {
+		t.Fatalf("GitHubAllowedEmails=%v", c.GitHubAllowedEmails)
 	}
 }
 

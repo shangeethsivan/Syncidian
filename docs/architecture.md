@@ -2,7 +2,7 @@
 
 This document describes the **current MVP** as implemented in this repository. GitHub renders the Mermaid diagrams below — open this file on GitHub to visualize them.
 
-The plugin is the client (Windows, macOS, Linux, Android, and iOS — `isDesktopOnly` is false). HTTP from the plugin uses Obsidian `requestUrl`. The Go server is the coordination layer. A per-user vault on disk plus SQLite metadata is the working copy. GitHub is an **optional, per-user** durable source of truth — people sign in with GitHub on the public landing, then install the App on one repository. Operators use an unlisted path (`SYNCIDIAN_ADMIN_PATH`, default `/admin`). MCP is the AI bridge.
+The plugin is the client (Windows, macOS, Linux, Android, and iOS — `isDesktopOnly` is false). HTTP from the plugin uses Obsidian `requestUrl`. The Go server is the coordination layer. A per-user vault on disk plus SQLite metadata is the working copy. GitHub is an **optional, per-user** durable source of truth — after identity, a user installs the App on one repository. On hosted Syncidian.com, GitHub sign-in is hidden (tap the app name six times) and allowlisted via `SYNCIDIAN_GITHUB_ALLOWED_EMAIL` until public launch. Operators use an unlisted path (`SYNCIDIAN_ADMIN_PATH`, default `/admin`). MCP is the AI bridge.
 
 When you change this architecture, update the Mermaid diagrams in this file and in `README.md`. See [`AGENT.md`](../AGENT.md).
 
@@ -139,7 +139,8 @@ This is the user-facing path the dashboard implements. Keep it in sync with `int
 ```mermaid
 flowchart TD
   Open["GET /"] --> Land["Landing: what Syncidian is"]
-  Land --> GH["Sign up / Log in / Connect with GitHub"]
+  Land --> Wait["Hosted: join the waitlist"]
+  Land --> GH["GitHub sign-in hidden until app name tapped 6 times"]
   Land --> Email["Optional email signup"]
 
   Ops["GET SYNCIDIAN_ADMIN_PATH<br/>unlisted · default /admin"] --> Auth{"Authenticated admin?"}
@@ -320,7 +321,8 @@ flowchart TD
 ```mermaid
 flowchart LR
   subgraph site [Public site]
-    Land["GET / landing"] --> GitHub["Sign in with GitHub"]
+    Land["GET / landing"] --> Wait["Hosted waitlist"]
+    Land --> GitHub["GitHub sign-in hidden until 6 taps on app name"]
     Land --> Email["POST /api/v1/auth/signup"]
     GitHub --> Callback["GET /api/v1/auth/github/callback"]
     Callback --> Cookie["HttpOnly cookie<br/>syncidian_session"]

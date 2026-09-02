@@ -35,7 +35,7 @@ Protected resource metadata: [/.well-known/oauth-protected-resource](/.well-know
 
 ## Human sign-in (not for agents)
 
-People sign in with GitHub (`GET /api/v1/auth/github/start`) or email (`POST /api/v1/auth/login` / `/api/v1/auth/signup`). Operators use `/admin`. GitHub App install for vault backup happens after identity, on one repository, `main` only.
+People sign in with GitHub (`GET /api/v1/auth/github/start`) or email (`POST /api/v1/auth/login` / `/api/v1/auth/signup`). On hosted Syncidian.com, GitHub sign-in is hidden until the app name is tapped six times, and `SYNCIDIAN_GITHUB_ALLOWED_EMAIL` limits which GitHub accounts can complete OAuth. Operators use `/admin`. GitHub App install for vault backup happens after identity, on one repository, `main` only.
 
 ## Revocation
 
