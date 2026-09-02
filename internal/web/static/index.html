@@ -918,7 +918,7 @@ const HELP_STEPS = [
     html: () => `
       <p>The public site is a one-page story. On a self-hosted host, people sign in with email. On Syncidian.com they use GitHub (tap the app name six times to reveal it until public launch).</p>
       <p><b>Self-host operators:</b> open <code>/admin</code> on this same URL to create the first admin. Skip Tailscale — leave <code>SYNCIDIAN_ADMIN_HOST</code> unset, or set <code>SYNCIDIAN_ADMIN_PRIVATE=0</code>.</p>
-      <p>A Tailscale-only hostname (<code>admin.syncidian.com</code>) is optional. See <code>docs/tailscale-admin.md</code>.</p>
+      <p>A Tailscale-only hostname (<code>admin.syncidian.com</code>) is optional. Tailscale’s DNS page has no Extra records control — use a hosts file, Split DNS + Pi-hole, a public A to <code>100.x</code> on a self-hosted node, or <code>/admin</code> on Railway. See <code>docs/tailscale-admin.md</code>.</p>
       <h2>Docker</h2>
       <pre>git clone https://github.com/shangeethsivan/Syncidian.git
 cd Syncidian

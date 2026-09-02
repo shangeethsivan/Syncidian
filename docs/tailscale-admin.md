@@ -17,6 +17,14 @@ SYNCIDIAN_ADMIN_PRIVATE=0
 
 That keeps the operator UI at `/admin` on the same URL as the public site.
 
+## Hosted Syncidian.com (Railway)
+
+The production process is not on a Tailscale node. Leave `SYNCIDIAN_ADMIN_LISTEN_IP` and `TAILSCALE_IP` unset.
+
+Tailscale’s DNS page has **no Extra records** control (it was never shipped). A second hostname such as `admin.syncidian.com` also needs a **second Railway custom domain**. Trial/hobby limits are often **one custom domain**; if Railway refuses `admin.syncidian.com`, keep `SYNCIDIAN_ADMIN_HOST` unset and open `https://syncidian.com/admin`.
+
+To use `admin.syncidian.com` on Railway you need a plan that allows another domain, then one of the DNS options in [section 4](#4-dns-tailscale-has-no-extra-records). Until that domain is attached, setting `SYNCIDIAN_ADMIN_HOST` makes `/admin` on the public site return 404 and the operator UI is unreachable.
+
 ---
 
 Hide the Syncidian operator UI from the public internet **only if you want that extra lock**. Vault users keep using the public site (`https://syncidian.com` or your public URL). Operators open **`https://admin.syncidian.com`** only while connected to your Tailscale mesh.
@@ -214,19 +222,50 @@ Do not use a public Proxy Host for `admin.syncidian.com`. Run NPM only if its UI
 
 ---
 
-## 4. DNS: Tailscale MagicDNS extra record (recommended)
+## 4. DNS: Tailscale has no Extra records
 
-Public DNS for `syncidian.com` is unchanged. Split-horizon for the operator name:
+The [Tailscale DNS page](https://login.tailscale.com/admin/dns) has **MagicDNS**, **Nameservers**, and **Split DNS**. It does **not** have Extra records. Tailscale never shipped a UI to add arbitrary A/CNAME names to MagicDNS ([docs](https://tailscale.com/kb/1054/dns): “It's not possible to add arbitrary records to MagicDNS”).
 
-1. [Tailscale admin console](https://login.tailscale.com/admin/dns) → **DNS**.
-2. Enable **MagicDNS** if it is not already on.
-3. **Extra records** (or **Nameservers** → custom) → add:
+Use one of the options below.
 
-   | Name | Type | Value |
-   | --- | --- | --- |
-   | `admin.syncidian.com` | `A` | `100.64.1.20` (your `tailscale ip -4`) |
+### Hosted on Railway (no Tailscale IP on the app)
 
-4. Do **not** add that record at Cloudflare / registrar / public DNS.
+The Syncidian process is not on a node with `tailscale0`. Leave `SYNCIDIAN_ADMIN_LISTEN_IP` and `TAILSCALE_IP` unset. A 100.x A record cannot reach Railway.
+
+1. Add `admin.syncidian.com` as a **Railway custom domain** on the Syncidian service (same port as the public site, usually `8080`).
+2. Resolve the name **only on operator machines**. Pick one:
+
+   **A. Hosts file (no extra Tailscale UI)** — on each operator laptop, after Railway shows the target:
+
+   ```text
+   # Linux / macOS: /etc/hosts
+   # Windows: C:\Windows\System32\drivers\etc\hosts
+   <Railway edge IPv4> admin.syncidian.com
+   ```
+
+   `dig +short <your-service>.up.railway.app` (or the CNAME Railway prints) gives that IPv4. Only machines with this line will open the name.
+
+   **B. Public CNAME at Cloudflare / registrar** — add the CNAME and TXT Railway prints. The hostname then works from any network. Protection is `SYNCIDIAN_ADMIN_HOST` plus the admin password, not the mesh.
+
+   **C. Split DNS + Pi-hole / AdGuard** (only if you already run one on the tailnet):
+
+   1. [DNS](https://login.tailscale.com/admin/dns) → **Nameservers** → **Add nameserver** → **Custom**.
+   2. Choose **Restrict to domain** (Split DNS). Domain: `admin.syncidian.com`. Nameserver: the Pi-hole’s Tailscale IPv4.
+   3. On the Pi-hole, add a local A record `admin.syncidian.com` → the Railway edge IPv4 (same value as the hosts file).
+
+   Do **not** split the whole `syncidian.com` zone unless that nameserver also answers the public site correctly.
+
+3. Railway still needs its verification TXT (and usually a CNAME) to issue HTTPS. If you skip the public CNAME and use only a hosts file, expect certificate errors until Railway can complete domain verification.
+
+### Self-host on a Tailscale machine
+
+Something is listening on `100.x:443` or `100.x:8080`. Tailscale’s documented approach is a **public** A record that points at the mesh address. Anyone can look the name up; only the tailnet can connect.
+
+| Name | Type | Value |
+| --- | --- | --- |
+| `admin.syncidian.com` | `A` | `100.64.1.20` (your `tailscale ip -4`) |
+
+Add that at Cloudflare / registrar. Do not proxy it through Cloudflare orange-cloud (TCP to `100.x` must stay direct).
 
 On a device already on the tailnet:
 
@@ -236,19 +275,19 @@ dig +short admin.syncidian.com
 # or: getent hosts admin.syncidian.com
 ```
 
-The answer must be the Tailscale IPv4. From a phone **off** Tailscale it must **not** resolve (or must not connect).
+The answer must be the Tailscale IPv4. From a phone **off** Tailscale, `curl` must fail to connect even if DNS resolves.
 
 ### Option: MagicDNS hostname instead of a custom name
 
-If you do not need `admin.syncidian.com`:
+If you do not need `admin.syncidian.com` and Syncidian **runs on a Tailscale node**:
 
 ```text
 https://<machine>.<tailnet>.ts.net
 ```
 
-Set `SYNCIDIAN_ADMIN_HOST` to that MagicDNS name (no `https://`). Tailscale can issue HTTPS for `*.ts.net`. This is simpler; skip extra records.
+Set `SYNCIDIAN_ADMIN_HOST` to that MagicDNS name (no `https://`). Tailscale can issue HTTPS for `*.ts.net`. This is the simplest mesh-only hostname.
 
-### Option: Pi-hole / local split-horizon
+### Option: Pi-hole / local split-horizon (self-host)
 
 On a Pi-hole that **only** Tailscale clients use (Pi-hole advertised as a Tailscale nameserver, or LAN DNS that is not public):
 
@@ -262,7 +301,7 @@ pihole restartdns
 dig @<pihole-tailscale-ip> admin.syncidian.com
 ```
 
-Do not point **public** recursive DNS at this Pi-hole.
+Then in Tailscale: **Nameservers** → **Add nameserver** → **Restrict to domain** `admin.syncidian.com` → the Pi-hole’s `100.x`. Do not point **public** recursive DNS at this Pi-hole.
 
 ---
 
