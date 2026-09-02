@@ -472,8 +472,12 @@ func TestDashboardServed(t *testing.T) {
 	}
 	for _, needle := range []string{
 		`id="landing"`,
+		`id="landing-brand"`,
+		`github-signin`,
+		`syncidian-github-signin`,
 		`Continue with GitHub`,
 		`Your vault.`,
+		`Your data<br>stays with you.`,
 		`id="hero-canvas"`,
 		`snoise`,
 		`id="auth-btn" type="button">Sign in</button`,

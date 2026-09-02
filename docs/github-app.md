@@ -41,7 +41,7 @@ This posts a GitHub App **manifest**, so permissions and URLs are filled in for 
 
 Those credentials are stored encrypted in SQLite. Attach a volume at `/data` (or copy them into `SYNCIDIAN_GITHUB_APP_*` env vars — Option B) so the next deploy does not wipe the GitHub App. Set `SYNCIDIAN_DATA_KEY` if you want the encryption key in environment variables instead of `data/secret.key`.
 
-People can now use **Sign up using GitHub** / **Log in** / **Connect to your GitHub repository** on `{base}/`.
+People can now use **Sign up using GitHub** / **Log in** / **Connect to your GitHub repository** on `{base}/`. On hosted Syncidian.com those GitHub buttons stay hidden until you tap the app name six times, and `SYNCIDIAN_GITHUB_ALLOWED_EMAIL` must match the GitHub account.
 
 The manifest requests:
 
@@ -122,7 +122,7 @@ Keep the `.pem` and client secret off the public site. `/admin` never shows anot
 Device sync works with no GitHub at all. GitHub is optional backup, one repo per user.
 
 1. Open `{base}/` (not `/admin`).
-2. Click **Sign up using GitHub** or **Connect to your GitHub repository**.
+2. Click **Sign up using GitHub** (on the hosted site, tap the Syncidian name six times first) or **Connect to your GitHub repository**.
 3. Authorize the app, then **Install** it on **one** repository (or several, then pick one in the dashboard).
 4. Syncidian always commits to **`main`**. Other branches are not used.
 5. Create a `sk_sync_…` token on that user’s **Tokens** page and paste it into the Obsidian plugin. The plugin never sees GitHub credentials.

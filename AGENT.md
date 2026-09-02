@@ -42,7 +42,7 @@ If a diagram no longer matches the code, rewrite it. Do not leave comments like 
 
 Document and implement these unless a later change explicitly replaces them — and if you replace them, update this list too:
 
-1. **Public landing, private operator surface.** Unauthenticated visitors see a one-page story with GitHub sign-in and optional email signup. There is no public Admin link. Operators create the first admin and register the instance GitHub App on `SYNCIDIAN_ADMIN_HOST` (for example `admin.syncidian.com` on Tailscale) or, if that is unset, at `SYNCIDIAN_ADMIN_PATH` (default `/admin`). Repository install stays per user after identity.
+1. **Public landing, private operator surface.** Unauthenticated visitors see a one-page story with optional email signup. On hosted Syncidian.com (and whenever `SYNCIDIAN_GITHUB_ALLOWED_EMAIL` is set), GitHub sign-in is hidden until the visitor taps the app name six times. There is no public Admin link. Operators create the first admin and register the instance GitHub App on `SYNCIDIAN_ADMIN_HOST` (for example `admin.syncidian.com` on Tailscale) or, if that is unset, at `SYNCIDIAN_ADMIN_PATH` (default `/admin`). Repository install stays per user after identity.
 2. **GitHub is per user, after identity.** One repository per `user_id`. `GET/POST /api/v1/github` requires `authenticate()`.
 3. **Admin login does not need repo sync.** Admins manage users. Vault/GitHub/token-list/device/activity/MCP routes use `vaultAuthed` or `sessionVaultAuthed` and return 403 for admins. Admins may mint a **one-time** `sk_sync_` token for a vault user via `POST /api/v1/users/tokens` (by username) or `issue_token` on user create — they still cannot list existing tokens or read vault/GitHub/MCP usage data.
 4. **Admin user list is public fields only:** `username`, `is_admin`, `created_at` (no `id`, vault, tokens, or GitHub).
@@ -66,6 +66,21 @@ When you change the Obsidian plugin or cut a release, **increment the version in
 
 Docs-only or server-only PRs do not bump the plugin version.
 
+## Production: open GitHub sign-in to everyone
+
+Hosted GitHub sign-in is **intentionally restricted** until public launch:
+
+* The landing **Continue with GitHub** / **Log in** controls stay hidden. Tapping the Syncidian name in the header **six times** reveals them (session only).
+* `SYNCIDIAN_GITHUB_ALLOWED_EMAIL` (Railway variable) is a comma-separated allowlist. Only those GitHub account emails can complete OAuth. Hosted should be `Shangeeth95@gmail.com`. An empty value allows every GitHub user.
+
+**When opening GitHub sign-in for all users, do all of the following in one change:**
+
+1. Unset `SYNCIDIAN_GITHUB_ALLOWED_EMAIL` on Railway (and any other host). Empty allowlist = any GitHub account may sign in.
+2. Stop hiding the landing GitHub buttons: `githubSignInHidden()` in `internal/server/auth_github.go` should return false for the public site (remove the hosted-domain hide). The six-tap easter egg in `internal/web/static/index.html` can then be removed.
+3. Update this list, the landing/auth markdown, and the app-workflow diagrams so they again describe public GitHub sign-in for everyone.
+
+Do not leave the six-tap hide or the allowlist in place after public launch.
+
 ## How to update diagrams
 
 * Keep Mermaid valid for GitHub (no HTML in node labels beyond `<br/>`).
@@ -79,4 +94,4 @@ When you change auth, GitHub scoping, admin privacy, operator hostname/Tailscale
 
 ## Help walkthrough
 
-The dashboard **Help** button must describe the same workflow as the diagrams: public landing with GitHub sign-in, optional email, private operator hostname (`SYNCIDIAN_ADMIN_HOST`, e.g. `admin.syncidian.com` on Tailscale) or unlisted path (`SYNCIDIAN_ADMIN_PATH`, default `/admin`), persist `/data` so deploys do not wipe users, register the instance GitHub App (`docs/github-app.md`), then optional per-user GitHub, admin without repo sync. Plugin install is Community plugins first, with BRAT or `scripts/install-plugin.sh` as fallback until the listing is live. Dashboard MCP/call/conflict stats stay behind **Stats for Nerds**.
+The dashboard **Help** button must describe the same workflow as the diagrams: public landing with waitlist on hosted Syncidian.com, GitHub sign-in hidden until the app name is tapped six times, optional email, private operator hostname (`SYNCIDIAN_ADMIN_HOST`, e.g. `admin.syncidian.com` on Tailscale) or unlisted path (`SYNCIDIAN_ADMIN_PATH`, default `/admin`), persist `/data` so deploys do not wipe users, register the instance GitHub App (`docs/github-app.md`), then optional per-user GitHub, admin without repo sync. Plugin install is Community plugins first, with BRAT or `scripts/install-plugin.sh` as fallback until the listing is live. Dashboard MCP/call/conflict stats stay behind **Stats for Nerds**.

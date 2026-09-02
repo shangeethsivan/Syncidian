@@ -21,12 +21,13 @@ func (s *Server) handleSetupStatus(w http.ResponseWriter, r *http.Request) {
 	app := s.instanceGitHubApp()
 	urls := githubapp.AppURLs(s.githubBase(r))
 	out := map[string]any{
-		"needs_setup":    n == 0,
-		"public_url":     s.Cfg.PublicURL,
-		"github_login":   app.Configured(),
-		"persistence":    s.persistence(),
-		"waitlist":       s.isHostedPublic(r),
-		"waitlist_admin": s.hostedWaitlistAdmin(r),
+		"needs_setup":          n == 0,
+		"public_url":           s.Cfg.PublicURL,
+		"github_login":         app.Configured(),
+		"github_signin_hidden": s.githubSignInHidden(r),
+		"persistence":          s.persistence(),
+		"waitlist":             s.isHostedPublic(r),
+		"waitlist_admin":       s.hostedWaitlistAdmin(r),
 		"github_app": map[string]any{
 			"configured": app.Configured(),
 			"slug":       "",

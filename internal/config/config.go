@@ -28,22 +28,29 @@ type Config struct {
 	GitHubClientID     string
 	GitHubClientSecret string
 	GitHubAppPEM       string
+	// GitHubAllowedEmails, when non-empty, is the only set of GitHub account
+	// emails that may complete GitHub sign-in. Empty means any GitHub user.
+	// Set SYNCIDIAN_GITHUB_ALLOWED_EMAIL on Railway to restrict hosted sign-in
+	// until public launch. PRODUCTION: unset it (and show the landing GitHub
+	// buttons) when opening sign-in to everyone. See AGENT.md.
+	GitHubAllowedEmails []string
 }
 
 func FromEnv() Config {
 	c := Config{
-		Addr:               firstEnv("SYNCIDIAN_ADDR", "PORT"),
-		DataDir:            resolveDataDir(),
-		PublicURL:          publicURL(),
-		AdminPath:          NormalizeAdminPath(env("SYNCIDIAN_ADMIN_PATH", "")),
-		AdminHost:          NormalizeAdminHost(env("SYNCIDIAN_ADMIN_HOST", "")),
-		AdminListenIP:      NormalizeListenIP(firstEnv("SYNCIDIAN_ADMIN_LISTEN_IP", "TAILSCALE_IP")),
-		GitName:            env("SYNCIDIAN_GIT_NAME", "Syncidian"),
-		GitEmail:           env("SYNCIDIAN_GIT_EMAIL", "syncidian@localhost"),
-		GitHubAppSlug:      githubapp.NormalizeAppSlug(env("SYNCIDIAN_GITHUB_APP_SLUG", "")),
-		GitHubClientID:     env("SYNCIDIAN_GITHUB_CLIENT_ID", ""),
-		GitHubClientSecret: env("SYNCIDIAN_GITHUB_CLIENT_SECRET", ""),
-		GitHubAppPEM:       strings.ReplaceAll(env("SYNCIDIAN_GITHUB_APP_PRIVATE_KEY", ""), `\n`, "\n"),
+		Addr:                firstEnv("SYNCIDIAN_ADDR", "PORT"),
+		DataDir:             resolveDataDir(),
+		PublicURL:           publicURL(),
+		AdminPath:           NormalizeAdminPath(env("SYNCIDIAN_ADMIN_PATH", "")),
+		AdminHost:           NormalizeAdminHost(env("SYNCIDIAN_ADMIN_HOST", "")),
+		AdminListenIP:       NormalizeListenIP(firstEnv("SYNCIDIAN_ADMIN_LISTEN_IP", "TAILSCALE_IP")),
+		GitName:             env("SYNCIDIAN_GIT_NAME", "Syncidian"),
+		GitEmail:            env("SYNCIDIAN_GIT_EMAIL", "syncidian@localhost"),
+		GitHubAppSlug:       githubapp.NormalizeAppSlug(env("SYNCIDIAN_GITHUB_APP_SLUG", "")),
+		GitHubClientID:      env("SYNCIDIAN_GITHUB_CLIENT_ID", ""),
+		GitHubClientSecret:  env("SYNCIDIAN_GITHUB_CLIENT_SECRET", ""),
+		GitHubAppPEM:        strings.ReplaceAll(env("SYNCIDIAN_GITHUB_APP_PRIVATE_KEY", ""), `\n`, "\n"),
+		GitHubAllowedEmails: ParseEmailList(env("SYNCIDIAN_GITHUB_ALLOWED_EMAIL", "")),
 	}
 	if id, err := strconv.ParseInt(env("SYNCIDIAN_GITHUB_APP_ID", "0"), 10, 64); err == nil {
 		c.GitHubAppID = id
@@ -102,6 +109,53 @@ func env(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+// ParseEmailList splits a comma-separated email list, lowercased and trimmed.
+func ParseEmailList(raw string) []string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil
+	}
+	seen := make(map[string]struct{})
+	var out []string
+	for _, part := range strings.Split(raw, ",") {
+		e := strings.ToLower(strings.TrimSpace(part))
+		if e == "" {
+			continue
+		}
+		if _, ok := seen[e]; ok {
+			continue
+		}
+		seen[e] = struct{}{}
+		out = append(out, e)
+	}
+	return out
+}
+
+// EmailAllowed reports whether any of emails is on allowlist. An empty
+// allowlist allows every address (production GitHub sign-in for all users).
+func EmailAllowed(allowlist []string, emails ...string) bool {
+	if len(allowlist) == 0 {
+		return true
+	}
+	allowed := make(map[string]struct{}, len(allowlist))
+	for _, a := range allowlist {
+		a = strings.ToLower(strings.TrimSpace(a))
+		if a != "" {
+			allowed[a] = struct{}{}
+		}
+	}
+	for _, e := range emails {
+		e = strings.ToLower(strings.TrimSpace(e))
+		if e == "" {
+			continue
+		}
+		if _, ok := allowed[e]; ok {
+			return true
+		}
+	}
+	return false
 }
 
 // NormalizeAdminPath returns a single-segment operator path. Default is /admin.

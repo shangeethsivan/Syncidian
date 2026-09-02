@@ -20,6 +20,7 @@ services:
       SYNCIDIAN_GITHUB_CLIENT_ID: ${SYNCIDIAN_GITHUB_CLIENT_ID:-}
       SYNCIDIAN_GITHUB_CLIENT_SECRET: ${SYNCIDIAN_GITHUB_CLIENT_SECRET:-}
       SYNCIDIAN_GITHUB_APP_PRIVATE_KEY: ${SYNCIDIAN_GITHUB_APP_PRIVATE_KEY:-}
+      SYNCIDIAN_GITHUB_ALLOWED_EMAIL: ${SYNCIDIAN_GITHUB_ALLOWED_EMAIL:-}
     volumes:
       # Named volume survives container recreate. `docker compose down -v` deletes it.
       - syncidian-data:/data
