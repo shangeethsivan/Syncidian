@@ -30,6 +30,32 @@ func (s *Server) requireAdminHost(w http.ResponseWriter, r *http.Request) bool {
 	return true
 }
 
+const operatorRobotsTag = "noindex, nofollow, noarchive, nosnippet"
+
+func setOperatorNoIndex(w http.ResponseWriter) {
+	w.Header().Set("X-Robots-Tag", operatorRobotsTag)
+	w.Header().Set("Referrer-Policy", "no-referrer")
+}
+
+func (s *Server) shouldNoIndex(r *http.Request) bool {
+	if r == nil {
+		return false
+	}
+	if s.isAdminHost(r) {
+		return true
+	}
+	return s.operatorPage(r.URL.Path)
+}
+
+func (s *Server) noIndexOperator(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if s.shouldNoIndex(r) {
+			setOperatorNoIndex(w)
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 func (s *Server) operatorPage(path string) bool {
 	p := strings.TrimRight(path, "/")
 	if p == "" {
