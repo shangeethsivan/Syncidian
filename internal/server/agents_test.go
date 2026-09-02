@@ -42,7 +42,7 @@ func TestAgentDiscovery(t *testing.T) {
 		t.Fatalf("robots.txt %d %s", res.StatusCode, body)
 	}
 	txt := string(body)
-	for _, needle := range []string{"User-agent: *", "User-agent: GPTBot", "Content-Signal:", "Sitemap:", "Agentmap:", "Disallow: /admin"} {
+	for _, needle := range []string{"User-agent: *", "User-agent: GPTBot", "Content-Signal:", "Sitemap:", "Agentmap:", "Disallow: /admin", "Disallow: /api/v1/setup", "Disallow: /api/v1/users"} {
 		if !strings.Contains(txt, needle) {
 			t.Fatalf("robots.txt missing %q:\n%s", needle, txt)
 		}

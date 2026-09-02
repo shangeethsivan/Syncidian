@@ -112,6 +112,9 @@ func (s *Server) handleRobots(w http.ResponseWriter, r *http.Request) {
 			b.WriteString("Disallow: /admin\n")
 		}
 	}
+	b.WriteString("Disallow: /api/v1/setup\n")
+	b.WriteString("Disallow: /api/v1/auth/login\n")
+	b.WriteString("Disallow: /api/v1/users\n")
 	b.WriteString("Content-Signal: search=yes, ai-train=yes, ai-input=yes\n\n")
 	for _, bot := range strings.Split(aiBots, ", ") {
 		fmt.Fprintf(&b, "User-agent: %s\nAllow: /\nContent-Signal: search=yes, ai-train=yes, ai-input=yes\n\n", bot)

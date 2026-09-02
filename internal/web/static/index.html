@@ -14,6 +14,25 @@
   <link rel="alternate" type="text/markdown" href="/" />
   <script>
     (function () {
+      var p = (location.pathname || "/").replace(/\/+$/, "") || "/";
+      if (p === "/") return;
+      var desc = document.querySelector('meta[name="description"]');
+      if (desc) desc.remove();
+      var robots = document.createElement("meta");
+      robots.name = "robots";
+      robots.content = "noindex, nofollow, noarchive, nosnippet";
+      document.head.appendChild(robots);
+      var ref = document.createElement("meta");
+      ref.name = "referrer";
+      ref.content = "no-referrer";
+      document.head.appendChild(ref);
+      document.querySelectorAll('link[rel="api-catalog"], link[rel="ai-catalog"], link[rel="describedby"], link[rel="alternate"]').forEach(function (el) {
+        el.remove();
+      });
+    })();
+  </script>
+  <script>
+    (function () {
       var t = localStorage.getItem("syncidian-theme");
       if (!t) t = matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
       document.documentElement.dataset.theme = t;
@@ -735,6 +754,22 @@ function isAdminPath() {
   const p = location.pathname.replace(/\/+$/, "") || "/";
   return p !== "/";
 }
+function applyOperatorNoIndex() {
+  if (!isAdminPath()) return;
+  if (document.querySelector('meta[name="robots"][content*="noindex"]')) return;
+  const desc = document.querySelector('meta[name="description"]');
+  if (desc) desc.remove();
+  const robots = document.createElement("meta");
+  robots.name = "robots";
+  robots.content = "noindex, nofollow, noarchive, nosnippet";
+  document.head.appendChild(robots);
+  if (!document.querySelector('meta[name="referrer"]')) {
+    const ref = document.createElement("meta");
+    ref.name = "referrer";
+    ref.content = "no-referrer";
+    document.head.appendChild(ref);
+  }
+}
 function nerdsOn() {
   return localStorage.getItem("syncidian-nerds") === "1";
 }
@@ -1152,6 +1187,7 @@ async function boot() {
   }
   const st = await api("/api/v1/setup");
   publicInfo = st;
+  applyOperatorNoIndex();
   initAnalytics(st.ga_id);
   bindLandingAnalytics();
   needsSetup = st.needs_setup;

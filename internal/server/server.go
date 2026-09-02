@@ -149,11 +149,13 @@ func (s *Server) Handler() http.Handler {
 		mux.HandleFunc("GET /assets/obsidian.zip", s.handlePluginZip)
 		mux.Handle("GET /assets/", fileServer)
 		serveHTML := func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Link", s.discoveryLinkHeader(s.publicOrigin(r)))
+			// Operator HTML is unlisted: no discovery Link header, noindex via middleware.
 			http.ServeFileFS(w, r, static, "index.html")
 		}
 		mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Link", s.discoveryLinkHeader(s.publicOrigin(r)))
+			if !s.isAdminHost(r) {
+				w.Header().Set("Link", s.discoveryLinkHeader(s.publicOrigin(r)))
+			}
 			w.Header().Set("Vary", "Accept")
 			if wantsMarkdown(r.Header.Get("Accept")) {
 				s.handleLandingMarkdown(w, r)
@@ -188,7 +190,7 @@ func (s *Server) Handler() http.Handler {
 		mux.HandleFunc("GET /.well-known/ai-catalog.json", s.handleAICatalog)
 	}
 
-	return s.adminHostGate(s.cors(mux))
+	return s.noIndexOperator(s.adminHostGate(s.cors(mux)))
 }
 
 func (s *Server) cors(next http.Handler) http.Handler {

@@ -62,6 +62,44 @@ func setupAdminOnHost(t *testing.T, srv *Server, host string) []*http.Cookie {
 	return rec.Result().Cookies()
 }
 
+func TestOperatorPageNoIndex(t *testing.T) {
+	dir := t.TempDir()
+	st, err := store.Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+	srv := New(config.Config{Addr: ":0", DataDir: dir, PublicURL: "http://localhost", AdminPath: "/admin"}, st, nil)
+
+	rec := serveHost(srv, http.MethodGet, "/", "localhost", nil, nil)
+	if rec.Code != 200 {
+		t.Fatalf("landing %d", rec.Code)
+	}
+	if tag := rec.Header().Get("X-Robots-Tag"); tag != "" {
+		t.Fatalf("public landing must stay indexable, got X-Robots-Tag %q", tag)
+	}
+	if rec.Header().Get("Link") == "" {
+		t.Fatal("public landing should keep discovery Link")
+	}
+
+	rec = serveHost(srv, http.MethodGet, "/admin", "localhost", nil, nil)
+	if rec.Code != 200 {
+		t.Fatalf("operator %d", rec.Code)
+	}
+	if got := rec.Header().Get("X-Robots-Tag"); got != operatorRobotsTag {
+		t.Fatalf("operator X-Robots-Tag %q", got)
+	}
+	if rec.Header().Get("Referrer-Policy") != "no-referrer" {
+		t.Fatalf("operator Referrer-Policy %q", rec.Header().Get("Referrer-Policy"))
+	}
+	if rec.Header().Get("Link") != "" {
+		t.Fatalf("operator HTML must not advertise discovery Link: %q", rec.Header().Get("Link"))
+	}
+	if !bytes.Contains(rec.Body.Bytes(), []byte(`noindex, nofollow, noarchive, nosnippet`)) {
+		t.Fatal("operator HTML should include a noindex script")
+	}
+}
+
 func TestAdminHostHidesOperatorOnPublic(t *testing.T) {
 	srv, _ := newAdminHostServer(t)
 
@@ -104,6 +142,12 @@ func TestAdminHostServesOperatorAndSetup(t *testing.T) {
 	rec := serveHost(srv, http.MethodGet, "/", "admin.syncidian.com", nil, nil)
 	if rec.Code != 200 || !bytes.Contains(rec.Body.Bytes(), []byte(`isAdminPath`)) {
 		t.Fatalf("admin host / should serve SPA: %d", rec.Code)
+	}
+	if got := rec.Header().Get("X-Robots-Tag"); got != operatorRobotsTag {
+		t.Fatalf("admin host / X-Robots-Tag %q", got)
+	}
+	if rec.Header().Get("Link") != "" {
+		t.Fatalf("admin host / must not advertise discovery Link: %q", rec.Header().Get("Link"))
 	}
 
 	rec = serveHost(srv, http.MethodGet, "/api/v1/setup", "admin.syncidian.com", nil, nil)
