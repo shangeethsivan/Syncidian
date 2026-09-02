@@ -7,8 +7,8 @@ Syncidian is a self-hosted sync server and MCP bridge for Obsidian. The same plu
 ## Sign in
 
 - **Waitlist (Syncidian.com):** use the form on the [homepage](/). Hosted GitHub sign-in is hidden until you tap the app name six times, and only allowlisted emails can complete it until public launch.
-- **GitHub (self-host, or after revealing it):** [Continue with GitHub](/api/v1/auth/github/start?next=install)
-- **Email:** use the Email button on the [homepage](/)
+- **GitHub (Syncidian.com, after revealing it):** [Continue with GitHub](/api/v1/auth/github/start?next=install)
+- **Email (self-host):** use the email form on the [homepage](/). You do not need a GitHub App to create an account. The operator still creates the first admin at `/admin`.
 
 ## For AI agents
 
@@ -27,4 +27,5 @@ MCP does not store note bodies on this server. Read and write tools use the user
 2. Create an access token (`sk_sync_…`) on **Tokens**.
 3. Install the Syncidian Obsidian plugin and paste the token. Download `main.js`, `manifest.json`, and `styles.css` from [this server](/assets/obsidian.zip) (or `/assets/obsidian/`) without cloning the git repo.
 
-Source: [github.com/shangeethsivan/Syncidian](https://github.com/shangeethsivan/Syncidian)
+Source: [github.com/shangeethsivan/Syncidian](https://github.com/shangeethsivan/Syncidian)  
+Discord: [discord.gg/sSpQQcV7K9](https://discord.gg/sSpQQcV7K9)

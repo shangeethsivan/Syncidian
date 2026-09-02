@@ -2,7 +2,7 @@
 
 This document describes the **current MVP** as implemented in this repository. GitHub renders the Mermaid diagrams below — open this file on GitHub to visualize them.
 
-The plugin is the client (Windows, macOS, Linux, Android, and iOS — `isDesktopOnly` is false). HTTP from the plugin uses Obsidian `requestUrl`. The Go server is the coordination layer. A per-user vault on disk plus SQLite metadata is the working copy. GitHub is an **optional, per-user** durable source of truth — after identity, a user installs the App on one repository. On hosted Syncidian.com, GitHub sign-in is hidden (tap the app name six times) and allowlisted via `SYNCIDIAN_GITHUB_ALLOWED_EMAIL` until public launch. Operators use a private hostname (`SYNCIDIAN_ADMIN_HOST`, for example `admin.syncidian.com` on Tailscale) or an unlisted path (`SYNCIDIAN_ADMIN_PATH`, default `/admin`). MCP is the AI bridge.
+The plugin is the client (Windows, macOS, Linux, Android, and iOS — `isDesktopOnly` is false). HTTP from the plugin uses Obsidian `requestUrl`. The Go server is the coordination layer. A per-user vault on disk plus SQLite metadata is the working copy. GitHub is an **optional, per-user** durable source of truth — after identity, a user installs the App on one repository. On hosted Syncidian.com, people join a waitlist and sign in with GitHub (hidden until the app name is tapped six times, allowlisted via `SYNCIDIAN_GITHUB_ALLOWED_EMAIL` until public launch). On a self-hosted host, people sign in with email; the GitHub App is optional. Operators use a private hostname (`SYNCIDIAN_ADMIN_HOST`, for example `admin.syncidian.com` on Tailscale) or an unlisted path (`SYNCIDIAN_ADMIN_PATH`, default `/admin`) to create the first admin. MCP is the AI bridge.
 
 When you change this architecture, update the Mermaid diagrams in this file and in `README.md`. See [`AGENT.md`](../AGENT.md).
 
@@ -94,7 +94,7 @@ flowchart TB
     OpenAPI["GET /openapi.json"]
     PlugDL["GET /assets/obsidian.zip · /assets/obsidian/*"]
     S1["GET/POST /api/v1/setup"]
-    L["POST /api/v1/auth/login · /auth/signup"]
+    L["POST /api/v1/auth/login<br/>POST /api/v1/auth/signup self-host only"]
     GHO["GET /api/v1/auth/github/start · /callback"]
     AppPub["GET /api/v1/github/app/setup · /callback<br/>GET/POST /api/v1/github/app/webhook · /urls"]
     MCPLogin["POST /api/v1/mcp/login<br/>password → sk_sync_ token"]
@@ -140,8 +140,8 @@ This is the user-facing path the dashboard implements. Keep it in sync with `int
 flowchart TD
   Open["GET /"] --> Land["Landing: what Syncidian is"]
   Land --> Wait["Hosted: join the waitlist"]
-  Land --> GH["GitHub sign-in hidden until app name tapped 6 times"]
-  Land --> Email["Optional email signup"]
+  Land --> Email["Self-host: email signup or login"]
+  Land --> GH["Hosted: GitHub sign-in hidden until app name tapped 6 times"]
 
   Ops["GET SYNCIDIAN_ADMIN_HOST<br/>or SYNCIDIAN_ADMIN_PATH"] --> Auth{"Authenticated admin?"}
   Auth -->|no, empty DB| Form["Create first admin"]
@@ -150,9 +150,9 @@ flowchart TD
   Login --> Cookie
   Cookie --> Manage["Users + instance GitHub App URLs"]
 
+  Email --> User["Regular user session"]
   GH --> OAuth["GET /api/v1/auth/github/callback"]
-  OAuth --> User["Regular user session"]
-  Email --> User
+  OAuth --> User
   User --> Own["Own vault, devices, tokens, activity"]
   Own --> Plug["Install plugin<br/>Community plugins · desktop · Android · iOS"]
   Plug --> Sync["Devices sync through the server"]
@@ -322,11 +322,11 @@ flowchart TD
 flowchart LR
   subgraph site [Public site]
     Land["GET / landing"] --> Wait["Hosted waitlist"]
-    Land --> GitHub["GitHub sign-in hidden until 6 taps on app name"]
-    Land --> Email["POST /api/v1/auth/signup"]
+    Land --> Email["Self-host: POST /api/v1/auth/signup or login"]
+    Land --> GitHub["Hosted: GitHub sign-in hidden until 6 taps"]
+    Email --> Cookie["HttpOnly cookie<br/>syncidian_session"]
     GitHub --> Callback["GET /api/v1/auth/github/callback"]
-    Callback --> Cookie["HttpOnly cookie<br/>syncidian_session"]
-    Email --> Cookie
+    Callback --> Cookie
   end
 
   subgraph admin [Operators]
@@ -350,7 +350,7 @@ flowchart LR
   Authed --> User["store.User"]
 ```
 
-GitHub OAuth is how vault users sign in. Admins sign in on a private operator hostname (`SYNCIDIAN_ADMIN_HOST`, for example `admin.syncidian.com` reachable only on Tailscale) or the unlisted path (`SYNCIDIAN_ADMIN_PATH`, default `/admin`) with username and password. The instance GitHub App needs a callback URL, a setup URL, and a webhook URL so GitHub can redirect and ping — those stay on `SYNCIDIAN_PUBLIC_URL`. GitHub App URL paste and MCP/call stats in the dashboard sit behind **Stats for Nerds**.
+On Syncidian.com, GitHub OAuth is how vault users sign in. On a self-hosted host, they use email signup/login; those routes are 404 on the hosted domain. Admins sign in on a private operator hostname (`SYNCIDIAN_ADMIN_HOST`, for example `admin.syncidian.com` reachable only on Tailscale) or the unlisted path (`SYNCIDIAN_ADMIN_PATH`, default `/admin`) with username and password. The instance GitHub App is optional for email-only self-host. When you do register one, it needs a callback URL, a setup URL, and a webhook URL so GitHub can redirect and ping — those stay on `SYNCIDIAN_PUBLIC_URL`. GitHub App URL paste and MCP/call stats in the dashboard sit behind **Stats for Nerds**.
 
 ---
 

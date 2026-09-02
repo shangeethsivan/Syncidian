@@ -109,7 +109,7 @@ func TestLoginRateLimit(t *testing.T) {
 	}
 }
 
-func TestSignupAndSetupRateLimit(t *testing.T) {
+func TestSetupRateLimit(t *testing.T) {
 	dir := t.TempDir()
 	st, err := store.Open(dir)
 	if err != nil {

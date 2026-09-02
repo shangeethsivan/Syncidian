@@ -141,9 +141,9 @@
     }
     #hero-canvas.visible { display: block; }
     body.hero-on { background: #05030a; }
-    :root[data-theme="light"] body.hero-on { background: #f4f0ff; }
+    :root[data-theme="light"] body.hero-on { background: #f6f3fb; }
     :root[data-theme="light"] #hero-canvas {
-      background: radial-gradient(120% 90% at 50% 42%, #e4dbff 0%, #c4b5fd 38%, #93c5fd 68%, #f4f0ff 100%);
+      background: radial-gradient(120% 90% at 50% 42%, #efe8ff 0%, #e4dbff 36%, #d7e6ff 64%, #f6f3fb 100%);
     }
     #landing {
       position: relative; z-index: 1; min-height: 100vh;
@@ -168,16 +168,93 @@
     :root[data-theme="light"] .hero h1 { color: #1a1230; text-shadow: 0 8px 36px rgba(120, 82, 238, .16); }
     :root[data-theme="light"] .hero .lede,
     :root[data-theme="light"] .hero .eyebrow { color: #4a4560; }
+    :root[data-theme="light"] #landing .site-head {
+      background: color-mix(in srgb, #f6f3fb 84%, transparent);
+      border-bottom: 1px solid rgba(29, 29, 31, .06);
+    }
+    :root[data-theme="light"] #landing .ghost { color: #3d3a4a; }
+    :root[data-theme="light"] #landing .ghost:hover {
+      color: #1a1230;
+      background: rgba(255, 255, 255, .72);
+    }
+    :root[data-theme="light"] #landing .arch div {
+      background: color-mix(in srgb, #ffffff 90%, transparent);
+      border-color: rgba(29, 29, 31, .08);
+      box-shadow: 0 12px 32px rgba(40, 28, 80, .06);
+    }
+    :root[data-theme="light"] .waitlist-box,
+    :root[data-theme="light"] .email-box {
+      background: #ffffff;
+      border-color: rgba(29, 29, 31, .1);
+    }
+    :root[data-theme="light"] .story,
+    :root[data-theme="light"] .devices,
+    :root[data-theme="light"] .privacy {
+      background: #f7f5fb;
+      box-shadow: 0 0 0 100vmax #f7f5fb;
+      clip-path: inset(0 -100vmax);
+    }
+    :root[data-theme="light"] .privacy-claim h2 { color: #1a1230; }
+    :root[data-theme="light"] .privacy-claim p { color: #5b5770; }
+    :root[data-theme="light"] .privacy-store {
+      background: #ffffff;
+      border-color: rgba(29, 29, 31, .08);
+      box-shadow: 0 18px 48px rgba(40, 28, 80, .07);
+    }
+    :root[data-theme="light"] .privacy-store h3 { color: #6a6680; }
+    :root[data-theme="light"] .laptop,
+    :root[data-theme="light"] .phone {
+      background: #ffffff;
+      box-shadow: 0 20px 50px rgba(40, 28, 80, .08);
+    }
+    :root[data-theme="light"] .note-list div {
+      background: #f4f1fa;
+    }
+    :root[data-theme="light"] .cinematic-footer-wrap {
+      background: #f3f0f8;
+      z-index: 2;
+    }
+    :root[data-theme="light"] .footer-aurora {
+      background: radial-gradient(circle at 50% 50%, color-mix(in srgb, #7852ee 14%, transparent), color-mix(in srgb, #027aff 10%, transparent) 42%, transparent 70%);
+    }
+    :root[data-theme="light"] .footer-pill {
+      background: #ffffff;
+      border-color: rgba(29, 29, 31, .1);
+      color: #1a1230;
+    }
+    .nav-chip {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 8px 14px; border-radius: 10px;
+      font-size: 13px; font-weight: 600; letter-spacing: -.01em;
+      text-decoration: none; line-height: 1; white-space: nowrap;
+    }
+    .nav-chip svg { width: 16px; height: 16px; flex-shrink: 0; }
+    .nav-chip-ghost {
+      color: rgba(247, 244, 255, .9);
+      background: transparent;
+      border: 1px solid rgba(247, 244, 255, .28);
+    }
+    .nav-chip-ghost:hover { border-color: rgba(247, 244, 255, .5); color: #fff; }
+    .nav-chip-solid {
+      background: #f5f5f7; color: #111; border: 1px solid #f5f5f7;
+    }
+    .nav-chip-solid:hover { filter: brightness(.96); }
+    :root[data-theme="light"] .nav-chip-ghost {
+      color: #1a1230;
+      border-color: rgba(29, 29, 31, .2);
+    }
+    :root[data-theme="light"] .nav-chip-ghost:hover {
+      color: #1a1230; border-color: rgba(29, 29, 31, .4); background: rgba(255,255,255,.7);
+    }
+    :root[data-theme="light"] .nav-chip-solid {
+      background: #1d1d1f; color: #f5f5f7; border-color: #1d1d1f;
+    }
+    .hero-source {
+      padding: 12px 20px; border-radius: 14px; font-size: 15px; text-transform: lowercase;
+    }
     #landing .arch div {
       background: color-mix(in srgb, var(--card) 58%, transparent);
       backdrop-filter: blur(18px);
-    }
-    #landing .email-box {
-      background: color-mix(in srgb, var(--card) 72%, transparent);
-      backdrop-filter: blur(18px);
-      border: 1px solid var(--line);
-      border-radius: 16px;
-      padding: 16px 18px;
     }
     .flash { padding: 10px 12px; border-radius: 10px; margin: 10px 0; }
     .flash.err { background: color-mix(in srgb, var(--danger) 12%, transparent); color: var(--danger); }
@@ -272,8 +349,8 @@
     .arch div { padding: 28px 24px; border: 1px solid var(--line); border-radius: 28px; text-align: left; background: var(--card); }
     .arch b { display: block; font-size: 15px; margin-bottom: 8px; }
     .arch span { color: var(--muted); font-size: 15px; }
-    .email-box { max-width: 420px; margin: 28px auto 0; text-align: left; }
-    .waitlist-box {
+    .waitlist-box,
+    .email-box {
       max-width: 520px; margin: 0 auto 28px; text-align: left;
       background: color-mix(in srgb, var(--card) 72%, transparent);
       backdrop-filter: blur(18px);
@@ -281,6 +358,7 @@
       border-radius: 16px;
       padding: 16px 18px;
     }
+    .email-box { max-width: 420px; }
     .waitlist-copy { margin: 0 0 12px; color: var(--muted); font-size: 15px; }
     .waitlist-row { display: flex; gap: 8px; align-items: stretch; }
     .waitlist-row input { flex: 1; min-width: 0; }
@@ -429,6 +507,10 @@
       .site-head { padding: 16px; }
       .arch { grid-template-columns: 1fr; }
       .hero-actions { flex-direction: column; align-items: center; }
+      .nav-chip span { display: none; }
+      .nav-chip { padding: 8px 10px; }
+      .hero-source span { display: inline; }
+      .hero-source { padding: 12px 20px; }
       .waitlist-row { flex-direction: column; }
       .waitlist-row .btn { width: 100%; min-height: 44px; }
       .device-stage { grid-template-columns: 1fr; }
@@ -445,7 +527,15 @@
       <div class="row">
         <button class="ghost theme-toggle" type="button">Theme</button>
         <a class="ghost" href="#privacy">Privacy</a>
-        <a class="ghost github-signin hidden" href="/api/v1/auth/github/start">Log in</a>
+        <a class="ghost github-signin hidden" href="/api/v1/auth/github/start" data-cta="github_signin" data-placement="header">Log in</a>
+        <a class="nav-chip nav-chip-ghost" href="https://discord.gg/sSpQQcV7K9" target="_blank" rel="noopener" data-cta="discord" data-placement="header">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M20.317 4.37a19.8 19.8 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.3 18.3 0 0 0-5.487 0 12.6 12.6 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.74 19.74 0 0 0 3.677 4.37a.07.07 0 0 0-.032.028C.533 9.046-.32 13.58.099 18.058a.08.08 0 0 0 .031.056 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14 14 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.1 13.1 0 0 1-1.872-.892.077.077 0 0 1-.008-.128c.126-.094.252-.192.372-.291a.074.074 0 0 1 .078-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.099.246.198.373.292a.077.077 0 0 1-.006.127 12.3 12.3 0 0 1-1.873.892.077.077 0 0 0-.041.106c.36.698.772 1.363 1.225 1.994a.076.076 0 0 0 .084.028 19.84 19.84 0 0 0 6.002-3.03.077.077 0 0 0 .032-.055c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.029M8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418m7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418"/></svg>
+          <span>Discord</span>
+        </a>
+        <a class="nav-chip nav-chip-solid" href="https://github.com/shangeethsivan/Syncidian" target="_blank" rel="noopener" data-cta="github" data-placement="header">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8"/></svg>
+          <span>GitHub</span>
+        </a>
       </div>
     </header>
     <section class="hero" id="start">
@@ -460,15 +550,12 @@
           <div class="waitlist-row">
             <label class="sr-only" for="waitlist-email">Email</label>
             <input id="waitlist-email" type="email" name="email" autocomplete="email" required placeholder="you@example.com" />
-            <button class="btn" id="waitlist-btn" type="submit">Join the waitlist</button>
+            <button class="btn" id="waitlist-btn" type="submit" data-cta="waitlist" data-placement="hero">Join the waitlist</button>
           </div>
           <div id="waitlist-flash"></div>
         </form>
-        <div class="hero-actions">
-          <a class="btn github-signin hidden" id="gh-signup" href="/api/v1/auth/github/start?next=install">Continue with GitHub</a>
-          <button class="btn secondary" id="show-email" type="button">Email</button>
-        </div>
         <form id="email-form" class="email-box hidden">
+          <p class="waitlist-copy" id="email-note">This is a self-hosted Syncidian. Use email to sign in — you do not need a GitHub App. Connecting a repo for backup is optional later.</p>
           <div id="email-flash"></div>
           <label>Username</label>
           <input id="su-user" autocomplete="username" />
@@ -481,8 +568,15 @@
             <button class="btn secondary" id="su-login" type="button">I already have an email account</button>
           </div>
         </form>
+        <div class="hero-actions">
+          <a class="btn github-signin hidden" id="gh-signup" href="/api/v1/auth/github/start?next=install" data-cta="github_signin" data-placement="hero">Continue with GitHub</a>
+          <a class="nav-chip nav-chip-ghost hero-source" href="https://github.com/shangeethsivan/Syncidian" target="_blank" rel="noopener" data-cta="github" data-placement="view_source">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8"/></svg>
+            <span>view source</span>
+          </a>
+        </div>
         <div class="arch">
-          <div><b>Sign in</b><span>GitHub, or email.</span></div>
+          <div><b>Sign in</b><span id="arch-signin">GitHub.</span></div>
           <div><b>Connect a repo</b><span>Install the GitHub App.</span></div>
           <div><b>Sync</b><span>This server commits to main.</span></div>
         </div>
@@ -551,11 +645,11 @@
         <div class="footer-center">
           <h2>Ready to begin?</h2>
           <div class="footer-pills">
-            <a class="footer-pill hidden" id="waitlist-footer" href="#waitlist-form">Join the waitlist</a>
+            <a class="footer-pill hidden" id="waitlist-footer" href="#waitlist-form" data-cta="waitlist" data-placement="footer">Join the waitlist</a>
+            <a class="footer-pill hidden" id="email-footer" href="#email-form">Email login</a>
             <a class="footer-pill" href="#privacy">Privacy</a>
-            <a class="footer-pill github-signin hidden" href="/api/v1/auth/github/start?next=install">Continue with GitHub</a>
-            <a class="footer-pill" href="#start">Email signup</a>
-            <a class="footer-pill" href="https://github.com/shangeethsivan/Syncidian" target="_blank" rel="noopener">Source</a>
+            <a class="footer-pill github-signin hidden" href="/api/v1/auth/github/start?next=install" data-cta="github_signin" data-placement="footer">Continue with GitHub</a>
+            <a class="footer-pill" href="https://github.com/shangeethsivan/Syncidian" target="_blank" rel="noopener" data-cta="github" data-placement="footer">Source</a>
           </div>
         </div>
         <div class="footer-bar">
@@ -574,7 +668,7 @@
         <button class="ghost theme-toggle" type="button">Theme</button>
       </div>
       <h1 id="auth-title">Admin</h1>
-      <p class="muted" id="auth-sub">Operators sign in here. Vault users sign in with GitHub from the public site.</p>
+      <p class="muted" id="auth-sub">Operators sign in here. On a self-hosted server, vault users sign in with email on the public site.</p>
       <div id="auth-persist"></div>
       <div id="flash"></div>
       <label>Username</label>
@@ -609,7 +703,7 @@
       <div class="help-head">
         <div>
           <h1 id="help-title">Setup walkthrough</h1>
-          <p class="muted" style="margin:0">GitHub for vault users. Operators use the unlisted admin path.</p>
+          <p class="muted" style="margin:0">Email on self-host. GitHub on Syncidian.com. Operators use the unlisted admin path.</p>
         </div>
         <button class="ghost" id="help-close" type="button">Close</button>
       </div>
@@ -651,6 +745,39 @@ function paintNerdsToggle() {
   b.classList.toggle("on", on);
   b.setAttribute("aria-pressed", on ? "true" : "false");
   b.textContent = on ? "Stats for Nerds on" : "Stats for Nerds";
+}
+function normalizeGAID(id) {
+  id = String(id || "").trim().toUpperCase();
+  return /^G-[A-Z0-9]+$/.test(id) ? id : "";
+}
+function initAnalytics(id) {
+  id = normalizeGAID(id);
+  if (!id || window.__syncidianGA) return;
+  window.__syncidianGA = id;
+  window.dataLayer = window.dataLayer || [];
+  window.gtag = function () { window.dataLayer.push(arguments); };
+  window.gtag("js", new Date());
+  window.gtag("config", id);
+  const s = document.createElement("script");
+  s.async = true;
+  s.src = "https://www.googletagmanager.com/gtag/js?id=" + encodeURIComponent(id);
+  document.head.appendChild(s);
+}
+function track(name, params) {
+  if (typeof window.gtag !== "function") return;
+  window.gtag("event", name, params || {});
+}
+function bindLandingAnalytics() {
+  document.querySelectorAll("[data-cta]").forEach((el) => {
+    el.addEventListener("click", () => {
+      const cta = el.getAttribute("data-cta") || "";
+      const placement = el.getAttribute("data-placement") || "";
+      if (cta === "discord") track("click_discord", { placement });
+      else if (cta === "github") track("click_github", { placement });
+      else if (cta === "github_signin") track("click_github_signin", { placement });
+      else if (cta === "waitlist") track("click_waitlist", { placement });
+    });
+  });
 }
 function applyTheme(next) {
   const theme = next || localStorage.getItem("syncidian-theme") || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
@@ -718,6 +845,10 @@ function waitlistAdminOn() {
   if (publicInfo && typeof publicInfo.waitlist_admin === "boolean") return publicInfo.waitlist_admin;
   return waitlistOn() && isAdminPath();
 }
+function emailLoginOn() {
+  if (publicInfo && typeof publicInfo.email_login === "boolean") return publicInfo.email_login;
+  return !isHostedPublicSite();
+}
 function githubSignInUnlocked() {
   try { return sessionStorage.getItem("syncidian-github-signin") === "1"; } catch { return false; }
 }
@@ -727,8 +858,22 @@ function githubSignInHidden() {
   return true;
 }
 function paintGitHubSignIn() {
-  const hide = githubSignInHidden();
-  document.querySelectorAll(".github-signin").forEach((el) => el.classList.toggle("hidden", hide));
+  const email = emailLoginOn();
+  const emailForm = $("email-form");
+  const emailFooter = $("email-footer");
+  if (emailForm) emailForm.classList.toggle("hidden", !email);
+  if (emailFooter) emailFooter.classList.toggle("hidden", !email);
+  const emailNote = $("email-note");
+  if (emailNote) {
+    emailNote.textContent = needsSetup
+      ? "This is a self-hosted Syncidian. Create the first admin at /admin, then people can sign up with email here. A GitHub App is optional."
+      : "This is a self-hosted Syncidian. Use email to sign in — you do not need a GitHub App. Connecting a repo for backup is optional later.";
+  }
+  let hideGH = githubSignInHidden();
+  if (email && !(publicInfo && publicInfo.github_login)) hideGH = true;
+  document.querySelectorAll(".github-signin").forEach((el) => el.classList.toggle("hidden", hideGH));
+  const signSpan = $("arch-signin");
+  if (signSpan) signSpan.textContent = email ? "Email on this server. GitHub is optional." : "GitHub.";
 }
 function revealGitHubSignIn() {
   try { sessionStorage.setItem("syncidian-github-signin", "1"); } catch {}
@@ -771,8 +916,8 @@ const HELP_STEPS = [
   {
     title: "1. Start the Syncidian server",
     html: () => `
-      <p>The public site is a one-page story. Vault users sign in with GitHub (on Syncidian.com, tap the app name six times to reveal it).</p>
-      <p><b>Self-host operators:</b> open <code>/admin</code> on this same URL. Skip Tailscale — leave <code>SYNCIDIAN_ADMIN_HOST</code> unset, or set <code>SYNCIDIAN_ADMIN_PRIVATE=0</code>.</p>
+      <p>The public site is a one-page story. On a self-hosted host, people sign in with email. On Syncidian.com they use GitHub (tap the app name six times to reveal it until public launch).</p>
+      <p><b>Self-host operators:</b> open <code>/admin</code> on this same URL to create the first admin. Skip Tailscale — leave <code>SYNCIDIAN_ADMIN_HOST</code> unset, or set <code>SYNCIDIAN_ADMIN_PRIVATE=0</code>.</p>
       <p>A Tailscale-only hostname (<code>admin.syncidian.com</code>) is optional. See <code>docs/tailscale-admin.md</code>.</p>
       <h2>Docker</h2>
       <pre>git clone https://github.com/shangeethsivan/Syncidian.git
@@ -793,19 +938,20 @@ docker compose up --build -d</pre>
   {
     title: "2. Authenticate",
     html: () => `
-      <p>The first account is an admin, created on the private operator hostname or unlisted path (default <code>/admin</code>). Admins manage users only — they do not connect a GitHub repository and never see another person’s vault, tokens, or GitHub credentials. Vault users sign in with GitHub from the public site, or with email.</p>
+      <p>Self-host still needs a one-time operator step: create the first admin on the private operator hostname or unlisted path (default <code>/admin</code>). After that, people sign up with email on the public site. You can also set <code>SYNCIDIAN_BOOTSTRAP_USER</code> and <code>SYNCIDIAN_BOOTSTRAP_PASSWORD</code> so the first admin is created at boot. Admins manage users only — they do not connect a GitHub repository and never see another person’s vault, tokens, or GitHub credentials.</p>
       <ol>
         <li>Open the operator path (not linked from the public site).</li>
         <li>Choose a username.</li>
         <li>Choose a password of at least 8 characters.</li>
         <li>Click <b>Create admin</b>.</li>
+        <li>Persist <code>/data</code> so that admin (and later users) survive deploys.</li>
       </ol>
     `,
   },
   {
     title: "3. Register the GitHub App",
     html: () => `
-      <p>Self-hosters create <b>one GitHub App for this instance</b> so people can sign in with GitHub. Full walkthrough: <code>docs/github-app.md</code>.</p>
+      <p>The GitHub App is <b>optional</b> on a self-hosted server. Email login works without it. Register the app only if you want GitHub sign-in or per-user vault backup. Full walkthrough: <code>docs/github-app.md</code>.</p>
       <ol>
         <li>On the admin page (enable <b>Stats for Nerds</b> to see GitHub App URLs), copy the <b>Callback</b>, <b>Setup</b>, and <b>Webhook</b> URLs — or click <b>Create GitHub App</b> to pre-fill them.</li>
         <li>If you create the app by hand in GitHub Developer settings, finish on the admin page: copy <b>App ID</b>, <b>Client ID</b>, generate a <b>client secret</b> and <b>private key</b>, then paste them into <b>Complete setup after creating the GitHub App</b>.</li>
@@ -816,10 +962,11 @@ docker compose up --build -d</pre>
   {
     title: "4. Create a regular user",
     html: () => `
-      <p>Most people sign up with GitHub on the public site. Admins can still create an email account on the <b>Users</b> page. Each account is isolated.</p>
+      <p>On a self-hosted host, vault users create an email account on the public site. On Syncidian.com they use <b>Continue with GitHub</b> (tap the app name six times first until public launch). Admins can still create a username and password on the <b>Users</b> page so they can mint an Obsidian token. Each account is isolated.</p>
       <ol>
-        <li>On the public site, click <b>Continue with GitHub</b> (on Syncidian.com, tap the app name six times first).</li>
-        <li>Or enter a username and password here, and leave <b>Admin</b> unchecked for vault users.</li>
+        <li>Self-host: use the email form on the public site after the first admin exists.</li>
+        <li>Syncidian.com: click <b>Continue with GitHub</b>.</li>
+        <li>Or create a vault user here (leave <b>Admin</b> unchecked) and mint an Obsidian token.</li>
       </ol>
       <p class="muted">Admins manage users. They should not see any private info of users.</p>
     `,
@@ -1005,6 +1152,8 @@ async function boot() {
   }
   const st = await api("/api/v1/setup");
   publicInfo = st;
+  initAnalytics(st.ga_id);
+  bindLandingAnalytics();
   needsSetup = st.needs_setup;
   fillGitHubURLs(st);
   try {
@@ -1057,8 +1206,8 @@ function showAuth() {
   heroScene.start();
   $("auth-title").textContent = needsSetup ? "Create the first admin" : "Admin sign in";
   $("auth-sub").textContent = needsSetup
-    ? "This is the operator page. Choose a username and a password of at least 8 characters. Vault users sign in with GitHub on the public site."
-    : "Operators only. Vault users sign in with GitHub from the public site.";
+    ? "This is the operator page. Choose a username and a password of at least 8 characters. After this, vault users sign in with email on the public site. A GitHub App is optional."
+    : "Operators only. On a self-hosted server, vault users sign in with email on the public site.";
   $("auth-btn").textContent = needsSetup ? "Create admin" : "Sign in";
   $("auth-btn").disabled = false;
   $("username").disabled = false;
@@ -1102,7 +1251,6 @@ $("logout").onclick = async () => {
   else location.href = "/";
 };
 
-$("show-email").onclick = () => $("email-form").classList.remove("hidden");
 const landingBrand = $("landing-brand");
 if (landingBrand) {
   landingBrand.addEventListener("pointerup", onLandingBrandTap);
@@ -1117,6 +1265,7 @@ if (waitlistForm) {
     try {
       if (btn) btn.disabled = true;
       await api("/api/v1/waitlist", { method: "POST", body: JSON.stringify({ email: $("waitlist-email").value }) });
+      track("join_waitlist", { placement: "hero" });
       flash($("waitlist-flash"), "You're on the list. We'll write when it's ready.", "ok");
       $("waitlist-email").value = "";
     } catch (err) {
@@ -1126,7 +1275,8 @@ if (waitlistForm) {
     }
   });
 }
-$("su-btn").onclick = async () => {
+const suBtn = $("su-btn");
+if (suBtn) suBtn.onclick = async () => {
   try {
     await api("/api/v1/auth/signup", { method: "POST", body: JSON.stringify({
       username: $("su-user").value, email: $("su-email").value, password: $("su-pass").value
@@ -1134,15 +1284,15 @@ $("su-btn").onclick = async () => {
     location.href = "/";
   } catch (e) { flash($("email-flash"), e.message); }
 };
-$("su-login").onclick = async () => {
+const suLogin = $("su-login");
+if (suLogin) suLogin.onclick = async () => {
   try {
     await api("/api/v1/auth/login", { method: "POST", body: JSON.stringify({
-      username: $("su-user").value, password: $("su-pass").value
+      username: $("su-user").value || $("su-email").value, password: $("su-pass").value
     })});
     location.href = "/";
   } catch (e) { flash($("email-flash"), e.message); }
 };
-
 async function render() {
   const main = $("main");
   main.innerHTML = "<p class='muted'>Loading…</p>";
@@ -1178,9 +1328,13 @@ async function adminOverview(main) {
     <div class="card">
       <h2>What you can do</h2>
       <ul>
-        <li>Create regular users on the <b>Users</b> page, or let them sign up with GitHub.</li>
+        ${waitlistOn()
+          ? "<li>Let allowlisted people sign in with GitHub from the public site after you register the instance GitHub App.</li>"
+          : "<li>Create regular users on the <b>Users</b> page, or let them sign up with email on this server.</li>"}
         ${waitlistOn() ? "<li>Review hosted waitlist emails on the <b>Waitlist</b> page.</li>" : ""}
-        <li>${nerdsOn() ? "Register the instance GitHub App using the URLs below." : "Turn on <b>Stats for Nerds</b> to register the instance GitHub App."}</li>
+        <li>${nerdsOn()
+          ? (waitlistOn() ? "Register the instance GitHub App using the URLs below." : "Optionally register the instance GitHub App using the URLs below.")
+          : (waitlistOn() ? "Turn on <b>Stats for Nerds</b> to register the instance GitHub App." : "Turn on <b>Stats for Nerds</b> if you want a GitHub App for sign-in or backup.")}</li>
         <li>You never open another user’s notes.</li>
       </ul>
       <div class="row">
@@ -1192,7 +1346,9 @@ async function adminOverview(main) {
       <h2>GitHub App</h2>
       <p>${publicInfo && publicInfo.github_app && publicInfo.github_app.configured
         ? `<span class="pill ok">Registered</span> ${esc((publicInfo.github_app.slug || "GitHub App"))}`
-        : `<span class="pill warn">Not registered</span> People cannot sign in with GitHub until an operator registers the app.`}</p>
+        : `<span class="pill warn">Not registered</span> ${waitlistOn()
+          ? "People cannot sign in with GitHub until an operator registers the app."
+          : "Email login already works. Register the app only if you want GitHub sign-in or per-user backup."}`}</p>
       ${nerdsOn() ? "" : `<p class="muted">Enable <b>Stats for Nerds</b> for callback URLs, Create GitHub App, and credential paste.</p>`}
     </div>
     ${nerdsOn() ? `
@@ -1234,7 +1390,7 @@ async function adminOverview(main) {
           <li>Paste the values into the form below and click <b>Save credentials</b>, <em>or</em></li>
           <li>Set <code>SYNCIDIAN_GITHUB_APP_ID</code>, <code>SYNCIDIAN_GITHUB_APP_SLUG</code>, <code>SYNCIDIAN_GITHUB_CLIENT_ID</code>, <code>SYNCIDIAN_GITHUB_CLIENT_SECRET</code>, and <code>SYNCIDIAN_GITHUB_APP_PRIVATE_KEY</code>, then restart the server.</li>
         </ol>
-        <p class="muted">When this page shows <b>Registered</b>, people can use <b>Continue with GitHub</b> on the public site. Full details: <code>docs/github-app.md</code>.</p>
+        <p class="muted">When this page shows <b>Registered</b>, people can also use <b>Continue with GitHub</b> on the public site. Email login works without it. Full details: <code>docs/github-app.md</code>.</p>
       </div>
       <label>App ID</label>
       <input id="gh-man-app-id" type="number" min="1" placeholder="123456" />
@@ -1765,7 +1921,7 @@ void main() {
   float glow = smoothstep(0.8, 0.0, dist) * 0.3;
   col += u_colors[1] * glow;
 
-  col = mix(col * 0.2, col, vignette);
+  col = mix(u_bg, col, vignette);
 
   float grain = fract(sin(dot(uv, vec2(12.9898, 78.233))) * 43758.5453 + u_time);
   col += (grain - 0.5) * u_grain * 0.1;
@@ -1776,7 +1932,7 @@ void main() {
 
   const palettes = {
     dark: { bg: "#05030a", colors: ["#7852ee", "#a882ff", "#027aff", "#2e1065"], grain: 0.28 },
-    light: { bg: "#f4f0ff", colors: ["#7852ee", "#a882ff", "#027aff", "#c4b5fd"], grain: 0.12 },
+    light: { bg: "#f6f3fb", colors: ["#d5c8ff", "#c8d8ff", "#e4dcff", "#f0e8ff"], grain: 0.06 },
   };
 
   function cssFallback() {

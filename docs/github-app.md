@@ -1,6 +1,6 @@
 # Set up the GitHub App (self-host)
 
-Anyone running their own Syncidian instance needs **one GitHub App** for that instance. Vault users then sign in with GitHub and install that app on **one** repository. Syncidian always uses the `main` branch. Personal access tokens and deploy keys are not used.
+The GitHub App is **optional** on a self-hosted instance. Vault users can sign in with email without it. Create **one GitHub App** for the instance only if you want GitHub sign-in or per-user vault backup. Those users then install that app on **one** repository. Syncidian always uses the `main` branch. Personal access tokens and deploy keys are not used.
 
 Do this after the server is reachable at a URL you will keep (for example `https://syncidian.example.com` or `http://localhost:8080` for a private laptop).
 
@@ -26,6 +26,8 @@ GET {base}/api/v1/github/app/urls
 
 Set `SYNCIDIAN_PUBLIC_URL` to `{base}` if the server sits behind a reverse proxy, so the GitHub App URLs (callback, setup, webhook) match the hostname GitHub can reach. A Tailscale-only operator hostname is not that origin.
 
+If the public hostname changes (for example Railway `*.up.railway.app` → `https://syncidian.com`), **keep the same GitHub App**. App ID, Client ID, client secret, and private key do not change. Open [the app’s settings](https://github.com/settings/apps) and set Homepage, Callback, Setup, and Webhook to the new `{base}` URLs above. Creating a new app would orphan existing installs.
+
 ---
 
 ## Option A — recommended: create it from `/admin`
@@ -41,7 +43,7 @@ This posts a GitHub App **manifest**, so permissions and URLs are filled in for 
 
 Those credentials are stored encrypted in SQLite. Attach a volume at `/data` (or copy them into `SYNCIDIAN_GITHUB_APP_*` env vars — Option B) so the next deploy does not wipe the GitHub App. Set `SYNCIDIAN_DATA_KEY` if you want the encryption key in environment variables instead of `data/secret.key`.
 
-People can now use **Sign up using GitHub** / **Log in** / **Connect to your GitHub repository** on `{base}/`. On hosted Syncidian.com those GitHub buttons stay hidden until you tap the app name six times, and `SYNCIDIAN_GITHUB_ALLOWED_EMAIL` must match the GitHub account.
+People can now use **Continue with GitHub** / **Log in** / **Connect to your GitHub repository** on `{base}/`. Self-hosted email login already works without this app. On hosted Syncidian.com those GitHub buttons stay hidden until you tap the app name six times, and `SYNCIDIAN_GITHUB_ALLOWED_EMAIL` must match the GitHub account.
 
 The manifest requests:
 
@@ -122,7 +124,7 @@ Keep the `.pem` and client secret off the public site. `/admin` never shows anot
 Device sync works with no GitHub at all. GitHub is optional backup, one repo per user.
 
 1. Open `{base}/` (not `/admin`).
-2. Click **Sign up using GitHub** (on the hosted site, tap the Syncidian name six times first) or **Connect to your GitHub repository**.
+2. Sign in with email (self-host) or **Continue with GitHub** (on the hosted site, tap the Syncidian name six times first), then **Connect to your GitHub repository**.
 3. Authorize the app, then **Install** it on **one** repository (or several, then pick one in the dashboard).
 4. Syncidian always commits to **`main`**. Other branches are not used.
 5. Create a `sk_sync_…` token on that user’s **Tokens** page and paste it into the Obsidian plugin. The plugin never sees GitHub credentials.
@@ -145,6 +147,7 @@ If GitHub sent them back after **Install & Authorize**, Syncidian records the `i
 | --- | --- |
 | “This instance has no GitHub App yet” | Finish Option A or B. Confirm `/admin` shows **Registered**, or the `SYNCIDIAN_GITHUB_APP_*` variables are set. |
 | OAuth error / redirect mismatch | Callback URL on the GitHub App must be exactly `{base}/api/v1/auth/github/callback`. `{base}` must be the origin in the address bar (scheme + host + port). |
+| Redirect URI error after changing the public domain | App ID, Client ID, client secret, and private key stay the same. Edit the **existing** GitHub App: Homepage, Callback, Setup, and Webhook must all use the new `{base}` (for hosted: `https://syncidian.com`). Do not create a new app. |
 | Install succeeds but Syncidian says credentials are missing | Setup URL must be `{base}/api/v1/github/app/setup`. Sign in as a **non-admin** vault user; admins do not connect a repo. |
 | Install & Authorize succeeds but dashboard still says **Not configured** | With OAuth during installation, GitHub redirects to the **Callback URL** with `installation_id`. Syncidian must receive that on `/api/v1/auth/github/callback` while you are signed in. Click **Connect with GitHub** again from the dashboard (do not open the install URL in a private window). Confirm Callback URL is exactly `{base}/api/v1/auth/github/callback`. |
 | Cannot install on someone else’s GitHub account | Make the app installable on **Any account** (public to GitHub users, not the Marketplace). |

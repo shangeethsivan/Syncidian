@@ -29,6 +29,8 @@ func (s *Server) handleSetupStatus(w http.ResponseWriter, r *http.Request) {
 		"waitlist":             s.isHostedPublic(r),
 		"waitlist_admin":       s.hostedWaitlistAdmin(r),
 		"admin_private":        s.Cfg.AdminPrivate || s.adminHostConfigured(),
+		"email_login":          !s.isHostedPublic(r),
+		"ga_id":                s.Cfg.GAID,
 		"github_app": map[string]any{
 			"configured": app.Configured(),
 			"slug":       "",
@@ -109,7 +111,15 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	if s.denyPassword(w, r, username) {
 		return
 	}
-	u, err := s.Store.GetUserByUsername(username)
+	var (
+		u   *store.User
+		err error
+	)
+	if strings.Contains(username, "@") {
+		u, err = s.Store.GetUserByEmail(strings.ToLower(username))
+	} else {
+		u, err = s.Store.GetUserByUsername(username)
+	}
 	if err != nil || u == nil || u.PasswordHash == "" || !checkPassword(u.PasswordHash, req.Password) {
 		s.notePasswordFail(r, username)
 		writeError(w, http.StatusUnauthorized, "invalid credentials")
@@ -136,6 +146,10 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleSignup(w http.ResponseWriter, r *http.Request) {
+	if s.isHostedPublic(r) {
+		writeError(w, http.StatusNotFound, "not found")
+		return
+	}
 	if s.denySignup(w, r) {
 		return
 	}
@@ -145,7 +159,7 @@ func (s *Server) handleSignup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if n == 0 {
-		writeError(w, http.StatusBadRequest, "Create the first admin before signing up.")
+		writeError(w, http.StatusBadRequest, "Create the first admin on /admin before signing up.")
 		return
 	}
 	var req struct {
