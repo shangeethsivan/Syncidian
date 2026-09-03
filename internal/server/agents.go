@@ -236,6 +236,9 @@ func (s *Server) mcpServerCard(origin string) map[string]any {
 		"title":           "Syncidian",
 		"description":     "Self-hosted Obsidian sync and MCP bridge. Search and read vault notes; optional GitHub-backed writes.",
 		"websiteUrl":      origin,
+		"icons": []map[string]any{
+			{"src": origin + "/assets/syncidian.png", "mimeType": "image/png", "sizes": "512x512"},
+		},
 		"repository": map[string]any{
 			"url":    "https://github.com/shangeethsivan/Syncidian",
 			"source": "github",
