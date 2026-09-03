@@ -194,6 +194,20 @@ func TestAdminHostServesOperatorAndSetup(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("admin user list on admin host: %d %s", rec.Code, rec.Body.Bytes())
 	}
+
+	rec = serveHost(srv, http.MethodPost, "/api/v1/auth/password", "syncidian.com", map[string]string{
+		"current_password": "password1", "password": "password2",
+	}, cookies)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("password change on public host should 404, got %d %s", rec.Code, rec.Body.Bytes())
+	}
+
+	rec = serveHost(srv, http.MethodPost, "/api/v1/auth/password", "admin.syncidian.com", map[string]string{
+		"current_password": "password1", "password": "password2",
+	}, cookies)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("password change on admin host: %d %s", rec.Code, rec.Body.Bytes())
+	}
 }
 
 func TestAdminHostWaitlistList(t *testing.T) {

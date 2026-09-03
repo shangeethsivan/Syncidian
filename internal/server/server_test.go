@@ -507,6 +507,9 @@ func TestDashboardServed(t *testing.T) {
 		`id="help-fab"`,
 		`id="help-overlay"`,
 		`id="help-panel"`,
+		`id="admin-password"`,
+		`id="adm-pass-save"`,
+		`/api/v1/auth/password`,
 		`Setup walkthrough`,
 		`HELP_STEPS`,
 		`scripts/install-plugin.sh`,
@@ -534,6 +537,11 @@ func TestDashboardServed(t *testing.T) {
 		`The plugin never puts the token in a URL`,
 		`id="setup-obsidian"`,
 		`Restricted mode`,
+		`Easy setup. No more git sync needed`,
+		`Auto resolves conflicts or opens a conflict resolver`,
+		`id="origin"`,
+		`Securing my second brain`,
+		`Linus Torvalds`,
 		`already installed the app earlier`,
 		`id="mcp-overview"`,
 		`Connected MCP clients`,
@@ -564,6 +572,69 @@ func TestDashboardServed(t *testing.T) {
 		if bytes.Contains(b, []byte(forbidden)) {
 			t.Fatalf("dashboard still gates login behind GitHub setup: %q", forbidden)
 		}
+	}
+}
+
+func TestAdminChangePassword(t *testing.T) {
+	hs, done := newTestServer(t)
+	defer done()
+	adminCookies := setupAdmin(t, hs)
+
+	res, m := doJSON(t, http.MethodPost, hs.URL+"/api/v1/auth/password", map[string]string{
+		"current_password": "wrong-password", "password": "password2",
+	}, adminCookies, "")
+	if res.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("wrong current password: %d %v", res.StatusCode, m)
+	}
+
+	res, m = doJSON(t, http.MethodPost, hs.URL+"/api/v1/auth/password", map[string]string{
+		"current_password": "password1", "password": "short",
+	}, adminCookies, "")
+	if res.StatusCode != http.StatusBadRequest {
+		t.Fatalf("short password: %d %v", res.StatusCode, m)
+	}
+
+	res, m = doJSON(t, http.MethodPost, hs.URL+"/api/v1/auth/password", map[string]string{
+		"current_password": "password1", "password": "password1",
+	}, adminCookies, "")
+	if res.StatusCode != http.StatusBadRequest {
+		t.Fatalf("same password: %d %v", res.StatusCode, m)
+	}
+
+	res, m = doJSON(t, http.MethodPost, hs.URL+"/api/v1/auth/password", map[string]string{
+		"current_password": "password1", "password": "password2",
+	}, adminCookies, "")
+	if res.StatusCode != http.StatusOK || m["ok"] != true {
+		t.Fatalf("change password: %d %v", res.StatusCode, m)
+	}
+
+	res, m = doJSON(t, http.MethodPost, hs.URL+"/api/v1/auth/login", map[string]string{
+		"username": "ada", "password": "password1",
+	}, nil, "")
+	if res.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("old password should fail: %d %v", res.StatusCode, m)
+	}
+
+	res, m = doJSON(t, http.MethodPost, hs.URL+"/api/v1/auth/login", map[string]string{
+		"username": "ada", "password": "password2",
+	}, nil, "")
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("new password should work: %d %v", res.StatusCode, m)
+	}
+
+	cookies := createAndLoginUser(t, hs, adminCookies, "bob")
+	res, m = doJSON(t, http.MethodPost, hs.URL+"/api/v1/auth/password", map[string]string{
+		"current_password": "password1", "password": "password9",
+	}, cookies, "")
+	if res.StatusCode != http.StatusForbidden {
+		t.Fatalf("vault user must not change admin password: %d %v", res.StatusCode, m)
+	}
+
+	res, m = doJSON(t, http.MethodPost, hs.URL+"/api/v1/auth/password", map[string]string{
+		"current_password": "password1", "password": "password9",
+	}, nil, "")
+	if res.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("unauthenticated change: %d %v", res.StatusCode, m)
 	}
 }
 
@@ -1768,7 +1839,7 @@ func TestCORSDoesNotReflectArbitraryOrigins(t *testing.T) {
 	hs, done := newTestServer(t)
 	defer done()
 	evil := "https://evil.example"
-	paths := []string{"/api/v1/auth/login", "/api/v1/mcp/login", "/api/v1/devices/register"}
+	paths := []string{"/api/v1/auth/login", "/api/v1/auth/password", "/api/v1/mcp/login", "/api/v1/devices/register"}
 	for _, path := range paths {
 		req, err := http.NewRequest(http.MethodOptions, hs.URL+path, nil)
 		if err != nil {

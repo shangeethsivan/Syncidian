@@ -4,6 +4,13 @@
   <img src="syncidian.png" alt="Syncidian" width="160" height="160" />
 </p>
 
+[![CI](https://github.com/shangeethsivan/Syncidian/actions/workflows/ci.yml/badge.svg)](https://github.com/shangeethsivan/Syncidian/actions/workflows/ci.yml)
+[![Latest release](https://img.shields.io/github/v/release/shangeethsivan/Syncidian)](https://github.com/shangeethsivan/Syncidian/releases)
+[![License: MIT](https://img.shields.io/github/license/shangeethsivan/Syncidian)](LICENSE)
+[![Obsidian](https://img.shields.io/badge/Obsidian-plugin-7C3AED?logo=obsidian&logoColor=white)](plugin/)
+[![Discord](https://img.shields.io/badge/Discord-join-5865F2?logo=discord&logoColor=white)](https://discord.gg/sSpQQcV7K9)
+[![Buy me a coffee](https://img.shields.io/badge/Buy%20me%20a%20coffee-FFDD00?logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/shravzdev)
+
 > **Your data stays with you.** Sync your knowledge. Back it up. Connect your AI.
 
 **Obsidian plugin:** install **Syncidian** from Community plugins (or [BRAT](https://github.com/TfTHacker/obsidian42-brat) / sideload). Point it at your Syncidian server with a `sk_sync_…` token. This plugin does not use Obsidian Sync.
@@ -27,6 +34,8 @@ docker run -d \
 ```
 
 **Self-host Syncidian for free.** A managed service is planned at $1/month; it is not available yet.
+
+[Buy me a coffee](https://buymeacoffee.com/shravzdev) if Syncidian is useful.
 
 ---
 
@@ -1414,6 +1423,14 @@ You can contribute through:
 * Platform-specific improvements
 
 Contribution guidelines will be added as the project matures.
+
+---
+
+# ☕ Support
+
+[![Buy me a coffee](https://img.shields.io/badge/Buy%20me%20a%20coffee-FFDD00?logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/shravzdev)
+
+If Syncidian is useful, you can [buy me a coffee](https://buymeacoffee.com/shravzdev). The repo also lists that link on GitHub’s Sponsor button.
 
 ---
 

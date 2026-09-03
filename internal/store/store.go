@@ -135,6 +135,21 @@ func (s *Store) CreateGitHubUser(login, email string, githubID int64) (*User, er
 	return u, nil
 }
 
+func (s *Store) SetUserPassword(userID, passwordHash string) error {
+	if strings.TrimSpace(userID) == "" || passwordHash == "" {
+		return fmt.Errorf("user and password hash are required")
+	}
+	res, err := s.db.Exec(`UPDATE users SET password_hash = ? WHERE id = ?`, passwordHash, userID)
+	if err != nil {
+		return err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return fmt.Errorf("user not found")
+	}
+	return nil
+}
+
 func (s *Store) SetUserGitHub(userID string, githubID int64, email string) error {
 	email = strings.TrimSpace(strings.ToLower(email))
 	_, err := s.db.Exec(`UPDATE users SET github_id = ?, email = CASE WHEN ? != '' THEN ? ELSE email END WHERE id = ?`,
