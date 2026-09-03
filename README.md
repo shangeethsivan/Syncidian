@@ -1,5 +1,27 @@
 # Syncidian
 
+[![CI](https://github.com/shangeethsivan/Syncidian/actions/workflows/ci.yml/badge.svg)](https://github.com/shangeethsivan/Syncidian/actions/workflows/ci.yml)
+[![Release](https://github.com/shangeethsivan/Syncidian/actions/workflows/release.yml/badge.svg)](https://github.com/shangeethsivan/Syncidian/actions/workflows/release.yml)
+[![Latest release](https://img.shields.io/github/v/release/shangeethsivan/Syncidian)](https://github.com/shangeethsivan/Syncidian/releases)
+[![Plugin](https://img.shields.io/badge/plugin-0.2.0-blue)](plugin/manifest.json)
+[![License: MIT](https://img.shields.io/github/license/shangeethsivan/Syncidian)](LICENSE)
+[![Go](https://img.shields.io/badge/Go-1.22-00ADD8?logo=go&logoColor=white)](https://go.dev/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.3-3178C6?logo=typescript&logoColor=white)](plugin/)
+[![Docker](https://img.shields.io/badge/Docker-ready-2496ED?logo=docker&logoColor=white)](Dockerfile)
+[![SQLite](https://img.shields.io/badge/SQLite-embedded-003B57?logo=sqlite&logoColor=white)](https://sqlite.org/)
+[![Obsidian](https://img.shields.io/badge/Obsidian-plugin-7C3AED?logo=obsidian&logoColor=white)](plugin/)
+[![Mobile](https://img.shields.io/badge/mobile-Android%20%2B%20iOS-black)](docs/install-mobile.md)
+[![MCP](https://img.shields.io/badge/MCP-server-555)](docs/architecture.md)
+[![GitHub App](https://img.shields.io/badge/GitHub%20App-optional-181717?logo=github)](docs/github-app.md)
+[![Self-host](https://img.shields.io/badge/self--host-free-0A7)](#-quick-start-mac-linux-or-windows-with-docker)
+[![Railway](https://img.shields.io/badge/Railway-deploy-0B0D0E?logo=railway)](#deploy-on-railway)
+[![Stars](https://img.shields.io/github/stars/shangeethsivan/Syncidian?style=social)](https://github.com/shangeethsivan/Syncidian/stargazers)
+[![Issues](https://img.shields.io/github/issues/shangeethsivan/Syncidian)](https://github.com/shangeethsivan/Syncidian/issues)
+[![PRs](https://img.shields.io/github/issues-pr/shangeethsivan/Syncidian)](https://github.com/shangeethsivan/Syncidian/pulls)
+[![Last commit](https://img.shields.io/github/last-commit/shangeethsivan/Syncidian)](https://github.com/shangeethsivan/Syncidian/commits/main)
+[![Discord](https://img.shields.io/badge/Discord-join-5865F2?logo=discord&logoColor=white)](https://discord.gg/sSpQQcV7K9)
+[![Buy me a coffee](https://img.shields.io/badge/Buy%20me%20a%20coffee-FFDD00?logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/shravzdev)
+
 > **Your data stays with you.** Sync your knowledge. Back it up. Connect your AI.
 
 **Obsidian plugin:** install **Syncidian** from Community plugins (or [BRAT](https://github.com/TfTHacker/obsidian42-brat) / sideload). Point it at your Syncidian server with a `sk_sync_…` token. This plugin does not use Obsidian Sync.
@@ -23,6 +45,8 @@ docker run -d \
 ```
 
 **Self-host Syncidian for free.** A managed service is planned at $1/month; it is not available yet.
+
+[Buy me a coffee](https://buymeacoffee.com/shravzdev) if Syncidian is useful.
 
 ---
 
@@ -1410,6 +1434,14 @@ You can contribute through:
 * Platform-specific improvements
 
 Contribution guidelines will be added as the project matures.
+
+---
+
+# ☕ Support
+
+[![Buy me a coffee](https://img.shields.io/badge/Buy%20me%20a%20coffee-FFDD00?logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/shravzdev)
+
+If Syncidian is useful, you can [buy me a coffee](https://buymeacoffee.com/shravzdev). The repo also lists that link on GitHub’s Sponsor button.
 
 ---
 

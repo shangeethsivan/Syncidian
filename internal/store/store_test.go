@@ -83,6 +83,29 @@ func TestOneGitHubRepoPerUser(t *testing.T) {
 	}
 }
 
+func TestSetUserPassword(t *testing.T) {
+	st, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	u, err := st.CreateUser("ada", "old-hash", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.SetUserPassword(u.ID, "new-hash"); err != nil {
+		t.Fatal(err)
+	}
+	got, err := st.GetUser(u.ID)
+	if err != nil || got == nil || got.PasswordHash != "new-hash" {
+		t.Fatalf("password hash: %+v %v", got, err)
+	}
+	if err := st.SetUserPassword("missing", "x"); err == nil {
+		t.Fatal("expected missing user to fail")
+	}
+}
+
 func TestGitHubIdentityAndInstanceApp(t *testing.T) {
 	st, err := Open(t.TempDir())
 	if err != nil {

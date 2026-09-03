@@ -208,6 +208,49 @@ func (s *Server) handleSignup(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, map[string]any{"user": publicUser(u)})
 }
 
+func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request, u *store.User) {
+	if bearerRequest(r) {
+		writeError(w, http.StatusForbidden, "access tokens cannot change the password; sign in on the dashboard")
+		return
+	}
+	var req struct {
+		CurrentPassword string `json:"current_password"`
+		Password        string `json:"password"`
+	}
+	if err := readJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid json")
+		return
+	}
+	if s.denyPassword(w, r, u.Username) {
+		return
+	}
+	if u.PasswordHash == "" || !checkPassword(u.PasswordHash, req.CurrentPassword) {
+		s.notePasswordFail(r, u.Username)
+		writeError(w, http.StatusUnauthorized, "current password is incorrect")
+		return
+	}
+	if len(req.Password) < 8 {
+		writeError(w, http.StatusBadRequest, "password must be at least 8 characters")
+		return
+	}
+	if req.Password == req.CurrentPassword {
+		writeError(w, http.StatusBadRequest, "new password must be different")
+		return
+	}
+	hash, err := hashPassword(req.Password)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "could not hash password")
+		return
+	}
+	if err := s.Store.SetUserPassword(u.ID, hash); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	s.notePasswordOK(u.Username)
+	_ = s.Store.AddActivity(store.Activity{UserID: u.ID, Action: "password.change", Detail: u.Username})
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
 func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request, _ *store.User) {
 	if c, err := r.Cookie("syncidian_session"); err == nil {
 		_ = s.Store.DeleteSession(c.Value)

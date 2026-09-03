@@ -90,6 +90,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/v1/auth/login", s.handleLogin)
 	mux.HandleFunc("POST /api/v1/auth/signup", s.handleSignup)
 	mux.HandleFunc("POST /api/v1/auth/logout", s.authed(s.handleLogout))
+	mux.HandleFunc("POST /api/v1/auth/password", s.adminAuthed(s.handleChangePassword))
 	mux.HandleFunc("GET /api/v1/auth/github/start", s.handleGitHubAuthStart)
 	mux.HandleFunc("GET /api/v1/auth/github/callback", s.handleGitHubAuthCallback)
 	mux.HandleFunc("GET /api/v1/me", s.authed(s.handleMe))
