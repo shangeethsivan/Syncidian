@@ -172,7 +172,8 @@ func (s *Server) Handler() http.Handler {
 			mux.HandleFunc("GET /admin/{$}", http.NotFound)
 		}
 		mux.HandleFunc("GET /favicon.ico", func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusNoContent)
+			w.Header().Set("Content-Type", "image/png")
+			http.ServeFileFS(w, r, static, "assets/syncidian.png")
 		})
 		mux.HandleFunc("GET /robots.txt", s.handleRobots)
 		mux.HandleFunc("GET /sitemap.xml", s.handleSitemap)

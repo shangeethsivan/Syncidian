@@ -24,3 +24,20 @@ func TestLandingUsesVelarisNotThree(t *testing.T) {
 		t.Fatal("landing is missing Obsidian palette colors")
 	}
 }
+
+func TestLandingUsesAppLogo(t *testing.T) {
+	if _, err := FS.ReadFile("static/assets/syncidian.png"); err != nil {
+		t.Fatal("web assets must include syncidian.png")
+	}
+	b, err := FS.ReadFile("static/index.html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	html := string(b)
+	if !strings.Contains(html, `/assets/syncidian.png`) {
+		t.Fatal("landing is missing the Syncidian logo")
+	}
+	if strings.Contains(html, `class="dot"`) {
+		t.Fatal("landing still uses the placeholder brand dot")
+	}
+}

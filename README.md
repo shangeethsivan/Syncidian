@@ -1,5 +1,9 @@
 # Syncidian
 
+<p align="center">
+  <img src="syncidian.png" alt="Syncidian" width="160" height="160" />
+</p>
+
 [![CI](https://github.com/shangeethsivan/Syncidian/actions/workflows/ci.yml/badge.svg)](https://github.com/shangeethsivan/Syncidian/actions/workflows/ci.yml)
 [![Latest release](https://img.shields.io/github/v/release/shangeethsivan/Syncidian)](https://github.com/shangeethsivan/Syncidian/releases)
 [![License: MIT](https://img.shields.io/github/license/shangeethsivan/Syncidian)](LICENSE)
