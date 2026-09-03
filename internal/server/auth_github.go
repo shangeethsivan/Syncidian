@@ -66,7 +66,7 @@ func (s *Server) handleGitHubAuthStart(w http.ResponseWriter, r *http.Request) {
 		Secure:   r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https"),
 		MaxAge:   600,
 	})
-	urls := githubapp.AppURLs(s.requestBase(r))
+	urls := githubapp.AppURLs(s.githubBase(r))
 	q := url.Values{
 		"client_id":    {app.ClientID},
 		"redirect_uri": {urls.Callback},
@@ -115,7 +115,7 @@ func (s *Server) handleGitHubAuthCallback(w http.ResponseWriter, r *http.Request
 		s.dashboardRedirect(w, r, url.Values{"github": {"error"}, "message": {"GitHub App is not registered."}})
 		return
 	}
-	urls := githubapp.AppURLs(s.requestBase(r))
+	urls := githubapp.AppURLs(s.githubBase(r))
 	token, err := githubapp.ExchangeOAuth(app.ClientID, app.ClientSecret, r.URL.Query().Get("code"), urls.Callback)
 	if err != nil {
 		s.dashboardRedirect(w, r, url.Values{"github": {"error"}, "message": {err.Error()}})

@@ -487,6 +487,8 @@ func TestDashboardServed(t *testing.T) {
 	for _, needle := range []string{
 		`id="landing"`,
 		`id="landing-brand"`,
+		`id="adm-callback-public"`,
+		`redirect_uri is not associated`,
 		`github-signin`,
 		`syncidian-github-signin`,
 		`Continue with GitHub`,

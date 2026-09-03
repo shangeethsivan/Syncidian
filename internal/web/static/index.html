@@ -831,6 +831,7 @@ function fillGitHubURLs(st) {
   if (!urls) return;
   const set = (id, v) => { const el = $(id); if (el) el.textContent = v; };
   set("adm-callback", urls.callback);
+  set("adm-callback-public", urls.callback);
   set("adm-setup", urls.setup);
   set("adm-webhook", urls.webhook);
 }
@@ -1385,7 +1386,11 @@ async function adminOverview(main) {
         : `<span class="pill warn">Not registered</span> ${waitlistOn()
           ? "People cannot sign in with GitHub until an operator registers the app."
           : "Email login already works. Register the app only if you want GitHub sign-in or per-user backup."}`}</p>
-      ${nerdsOn() ? "" : `<p class="muted">Enable <b>Stats for Nerds</b> for callback URLs, Create GitHub App, and credential paste.</p>`}
+      ${publicInfo && publicInfo.github_app && publicInfo.github_app.configured && publicInfo.github_app.urls && publicInfo.github_app.urls.callback ? `
+      <p>GitHub sign-in sends people to this <b>Callback URL</b>. It must be listed on the GitHub App (Identifying and authorizing users). If GitHub shows <b>The redirect_uri is not associated with this application</b>, add this exact URL and save — do not leave a Railway hostname as the only callback after you attach a custom domain.</p>
+      <p><code id="adm-callback-public">${esc(publicInfo.github_app.urls.callback)}</code></p>
+      <p><a href="https://github.com/settings/apps/${esc(publicInfo.github_app.slug || "syncidian")}" target="_blank" rel="noopener">Open GitHub App settings</a></p>` : ""}
+      ${nerdsOn() ? "" : `<p class="muted">Enable <b>Stats for Nerds</b> for setup/webhook URLs, Create GitHub App, and credential paste.</p>`}
     </div>
     ${nerdsOn() ? `
     <div class="card">

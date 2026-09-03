@@ -291,13 +291,12 @@ func (s *Server) requestBase(r *http.Request) string {
 	return proto + "://" + host
 }
 
-// githubBase is the origin GitHub can reach (callback, setup, webhook).
-// Operator UI on a Tailscale-only hostname must still advertise the public URL.
+// githubBase is the origin GitHub can reach (callback, setup, webhook, OAuth).
+// Prefer SYNCIDIAN_PUBLIC_URL so sign-in always uses the URL registered on the
+// GitHub App (custom domain), not a Tailscale or Railway hostname.
 func (s *Server) githubBase(r *http.Request) string {
-	if s.isAdminHost(r) {
-		if u := strings.TrimRight(s.Cfg.PublicURL, "/"); u != "" {
-			return u
-		}
+	if u := strings.TrimRight(s.Cfg.PublicURL, "/"); u != "" {
+		return u
 	}
 	return s.requestBase(r)
 }
