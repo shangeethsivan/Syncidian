@@ -88,6 +88,7 @@ func TestAgentDiscovery(t *testing.T) {
 		{"/.well-known/oauth-authorization-server", "token_endpoint"},
 		{"/.well-known/openid-configuration", "issuer"},
 		{"/.well-known/mcp/server-card.json", "streamable-http"},
+		{"/.well-known/mcp/server-card.json", "/assets/syncidian.png"},
 		{"/.well-known/mcp.json", "syncidian"},
 		{"/.well-known/agent-skills/index.json", "syncidian-mcp"},
 		{"/.well-known/skills/index.json", "$schema"},

@@ -1,5 +1,9 @@
 # Syncidian (Obsidian plugin)
 
+<p align="center">
+  <img src="../syncidian.png" alt="Syncidian" width="120" height="120" />
+</p>
+
 Syncidian is an Obsidian community plugin that syncs a vault through Syncidian.com or your own server. It is **not desktop-only**. The same plugin runs on Windows, macOS, Linux, **Android**, and **iOS**.
 
 Git-based community plugins (for example [Obsidian Git](https://github.com/denolehov/obsidian-git)) set `isDesktopOnly: true` because they call Node.js, Electron, or a local `git` binary. Those APIs do not exist in the Android and iOS apps, so those plugins never appear on mobile. Syncidian never shells out to Git and never imports Node or Electron. Vault I/O uses the Obsidian Vault API. HTTP uses Obsidian `requestUrl` (no CORS). Live updates use WebSockets with an HTTP poll fallback.

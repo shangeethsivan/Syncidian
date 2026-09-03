@@ -541,6 +541,10 @@ func TestDashboardServed(t *testing.T) {
 		`mcpClientTable`,
 		`rel="ai-catalog"`,
 		`navigator.modelContext`,
+		`/assets/syncidian.png`,
+		`class="brand-logo"`,
+		`rel="icon"`,
+		`rel="apple-touch-icon"`,
 	} {
 		if !bytes.Contains(b, []byte(needle)) {
 			t.Fatalf("dashboard missing required markup %q", needle)
@@ -559,6 +563,28 @@ func TestDashboardServed(t *testing.T) {
 	} {
 		if bytes.Contains(b, []byte(forbidden)) {
 			t.Fatalf("dashboard still gates login behind GitHub setup: %q", forbidden)
+		}
+	}
+}
+
+func TestFaviconServesLogo(t *testing.T) {
+	hs, done := newTestServer(t)
+	defer done()
+	for _, path := range []string{"/favicon.ico", "/assets/syncidian.png"} {
+		res, err := http.Get(hs.URL + path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		b, _ := io.ReadAll(res.Body)
+		res.Body.Close()
+		if res.StatusCode != http.StatusOK {
+			t.Fatalf("%s status %d", path, res.StatusCode)
+		}
+		if !strings.Contains(res.Header.Get("Content-Type"), "image/png") {
+			t.Fatalf("%s content-type %q", path, res.Header.Get("Content-Type"))
+		}
+		if len(b) < 8 || string(b[:8]) != "\x89PNG\r\n\x1a\n" {
+			t.Fatalf("%s is not a PNG", path)
 		}
 	}
 }

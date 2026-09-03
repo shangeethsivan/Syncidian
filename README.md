@@ -1,5 +1,9 @@
 # Syncidian
 
+<p align="center">
+  <img src="syncidian.png" alt="Syncidian" width="160" height="160" />
+</p>
+
 > **Your data stays with you.** Sync your knowledge. Back it up. Connect your AI.
 
 **Obsidian plugin:** install **Syncidian** from Community plugins (or [BRAT](https://github.com/TfTHacker/obsidian42-brat) / sideload). Point it at your Syncidian server with a `sk_sync_…` token. This plugin does not use Obsidian Sync.
