@@ -219,6 +219,19 @@ func uniqueLowerEmails(parts []string) []string {
 	return out
 }
 
+// FormatEmailListJSON is the value to paste into SYNCIDIAN_GITHUB_ALLOWED_EMAILS.
+func FormatEmailListJSON(emails []string) string {
+	emails = uniqueLowerEmails(emails)
+	if len(emails) == 0 {
+		return "[]"
+	}
+	b, err := json.Marshal(emails)
+	if err != nil {
+		return "[]"
+	}
+	return string(b)
+}
+
 // EmailAllowed reports whether any of emails is on allowlist. An empty
 // allowlist allows every address (production GitHub sign-in for all users).
 func EmailAllowed(allowlist []string, emails ...string) bool {

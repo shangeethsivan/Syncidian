@@ -111,9 +111,10 @@ func (s *Server) handleListWaitlist(w http.ResponseWriter, r *http.Request, _ *s
 		})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"count":                    n,
-		"emails":                   rows,
-		"github_allowed_emails":    allow,
-		"github_signin_restricted": restricted,
+		"count":                      n,
+		"emails":                     rows,
+		"github_allowed_emails":      allow,
+		"github_allowed_emails_json": config.FormatEmailListJSON(allow),
+		"github_signin_restricted":   restricted,
 	})
 }

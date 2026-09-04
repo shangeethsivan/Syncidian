@@ -194,10 +194,11 @@ func TestWaitlistListMarksEnvAllowlist(t *testing.T) {
 		t.Fatalf("admin list %d %s", rec.Code, rec.Body.Bytes())
 	}
 	var body struct {
-		Count                  int              `json:"count"`
-		GitHubSignInRestricted bool             `json:"github_signin_restricted"`
-		GitHubAllowedEmails    []string         `json:"github_allowed_emails"`
-		Emails                 []map[string]any `json:"emails"`
+		Count                   int              `json:"count"`
+		GitHubSignInRestricted  bool             `json:"github_signin_restricted"`
+		GitHubAllowedEmails     []string         `json:"github_allowed_emails"`
+		GitHubAllowedEmailsJSON string           `json:"github_allowed_emails_json"`
+		Emails                  []map[string]any `json:"emails"`
 	}
 	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
 		t.Fatal(err)
@@ -207,6 +208,9 @@ func TestWaitlistListMarksEnvAllowlist(t *testing.T) {
 	}
 	if len(body.GitHubAllowedEmails) != 1 || body.GitHubAllowedEmails[0] != "ada@example.com" {
 		t.Fatalf("allowlist: %v", body.GitHubAllowedEmails)
+	}
+	if body.GitHubAllowedEmailsJSON != `["ada@example.com"]` {
+		t.Fatalf("allowlist json: %q", body.GitHubAllowedEmailsJSON)
 	}
 	allowed := map[string]bool{}
 	for _, e := range body.Emails {

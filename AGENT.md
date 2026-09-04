@@ -71,7 +71,7 @@ Docs-only or server-only PRs do not bump the plugin version.
 Hosted GitHub sign-in is **intentionally restricted** until public launch:
 
 * The landing **Continue with GitHub** / **Log in** controls stay hidden. Tapping the Syncidian name in the header **six times** reveals them (session only).
-* `SYNCIDIAN_GITHUB_ALLOWED_EMAILS` (Railway variable) is the GitHub sign-in allowlist. Only those GitHub account emails can complete OAuth. Use a JSON array (`["a@x.com","b@x.com"]`), commas, or one email per line. `SYNCIDIAN_GITHUB_ALLOWED_EMAIL` is still accepted as an alias. Hosted should at least include `Shangeeth95@gmail.com`. An empty value allows every GitHub user.
+* `SYNCIDIAN_GITHUB_ALLOWED_EMAILS` (Railway variable) is the GitHub sign-in allowlist. Only those GitHub account emails can complete OAuth. Use a JSON array (`["a@x.com","b@x.com"]`), commas, or one email per line. `SYNCIDIAN_GITHUB_ALLOWED_EMAIL` is still accepted as an alias. Hosted should at least include `Shangeeth95@gmail.com`. An empty value allows every GitHub user. The operator Waitlist page never writes this list — it only helps copy the next Railway value.
 
 **When opening GitHub sign-in for all users, do all of the following in one change:**
 

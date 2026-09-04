@@ -144,6 +144,19 @@ func TestParseEmailList(t *testing.T) {
 	}
 }
 
+func TestFormatEmailListJSON(t *testing.T) {
+	if got := FormatEmailListJSON(nil); got != "[]" {
+		t.Fatalf("empty: %q", got)
+	}
+	got := FormatEmailListJSON([]string{"Bob@Example.com", "ada@example.com", "bob@example.com"})
+	if got != `["bob@example.com","ada@example.com"]` {
+		t.Fatalf("got %s", got)
+	}
+	if round := ParseEmailList(got); len(round) != 2 || round[0] != "bob@example.com" {
+		t.Fatalf("round-trip: %v", round)
+	}
+}
+
 func TestEmailAllowed(t *testing.T) {
 	if !EmailAllowed(nil, "anyone@example.com") {
 		t.Fatal("empty allowlist should allow all")

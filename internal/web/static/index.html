@@ -144,6 +144,7 @@
     input, textarea {
       width: 100%; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px;
     }
+    textarea.token { min-height: 96px; }
     table { width: 100%; border-collapse: collapse; }
     th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
     th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
@@ -153,6 +154,7 @@
     .warn { background: color-mix(in srgb, var(--warn) 18%, transparent); color: var(--warn); }
     .err { background: color-mix(in srgb, var(--danger) 16%, transparent); color: var(--danger); }
     .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    .row input { flex: 1; min-width: 12rem; width: auto; }
     .hidden { display: none !important; }
     .auth { min-height: 100vh; display: grid; place-items: center; padding: 24px; position: relative; z-index: 2; }
     .auth .card {
@@ -1396,7 +1398,7 @@ async function adminOverview(main) {
       <h2>What you can do</h2>
       <ul>
         ${waitlistOn()
-          ? "<li>Let allowlisted people sign in with GitHub from the public site after you register the instance GitHub App. Add their emails to <code>SYNCIDIAN_GITHUB_ALLOWED_EMAILS</code> on Railway.</li>"
+          ? "<li>Let allowlisted people sign in with GitHub from the public site after you register the instance GitHub App. Access lives in Railway (<code>SYNCIDIAN_GITHUB_ALLOWED_EMAILS</code>). The <b>Waitlist</b> page only helps you copy the next value.</li>"
           : "<li>Create regular users on the <b>Users</b> page, or let them sign up with email on this server.</li>"}
         ${waitlistOn() ? "<li>Review hosted waitlist emails on the <b>Waitlist</b> page.</li>" : ""}
         <li>${nerdsOn()
@@ -1872,30 +1874,120 @@ async function mcp(main) {
 async function waitlistAdmin(main) {
   const data = await api("/api/v1/waitlist");
   const list = asList(data.emails);
-  const allow = asList(data.github_allowed_emails);
+  const allow = asList(data.github_allowed_emails).map((e) => String(e).toLowerCase());
   const restricted = !!data.github_signin_restricted;
-  const allowCopy = restricted
-    ? `GitHub sign-in is limited to ${allow.length} address${allow.length === 1 ? "" : "es"} in <code>SYNCIDIAN_GITHUB_ALLOWED_EMAILS</code>. Add a waitlist email there (JSON array, commas, or one per line) on Railway, then redeploy — joining the waitlist does not grant access.`
-    : `GitHub sign-in is open to every GitHub account. Set <code>SYNCIDIAN_GITHUB_ALLOWED_EMAILS</code> on Railway to a JSON array of emails if you only want specific waitlist people to sign in.`;
+  const currentJSON = typeof data.github_allowed_emails_json === "string" && data.github_allowed_emails_json
+    ? data.github_allowed_emails_json
+    : JSON.stringify(allow);
+  const varName = "SYNCIDIAN_GITHUB_ALLOWED_EMAILS";
+
+  const uniqueEmails = (parts) => {
+    const seen = new Set();
+    const out = [];
+    for (const p of parts) {
+      const e = String(p || "").trim().toLowerCase();
+      if (!e || seen.has(e)) continue;
+      seen.add(e);
+      out.push(e);
+    }
+    return out;
+  };
+  const parseDraft = (raw) => {
+    const t = String(raw || "").trim();
+    if (!t) return [];
+    try {
+      const v = JSON.parse(t);
+      if (Array.isArray(v)) return uniqueEmails(v);
+    } catch {}
+    return uniqueEmails(t.split(/[\s,;]+/).filter(Boolean));
+  };
+  const formatDraft = (emails) => JSON.stringify(uniqueEmails(emails));
+  const looksLikeEmail = (email) => {
+    const e = String(email || "").trim();
+    const at = e.lastIndexOf("@");
+    return at > 0 && at < e.length - 1 && e.includes(".", at) && e.length <= 254;
+  };
+
   main.innerHTML = `
     <h1>Waitlist</h1>
-    <p class="muted">Emails collected on Syncidian.com. Each address is encrypted in this instance’s database.</p>
-    <p class="muted">${allowCopy}</p>
+    <p class="muted">Emails collected on Syncidian.com. Each address is encrypted in this instance’s database. GitHub access is <b>not</b> stored here — it is the Railway variable <code>${esc(varName)}</code>.</p>
     <div class="grid">
       <div class="stat">Joined<b>${esc(String(data.count ?? list.length))}</b></div>
       <div class="stat">GitHub access<b>${restricted ? esc(String(allow.length)) : "Everyone"}</b></div>
     </div>
-    ${restricted && allow.length ? `<div class="card"><h2>Allowlist</h2>
-      <p class="muted">Current <code>SYNCIDIAN_GITHUB_ALLOWED_EMAILS</code> value (from the environment). Edit it on Railway, not here.</p>
-      <ul>${allow.map((e) => `<li><code>${esc(String(e))}</code></li>`).join("")}</ul>
-    </div>` : ""}
-    <div class="card"><table><thead><tr><th>Email</th><th>Joined</th><th>GitHub</th></tr></thead>
+    <div class="card">
+      <h2>Railway allowlist</h2>
+      <p class="muted">${restricted
+        ? "This instance only lets the emails below complete GitHub sign-in. Add someone from the waitlist (or type an address), copy the value, and paste it into Railway → Variables. The next deploy applies it."
+        : "GitHub sign-in is currently open to every GitHub account. Setting this variable restricts access to only the addresses you copy. Paste it into Railway → Variables, then wait for the deploy."}</p>
+      <label for="wl-draft">Value for <code>${esc(varName)}</code></label>
+      <textarea id="wl-draft" class="token" rows="4" spellcheck="false" autocomplete="off">${esc(restricted ? currentJSON : "[]")}</textarea>
+      <label for="wl-add">Add an email</label>
+      <div class="row">
+        <input id="wl-add" type="email" autocomplete="off" placeholder="waitlist@example.com" />
+        <button class="btn secondary" id="wl-add-btn" type="button">Add</button>
+        <button class="btn" id="wl-copy" type="button">Copy for Railway</button>
+      </div>
+      <div id="wl-flash"></div>
+    </div>
+    <div class="card"><table><thead><tr><th>Email</th><th>Joined</th><th>GitHub</th><th></th></tr></thead>
     <tbody>${list.length ? list.map((e) => `<tr>
       <td>${esc(e.email)}</td>
       <td>${when(e.created_at)}</td>
       <td>${e.allowed ? `<span class="pill ok">Allowed</span>` : `<span class="pill warn">Waitlist</span>`}</td>
-    </tr>`).join("") : `<tr><td colspan="3" class="muted">No one has joined yet.</td></tr>`}</tbody></table>
+      <td>${e.allowed
+        ? ""
+        : `<button class="btn secondary" data-allow-email="${esc(e.email)}" type="button">Add to Railway value</button>`}</td>
+    </tr>`).join("") : `<tr><td colspan="4" class="muted">No one has joined yet.</td></tr>`}</tbody></table>
     </div>`;
+
+  const draftEl = $("wl-draft");
+  const addEmail = (email) => {
+    const next = String(email || "").trim().toLowerCase();
+    if (!looksLikeEmail(next)) {
+      flash($("wl-flash"), "Enter a valid email");
+      return false;
+    }
+    const emails = parseDraft(draftEl.value);
+    if (!emails.includes(next)) emails.push(next);
+    draftEl.value = formatDraft(emails);
+    return true;
+  };
+  const copyDraft = async () => {
+    const emails = parseDraft(draftEl.value);
+    if (!emails.length) {
+      flash($("wl-flash"), "Add at least one email before copying. An empty list opens GitHub sign-in to everyone.");
+      return;
+    }
+    draftEl.value = formatDraft(emails);
+    const text = draftEl.value;
+    try {
+      await navigator.clipboard.writeText(text);
+      flash($("wl-flash"), `Copied ${varName}. Paste it into Railway → Variables and save to redeploy.`, "ok");
+    } catch {
+      draftEl.focus();
+      draftEl.select();
+      flash($("wl-flash"), "Select the value and copy it, then paste it into Railway → Variables.", "ok");
+    }
+  };
+  $("wl-add-btn").onclick = () => {
+    if (!addEmail($("wl-add").value)) return;
+    $("wl-add").value = "";
+    flash($("wl-flash"), "Added. Copy the value and paste it into Railway Variables.", "ok");
+  };
+  $("wl-add").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      $("wl-add-btn").click();
+    }
+  });
+  $("wl-copy").onclick = () => copyDraft();
+  main.querySelectorAll("[data-allow-email]").forEach((b) => {
+    b.onclick = async () => {
+      if (!addEmail(b.dataset.allowEmail)) return;
+      await copyDraft();
+    };
+  });
 }
 
 async function users(main) {
