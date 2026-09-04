@@ -203,7 +203,7 @@ func (s *Server) githubSignInRestricted() bool {
 func (s *Server) githubSignInHidden(r *http.Request) bool {
 	// Hosted Syncidian.com hides GitHub until public launch. An allowlist
 	// also hides it on any host. PRODUCTION: stop hiding on the hosted
-	// domain and unset SYNCIDIAN_GITHUB_ALLOWED_EMAIL so everyone can sign in.
+	// domain and unset SYNCIDIAN_GITHUB_ALLOWED_EMAILS so everyone can sign in.
 	return s.isHostedPublic(r) || s.githubSignInRestricted()
 }
 

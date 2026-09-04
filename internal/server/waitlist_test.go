@@ -157,6 +157,66 @@ func TestWaitlistListRequiresAdminOnHostedDomain(t *testing.T) {
 	if !strings.Contains(rec.Body.String(), "ada@example.com") {
 		t.Fatalf("admin list missing email: %s", rec.Body.Bytes())
 	}
+	if !strings.Contains(rec.Body.String(), `"github_signin_restricted":false`) {
+		t.Fatalf("empty allowlist should not restrict: %s", rec.Body.Bytes())
+	}
+}
+
+func TestWaitlistListMarksEnvAllowlist(t *testing.T) {
+	dir := t.TempDir()
+	st, err := store.Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	if _, err := st.AddWaitlistEmail("ada@example.com"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.AddWaitlistEmail("bob@example.com"); err != nil {
+		t.Fatal(err)
+	}
+	srv := New(config.Config{
+		Addr: ":0", DataDir: dir, PublicURL: "https://syncidian.com",
+		GitHubAllowedEmails: []string{"ada@example.com"},
+	}, st, nil)
+	hs := httptest.NewServer(srv.Handler())
+	defer hs.Close()
+	cookies := setupAdmin(t, hs)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/waitlist", nil)
+	req.Host = "syncidian.com"
+	for _, c := range cookies {
+		req.AddCookie(c)
+	}
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("admin list %d %s", rec.Code, rec.Body.Bytes())
+	}
+	var body struct {
+		Count                  int              `json:"count"`
+		GitHubSignInRestricted bool             `json:"github_signin_restricted"`
+		GitHubAllowedEmails    []string         `json:"github_allowed_emails"`
+		Emails                 []map[string]any `json:"emails"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Count != 2 || !body.GitHubSignInRestricted {
+		t.Fatalf("list meta: %+v", body)
+	}
+	if len(body.GitHubAllowedEmails) != 1 || body.GitHubAllowedEmails[0] != "ada@example.com" {
+		t.Fatalf("allowlist: %v", body.GitHubAllowedEmails)
+	}
+	allowed := map[string]bool{}
+	for _, e := range body.Emails {
+		email, _ := e["email"].(string)
+		ok, _ := e["allowed"].(bool)
+		allowed[email] = ok
+	}
+	if !allowed["ada@example.com"] || allowed["bob@example.com"] {
+		t.Fatalf("allowed flags: %v", allowed)
+	}
 }
 
 func TestSetupExposesGAID(t *testing.T) {

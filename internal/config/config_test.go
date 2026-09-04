@@ -18,6 +18,7 @@ func TestFromEnvDefaults(t *testing.T) {
 	t.Setenv("SYNCIDIAN_ADMIN_PRIVATE", "")
 	t.Setenv("TAILSCALE_IP", "")
 	t.Setenv("SYNCIDIAN_GITHUB_ALLOWED_EMAIL", "")
+	t.Setenv("SYNCIDIAN_GITHUB_ALLOWED_EMAILS", "")
 	t.Setenv("SYNCIDIAN_GA_ID", "")
 
 	c := FromEnv()
@@ -130,6 +131,17 @@ func TestParseEmailList(t *testing.T) {
 	if len(got) != 2 || got[0] != "shangeeth95@gmail.com" || got[1] != "other@example.com" {
 		t.Fatalf("got %v", got)
 	}
+	pretty := ParseEmailList(`[
+  "Ada@Example.com",
+  "bob@example.com"
+]`)
+	if len(pretty) != 2 || pretty[0] != "ada@example.com" || pretty[1] != "bob@example.com" {
+		t.Fatalf("pretty json: %v", pretty)
+	}
+	lines := ParseEmailList("ada@example.com\nbob@example.com; cara@example.com")
+	if len(lines) != 3 || lines[0] != "ada@example.com" || lines[2] != "cara@example.com" {
+		t.Fatalf("lines: %v", lines)
+	}
 }
 
 func TestEmailAllowed(t *testing.T) {
@@ -149,9 +161,28 @@ func TestEmailAllowed(t *testing.T) {
 }
 
 func TestFromEnvGitHubAllowedEmail(t *testing.T) {
+	t.Setenv("SYNCIDIAN_GITHUB_ALLOWED_EMAILS", "")
 	t.Setenv("SYNCIDIAN_GITHUB_ALLOWED_EMAIL", "Shangeeth95@gmail.com")
 	c := FromEnv()
 	if len(c.GitHubAllowedEmails) != 1 || c.GitHubAllowedEmails[0] != "shangeeth95@gmail.com" {
+		t.Fatalf("GitHubAllowedEmails=%v", c.GitHubAllowedEmails)
+	}
+}
+
+func TestFromEnvGitHubAllowedEmailsJSON(t *testing.T) {
+	t.Setenv("SYNCIDIAN_GITHUB_ALLOWED_EMAIL", "")
+	t.Setenv("SYNCIDIAN_GITHUB_ALLOWED_EMAILS", `["Shangeeth95@gmail.com","waitlist@example.com"]`)
+	c := FromEnv()
+	if len(c.GitHubAllowedEmails) != 2 || c.GitHubAllowedEmails[0] != "shangeeth95@gmail.com" || c.GitHubAllowedEmails[1] != "waitlist@example.com" {
+		t.Fatalf("GitHubAllowedEmails=%v", c.GitHubAllowedEmails)
+	}
+}
+
+func TestFromEnvGitHubAllowedEmailsMergesAlias(t *testing.T) {
+	t.Setenv("SYNCIDIAN_GITHUB_ALLOWED_EMAILS", "ada@example.com")
+	t.Setenv("SYNCIDIAN_GITHUB_ALLOWED_EMAIL", "bob@example.com, ada@example.com")
+	c := FromEnv()
+	if len(c.GitHubAllowedEmails) != 2 || c.GitHubAllowedEmails[0] != "ada@example.com" || c.GitHubAllowedEmails[1] != "bob@example.com" {
 		t.Fatalf("GitHubAllowedEmails=%v", c.GitHubAllowedEmails)
 	}
 }

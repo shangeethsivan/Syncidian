@@ -88,8 +88,10 @@ Environment:
   SYNCIDIAN_GITHUB_CLIENT_ID     GitHub App OAuth client ID
   SYNCIDIAN_GITHUB_CLIENT_SECRET GitHub App OAuth client secret
   SYNCIDIAN_GITHUB_APP_PRIVATE_KEY  PEM; use \n for newlines
-  SYNCIDIAN_GITHUB_ALLOWED_EMAIL Comma-separated GitHub emails allowed to sign in.
-                                 Empty = any GitHub user. Production: unset this.
+  SYNCIDIAN_GITHUB_ALLOWED_EMAILS JSON array, commas, or one GitHub email per line
+                                 allowed to sign in. Empty = any GitHub user.
+                                 SYNCIDIAN_GITHUB_ALLOWED_EMAIL is still accepted
+                                 as an alias. Production: unset both.
   SYNCIDIAN_GA_ID                Google Analytics 4 ID (G-…). Landing CTA clicks only when set.
 `)
 }

@@ -42,7 +42,7 @@ If a diagram no longer matches the code, rewrite it. Do not leave comments like 
 
 Document and implement these unless a later change explicitly replaces them — and if you replace them, update this list too:
 
-1. **Public landing, private operator surface.** Unauthenticated visitors see a one-page story. On hosted Syncidian.com, vault users sign in with GitHub (hidden until the app name is tapped six times whenever `SYNCIDIAN_GITHUB_ALLOWED_EMAIL` is set). On any other host, vault users sign in with email — a GitHub App is not required to create an account. There is no public Admin link. Self-host operators create the first admin at `SYNCIDIAN_ADMIN_PATH` (default `/admin`) or via `SYNCIDIAN_BOOTSTRAP_USER` / `SYNCIDIAN_BOOTSTRAP_PASSWORD`, persist `/data`, and skip Tailscale (`SYNCIDIAN_ADMIN_PRIVATE=0` or leave `SYNCIDIAN_ADMIN_HOST` unset). A Tailscale hostname (`SYNCIDIAN_ADMIN_HOST`, for example `admin.syncidian.com`) is optional. The instance GitHub App is optional on self-host (needed only for GitHub sign-in or per-user backup). Repository install stays per user after identity.
+1. **Public landing, private operator surface.** Unauthenticated visitors see a one-page story. On hosted Syncidian.com, vault users sign in with GitHub (hidden until the app name is tapped six times whenever `SYNCIDIAN_GITHUB_ALLOWED_EMAILS` is set). On any other host, vault users sign in with email — a GitHub App is not required to create an account. There is no public Admin link. Self-host operators create the first admin at `SYNCIDIAN_ADMIN_PATH` (default `/admin`) or via `SYNCIDIAN_BOOTSTRAP_USER` / `SYNCIDIAN_BOOTSTRAP_PASSWORD`, persist `/data`, and skip Tailscale (`SYNCIDIAN_ADMIN_PRIVATE=0` or leave `SYNCIDIAN_ADMIN_HOST` unset). A Tailscale hostname (`SYNCIDIAN_ADMIN_HOST`, for example `admin.syncidian.com`) is optional. The instance GitHub App is optional on self-host (needed only for GitHub sign-in or per-user backup). Repository install stays per user after identity.
 2. **GitHub is per user, after identity.** One repository per `user_id`. `GET/POST /api/v1/github` requires `authenticate()`.
 3. **Admin login does not need repo sync.** Admins manage users. Vault/GitHub/token-list/device/activity/MCP routes use `vaultAuthed` or `sessionVaultAuthed` and return 403 for admins. Admins may mint a **one-time** `sk_sync_` token for a vault user via `POST /api/v1/users/tokens` (by username) or `issue_token` on user create — they still cannot list existing tokens or read vault/GitHub/MCP usage data.
 4. **Admin user list is public fields only:** `username`, `is_admin`, `created_at` (no `id`, vault, tokens, or GitHub).
@@ -71,11 +71,11 @@ Docs-only or server-only PRs do not bump the plugin version.
 Hosted GitHub sign-in is **intentionally restricted** until public launch:
 
 * The landing **Continue with GitHub** / **Log in** controls stay hidden. Tapping the Syncidian name in the header **six times** reveals them (session only).
-* `SYNCIDIAN_GITHUB_ALLOWED_EMAIL` (Railway variable) is a comma-separated allowlist. Only those GitHub account emails can complete OAuth. Hosted should be `Shangeeth95@gmail.com`. An empty value allows every GitHub user.
+* `SYNCIDIAN_GITHUB_ALLOWED_EMAILS` (Railway variable) is the GitHub sign-in allowlist. Only those GitHub account emails can complete OAuth. Use a JSON array (`["a@x.com","b@x.com"]`), commas, or one email per line. `SYNCIDIAN_GITHUB_ALLOWED_EMAIL` is still accepted as an alias. Hosted should at least include `Shangeeth95@gmail.com`. An empty value allows every GitHub user.
 
 **When opening GitHub sign-in for all users, do all of the following in one change:**
 
-1. Unset `SYNCIDIAN_GITHUB_ALLOWED_EMAIL` on Railway (and any other host). Empty allowlist = any GitHub account may sign in.
+1. Unset `SYNCIDIAN_GITHUB_ALLOWED_EMAILS` and `SYNCIDIAN_GITHUB_ALLOWED_EMAIL` on Railway (and any other host). Empty allowlist = any GitHub account may sign in.
 2. Stop hiding the landing GitHub buttons: `githubSignInHidden()` in `internal/server/auth_github.go` should return false for the public site (remove the hosted-domain hide). The six-tap easter egg in `internal/web/static/index.html` can then be removed.
 3. Update this list, the landing/auth markdown, and the app-workflow diagrams so they again describe public GitHub sign-in for everyone.
 

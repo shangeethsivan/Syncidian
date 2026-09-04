@@ -1396,7 +1396,7 @@ async function adminOverview(main) {
       <h2>What you can do</h2>
       <ul>
         ${waitlistOn()
-          ? "<li>Let allowlisted people sign in with GitHub from the public site after you register the instance GitHub App.</li>"
+          ? "<li>Let allowlisted people sign in with GitHub from the public site after you register the instance GitHub App. Add their emails to <code>SYNCIDIAN_GITHUB_ALLOWED_EMAILS</code> on Railway.</li>"
           : "<li>Create regular users on the <b>Users</b> page, or let them sign up with email on this server.</li>"}
         ${waitlistOn() ? "<li>Review hosted waitlist emails on the <b>Waitlist</b> page.</li>" : ""}
         <li>${nerdsOn()
@@ -1872,17 +1872,29 @@ async function mcp(main) {
 async function waitlistAdmin(main) {
   const data = await api("/api/v1/waitlist");
   const list = asList(data.emails);
+  const allow = asList(data.github_allowed_emails);
+  const restricted = !!data.github_signin_restricted;
+  const allowCopy = restricted
+    ? `GitHub sign-in is limited to ${allow.length} address${allow.length === 1 ? "" : "es"} in <code>SYNCIDIAN_GITHUB_ALLOWED_EMAILS</code>. Add a waitlist email there (JSON array, commas, or one per line) on Railway, then redeploy — joining the waitlist does not grant access.`
+    : `GitHub sign-in is open to every GitHub account. Set <code>SYNCIDIAN_GITHUB_ALLOWED_EMAILS</code> on Railway to a JSON array of emails if you only want specific waitlist people to sign in.`;
   main.innerHTML = `
     <h1>Waitlist</h1>
     <p class="muted">Emails collected on Syncidian.com. Each address is encrypted in this instance’s database.</p>
+    <p class="muted">${allowCopy}</p>
     <div class="grid">
       <div class="stat">Joined<b>${esc(String(data.count ?? list.length))}</b></div>
+      <div class="stat">GitHub access<b>${restricted ? esc(String(allow.length)) : "Everyone"}</b></div>
     </div>
-    <div class="card"><table><thead><tr><th>Email</th><th>Joined</th></tr></thead>
+    ${restricted && allow.length ? `<div class="card"><h2>Allowlist</h2>
+      <p class="muted">Current <code>SYNCIDIAN_GITHUB_ALLOWED_EMAILS</code> value (from the environment). Edit it on Railway, not here.</p>
+      <ul>${allow.map((e) => `<li><code>${esc(String(e))}</code></li>`).join("")}</ul>
+    </div>` : ""}
+    <div class="card"><table><thead><tr><th>Email</th><th>Joined</th><th>GitHub</th></tr></thead>
     <tbody>${list.length ? list.map((e) => `<tr>
       <td>${esc(e.email)}</td>
       <td>${when(e.created_at)}</td>
-    </tr>`).join("") : `<tr><td colspan="2" class="muted">No one has joined yet.</td></tr>`}</tbody></table>
+      <td>${e.allowed ? `<span class="pill ok">Allowed</span>` : `<span class="pill warn">Waitlist</span>`}</td>
+    </tr>`).join("") : `<tr><td colspan="3" class="muted">No one has joined yet.</td></tr>`}</tbody></table>
     </div>`;
 }
 

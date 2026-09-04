@@ -19,7 +19,7 @@ Syncidian is an open-source, self-hostable **Obsidian synchronization and AI bri
 
 It runs as an Obsidian plugin on your devices and connects to a lightweight Syncidian server that coordinates synchronization between them.
 
-Each signed-in user can connect **one private GitHub repository**. GitHub is the durable, versioned **source of truth** for that user's vault. The public site is a one-page story: join the waitlist and sign in with GitHub on Syncidian.com, or sign in with email on a self-hosted host. GitHub sign-in is hidden on the hosted landing (tap the app name six times to reveal it) and limited to `SYNCIDIAN_GITHUB_ALLOWED_EMAIL` until public launch. Operators use a private hostname (`SYNCIDIAN_ADMIN_HOST`, for example `admin.syncidian.com` on Tailscale) or an unlisted path (`SYNCIDIAN_ADMIN_PATH`, default `/admin`) — neither is linked from the landing page. Admins manage users and an optional instance GitHub App, and never see vault or GitHub data.
+Each signed-in user can connect **one private GitHub repository**. GitHub is the durable, versioned **source of truth** for that user's vault. The public site is a one-page story: join the waitlist and sign in with GitHub on Syncidian.com, or sign in with email on a self-hosted host. GitHub sign-in is hidden on the hosted landing (tap the app name six times to reveal it) and limited to `SYNCIDIAN_GITHUB_ALLOWED_EMAILS` until public launch. Operators use a private hostname (`SYNCIDIAN_ADMIN_HOST`, for example `admin.syncidian.com` on Tailscale) or an unlisted path (`SYNCIDIAN_ADMIN_PATH`, default `/admin`) — neither is linked from the landing page. Admins manage users and an optional instance GitHub App, and never see vault or GitHub data.
 
 Syncidian also includes a built-in **MCP server**, allowing compatible AI tools and agents to securely interact with your Obsidian knowledge base.
 
@@ -72,7 +72,7 @@ Users, GitHub App credentials, and vault files live in SQLite on disk. Railway�
 1. New project → deploy this GitHub repo. Railway builds the `Dockerfile`.
 2. **Settings → Volumes → Add volume**, mount path **`/data`**. Do this before creating the admin or registering the GitHub App. `railway.json` sets `requiredMountPath` to `/data` so a deploy without a volume fails instead of silently resetting the instance, and `overlapSeconds` to `0` so two replicas do not share SQLite during a rollout.
 3. Generate a public domain. The server listens on Railway’s `PORT` and uses `RAILWAY_PUBLIC_DOMAIN` for the dashboard URL unless you set `SYNCIDIAN_PUBLIC_URL`.
-4. Optional variables: `SYNCIDIAN_BOOTSTRAP_USER`, `SYNCIDIAN_BOOTSTRAP_PASSWORD`. To keep the GitHub App if the volume is missing, also set `SYNCIDIAN_GITHUB_APP_*` (see [Set up the GitHub App](docs/github-app.md)). Set `SYNCIDIAN_DATA_KEY` (32-byte hex) so GitHub App secrets stay encrypted even if `syncidian.db` is copied off the volume. Until public GitHub sign-in, set `SYNCIDIAN_GITHUB_ALLOWED_EMAIL` to the operator GitHub email (hosted: `Shangeeth95@gmail.com`) so only that account can complete GitHub OAuth.
+4. Optional variables: `SYNCIDIAN_BOOTSTRAP_USER`, `SYNCIDIAN_BOOTSTRAP_PASSWORD`. To keep the GitHub App if the volume is missing, also set `SYNCIDIAN_GITHUB_APP_*` (see [Set up the GitHub App](docs/github-app.md)). Set `SYNCIDIAN_DATA_KEY` (32-byte hex) so GitHub App secrets stay encrypted even if `syncidian.db` is copied off the volume. Until public GitHub sign-in, set `SYNCIDIAN_GITHUB_ALLOWED_EMAILS` to the GitHub emails that may complete OAuth (JSON array, commas, or one per line). Hosted should include `Shangeeth95@gmail.com`. Joining the waitlist does not grant access — add each person to this variable, then redeploy.
 5. Open the public URL. Create the admin at `/admin`. People can then sign up with email on `/`. Register the GitHub App ([walkthrough](docs/github-app.md)) only if you want GitHub sign-in or backup. `/admin` warns if the data directory is still ephemeral. On the hosted landing, tap **Syncidian** six times to reveal GitHub sign-in. Point the plugin at that URL with that user's token.
 
 Health check: `GET /health`. Agents can also fetch `/robots.txt`, `/auth.md`, `/.well-known/mcp/server-card.json`, and markdown for `GET /` (`Accept: text/markdown`). `/robots.txt` disallows the operator path (`/admin` by default) and operator APIs; that HTML also sends `X-Robots-Tag: noindex` so search engines should not list it. The operator page is not in `/sitemap.xml` and is not linked from `/`. If a CDN (Cloudflare AI Crawl Control) injects its own `robots.txt`, turn that off so the origin file is what crawlers see.
@@ -245,7 +245,7 @@ Eventually, Syncidian should be able to detect a conflict, have a small LLM reso
 
 # 🗺️ App workflow
 
-The public site is a one-pager. Hosted visitors join a waitlist and sign in with GitHub (hidden until the app name is tapped six times, allowlisted via `SYNCIDIAN_GITHUB_ALLOWED_EMAIL` until public launch). Self-hosted visitors sign in with email. Operators use a private hostname (`SYNCIDIAN_ADMIN_HOST`) or an unlisted path (`SYNCIDIAN_ADMIN_PATH`, default `/admin`) to create the first admin.
+The public site is a one-pager. Hosted visitors join a waitlist and sign in with GitHub (hidden until the app name is tapped six times, allowlisted via `SYNCIDIAN_GITHUB_ALLOWED_EMAILS` until public launch). Self-hosted visitors sign in with email. Operators use a private hostname (`SYNCIDIAN_ADMIN_HOST`) or an unlisted path (`SYNCIDIAN_ADMIN_PATH`, default `/admin`) to create the first admin.
 
 ```mermaid
 flowchart TD
@@ -434,7 +434,7 @@ Optional env vars if you prefer not to use the in-dashboard manifest flow: `SYNC
 
 Rules:
 
-* **Public landing, private operator surface.** Create the first admin at `SYNCIDIAN_ADMIN_HOST` (Tailscale) or `SYNCIDIAN_ADMIN_PATH` (default `/admin`). Self-hosted vault users sign in with email from `/`. The GitHub App is optional. On hosted Syncidian.com, GitHub sign-in is hidden until the app name is tapped six times and limited by `SYNCIDIAN_GITHUB_ALLOWED_EMAIL`.
+* **Public landing, private operator surface.** Create the first admin at `SYNCIDIAN_ADMIN_HOST` (Tailscale) or `SYNCIDIAN_ADMIN_PATH` (default `/admin`). Self-hosted vault users sign in with email from `/`. The GitHub App is optional. On hosted Syncidian.com, GitHub sign-in is hidden until the app name is tapped six times and limited by `SYNCIDIAN_GITHUB_ALLOWED_EMAILS`.
 * **One repository per user.** `github_config` is keyed by `user_id`.
 * **GitHub App only.** Connect with GitHub, install on a repository, Contents read and write. No personal access tokens and no deploy keys.
 * **Main branch only.** Syncidian always uses `main`.

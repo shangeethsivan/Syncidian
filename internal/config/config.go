@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -31,9 +32,10 @@ type Config struct {
 	GitHubAppPEM       string
 	// GitHubAllowedEmails, when non-empty, is the only set of GitHub account
 	// emails that may complete GitHub sign-in. Empty means any GitHub user.
-	// Set SYNCIDIAN_GITHUB_ALLOWED_EMAIL on Railway to restrict hosted sign-in
-	// until public launch. PRODUCTION: unset it (and show the landing GitHub
-	// buttons) when opening sign-in to everyone. See AGENT.md.
+	// Set SYNCIDIAN_GITHUB_ALLOWED_EMAILS on Railway to grant waitlist people
+	// access without opening sign-in to everyone. SYNCIDIAN_GITHUB_ALLOWED_EMAIL
+	// is still accepted as an alias. PRODUCTION: unset both (and show the
+	// landing GitHub buttons) when opening sign-in to everyone. See AGENT.md.
 	GitHubAllowedEmails []string
 	// GAID is a Google Analytics 4 measurement ID (G-…). Empty disables gtag.
 	// Set SYNCIDIAN_GA_ID on hosted Railway to count landing CTA clicks.
@@ -55,7 +57,7 @@ func FromEnv() Config {
 		GitHubClientID:      env("SYNCIDIAN_GITHUB_CLIENT_ID", ""),
 		GitHubClientSecret:  env("SYNCIDIAN_GITHUB_CLIENT_SECRET", ""),
 		GitHubAppPEM:        strings.ReplaceAll(env("SYNCIDIAN_GITHUB_APP_PRIVATE_KEY", ""), `\n`, "\n"),
-		GitHubAllowedEmails: ParseEmailList(env("SYNCIDIAN_GITHUB_ALLOWED_EMAIL", "")),
+		GitHubAllowedEmails: GitHubAllowedEmailsFromEnv(),
 		GAID:                NormalizeGAID(env("SYNCIDIAN_GA_ID", "")),
 	}
 	if id, err := strconv.ParseInt(env("SYNCIDIAN_GITHUB_APP_ID", "0"), 10, 64); err == nil {
@@ -164,15 +166,46 @@ func NormalizeGAID(raw string) string {
 	return s
 }
 
-// ParseEmailList splits a comma-separated email list, lowercased and trimmed.
+// GitHubAllowedEmailsFromEnv reads SYNCIDIAN_GITHUB_ALLOWED_EMAILS (preferred)
+// and the singular SYNCIDIAN_GITHUB_ALLOWED_EMAIL alias, then merges them.
+func GitHubAllowedEmailsFromEnv() []string {
+	return MergeEmailLists(
+		ParseEmailList(os.Getenv("SYNCIDIAN_GITHUB_ALLOWED_EMAILS")),
+		ParseEmailList(os.Getenv("SYNCIDIAN_GITHUB_ALLOWED_EMAIL")),
+	)
+}
+
+// ParseEmailList turns an environment value into unique, lowercased emails.
+// It accepts a JSON array, commas, semicolons, or one address per line so the
+// allowlist can be edited as an array on Railway without a code change.
 func ParseEmailList(raw string) []string {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
 		return nil
 	}
+	if strings.HasPrefix(raw, "[") {
+		var arr []string
+		if json.Unmarshal([]byte(raw), &arr) == nil {
+			return uniqueLowerEmails(arr)
+		}
+	}
+	replacer := strings.NewReplacer("\r\n", ",", "\n", ",", "\r", ",", ";", ",")
+	return uniqueLowerEmails(strings.Split(replacer.Replace(raw), ","))
+}
+
+// MergeEmailLists concatenates allowlists, dropping blanks and duplicates.
+func MergeEmailLists(lists ...[]string) []string {
+	var all []string
+	for _, list := range lists {
+		all = append(all, list...)
+	}
+	return uniqueLowerEmails(all)
+}
+
+func uniqueLowerEmails(parts []string) []string {
 	seen := make(map[string]struct{})
 	var out []string
-	for _, part := range strings.Split(raw, ",") {
+	for _, part := range parts {
 		e := strings.ToLower(strings.TrimSpace(part))
 		if e == "" {
 			continue
