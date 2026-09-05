@@ -12,12 +12,15 @@ import (
 )
 
 func TestGitHubSignInAllowlist(t *testing.T) {
-	s := &Server{Cfg: config.Config{GitHubAllowedEmails: []string{"shangeeth95@gmail.com"}}}
+	s := &Server{Cfg: config.Config{GitHubAllowedEmails: []string{"shangeeth95@gmail.com", "waitlist@example.com"}}}
 	if s.githubSignInAllowed(&githubapp.User{Email: "other@example.com"}) {
 		t.Fatal("other email must be denied")
 	}
 	if !s.githubSignInAllowed(&githubapp.User{Email: "Shangeeth95@gmail.com"}) {
 		t.Fatal("allowlist email must match case-insensitively")
+	}
+	if !s.githubSignInAllowed(&githubapp.User{Email: "waitlist@example.com"}) {
+		t.Fatal("second allowlist email must be accepted")
 	}
 	if !s.githubSignInAllowed(&githubapp.User{Emails: []string{"shangeeth95@gmail.com"}}) {
 		t.Fatal("verified secondary email must match")

@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/shangeethsivan/Syncidian/internal/config"
 	"github.com/shangeethsivan/Syncidian/internal/store"
 )
 
@@ -94,5 +95,26 @@ func (s *Server) handleListWaitlist(w http.ResponseWriter, r *http.Request, _ *s
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"count": n, "emails": list})
+	restricted := s.githubSignInRestricted()
+	allow := s.Cfg.GitHubAllowedEmails
+	if allow == nil {
+		allow = []string{}
+	}
+	rows := make([]map[string]any, 0, len(list))
+	for _, e := range list {
+		allowed := !restricted || config.EmailAllowed(s.Cfg.GitHubAllowedEmails, e.Email)
+		rows = append(rows, map[string]any{
+			"id":         e.ID,
+			"email":      e.Email,
+			"created_at": e.CreatedAt,
+			"allowed":    allowed,
+		})
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"count":                      n,
+		"emails":                     rows,
+		"github_allowed_emails":      allow,
+		"github_allowed_emails_json": config.FormatEmailListJSON(allow),
+		"github_signin_restricted":   restricted,
+	})
 }

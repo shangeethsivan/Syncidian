@@ -43,7 +43,7 @@ This posts a GitHub App **manifest**, so permissions and URLs are filled in for 
 
 Those credentials are stored encrypted in SQLite. Attach a volume at `/data` (or copy them into `SYNCIDIAN_GITHUB_APP_*` env vars — Option B) so the next deploy does not wipe the GitHub App. Set `SYNCIDIAN_DATA_KEY` if you want the encryption key in environment variables instead of `data/secret.key`.
 
-People can now use **Continue with GitHub** / **Log in** / **Connect to your GitHub repository** on `{base}/`. Self-hosted email login already works without this app. On hosted Syncidian.com those GitHub buttons stay hidden until you tap the app name six times, and `SYNCIDIAN_GITHUB_ALLOWED_EMAIL` must match the GitHub account.
+People can now use **Continue with GitHub** / **Log in** / **Connect to your GitHub repository** on `{base}/`. Self-hosted email login already works without this app. On hosted Syncidian.com those GitHub buttons stay hidden until you tap the app name six times, and `SYNCIDIAN_GITHUB_ALLOWED_EMAILS` must include the GitHub account.
 
 The manifest requests:
 
