@@ -41,3 +41,28 @@ func TestLandingUsesAppLogo(t *testing.T) {
 		t.Fatal("landing still uses the placeholder brand dot")
 	}
 }
+
+func TestLandingHasRailwayDeploy(t *testing.T) {
+	b, err := FS.ReadFile("static/index.html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	html := string(b)
+	const deploy = `https://railway.com/new/template?template=https://github.com/shangeethsivan/Syncidian`
+	if !strings.Contains(html, deploy) {
+		t.Fatal("landing is missing the Railway one-click deploy URL")
+	}
+	if !strings.Contains(html, `https://railway.com/button.svg`) {
+		t.Fatal("landing is missing the Deploy on Railway button")
+	}
+	if !strings.Contains(html, `data-cta="railway"`) {
+		t.Fatal("landing is missing Railway CTA tracking")
+	}
+	md, err := FS.ReadFile("static/agents/landing.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(md), deploy) {
+		t.Fatal("landing markdown is missing the Railway one-click deploy URL")
+	}
+}

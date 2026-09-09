@@ -2,7 +2,7 @@
 
 The Syncidian plugin is **not desktop-only**. The same `syncidian` plugin runs in Obsidian on Windows, macOS, Linux, Android, and iOS.
 
-You still need a running Syncidian **server** (Railway, Docker, or similar) and a vault-user token (`sk_sync_…`) from that server’s dashboard. The plugin never talks to GitHub itself.
+You still need a running Syncidian **server** ([Deploy on Railway](https://railway.com/new/template?template=https://github.com/shangeethsivan/Syncidian&utm_medium=integration&utm_source=button&utm_campaign=syncidian), Docker, or similar) and a vault-user token (`sk_sync_…`) from that server’s dashboard. The plugin never talks to GitHub itself.
 
 On a phone, leave **Syncidian.com** selected or choose **Custom Domain** with a public `https://` address (for example your Railway domain). `http://localhost:8080` is the phone, not your computer. iOS often blocks plain `http://`.
 

@@ -35,6 +35,10 @@ docker run -d \
 
 **Self-host Syncidian for free.** A managed service is planned at $1/month; it is not available yet.
 
+[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/new/template?template=https://github.com/shangeethsivan/Syncidian&utm_medium=integration&utm_source=button&utm_campaign=syncidian)
+
+One click deploys this repo on [Railway](https://railway.com). Attach a volume at `/data` before you create the admin so users survive redeploys. Details: [Deploy on Railway](#deploy-on-railway).
+
 [Buy me a coffee](https://buymeacoffee.com/shravzdev) if Syncidian is useful.
 
 ---
@@ -67,9 +71,11 @@ Data is stored in `./data` by default (`SYNCIDIAN_DATA` to change it). Docker Co
 
 ### Deploy on Railway
 
+[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/new/template?template=https://github.com/shangeethsivan/Syncidian&utm_medium=integration&utm_source=button&utm_campaign=syncidian)
+
 Users, GitHub App credentials, and vault files live in SQLite on disk. Railway’s container filesystem is **empty on every deploy** unless you attach a volume.
 
-1. New project → deploy this GitHub repo. Railway builds the `Dockerfile`.
+1. Click **Deploy on Railway** (or New project → this GitHub repo). Railway clones the repo and builds the `Dockerfile` from `railway.json`.
 2. **Settings → Volumes → Add volume**, mount path **`/data`**. Do this before creating the admin or registering the GitHub App. `railway.json` sets `requiredMountPath` to `/data` so a deploy without a volume fails instead of silently resetting the instance, and `overlapSeconds` to `0` so two replicas do not share SQLite during a rollout.
 3. Generate a public domain. The server listens on Railway’s `PORT` and uses `RAILWAY_PUBLIC_DOMAIN` for the dashboard URL unless you set `SYNCIDIAN_PUBLIC_URL`.
 4. Optional variables: `SYNCIDIAN_BOOTSTRAP_USER`, `SYNCIDIAN_BOOTSTRAP_PASSWORD`. To keep the GitHub App if the volume is missing, also set `SYNCIDIAN_GITHUB_APP_*` (see [Set up the GitHub App](docs/github-app.md)). Set `SYNCIDIAN_DATA_KEY` (32-byte hex) so GitHub App secrets stay encrypted even if `syncidian.db` is copied off the volume. Until public GitHub sign-in, set `SYNCIDIAN_GITHUB_ALLOWED_EMAILS` to the GitHub emails that may complete OAuth (JSON array, commas, or one per line). Hosted should include `Shangeeth95@gmail.com`. Joining the waitlist does not grant access — add each person to this variable, then redeploy.
