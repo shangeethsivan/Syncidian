@@ -52,8 +52,11 @@ func TestLandingHasRailwayDeploy(t *testing.T) {
 	if !strings.Contains(html, deploy) {
 		t.Fatal("landing is missing the Railway one-click deploy URL")
 	}
-	if !strings.Contains(html, `https://railway.com/button.svg`) {
+	if !strings.Contains(html, `/assets/railway-button.svg`) {
 		t.Fatal("landing is missing the Deploy on Railway button")
+	}
+	if _, err := FS.ReadFile("static/assets/railway-button.svg"); err != nil {
+		t.Fatal("web assets must include railway-button.svg")
 	}
 	if !strings.Contains(html, `data-cta="railway"`) {
 		t.Fatal("landing is missing Railway CTA tracking")

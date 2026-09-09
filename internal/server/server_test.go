@@ -490,7 +490,7 @@ func TestDashboardServed(t *testing.T) {
 		`github-signin`,
 		`Deploy on Railway`,
 		`railway.com/new/template?template=https://github.com/shangeethsivan/Syncidian`,
-		`railway.com/button.svg`,
+		`/assets/railway-button.svg`,
 		`data-cta="railway"`,
 		`syncidian-github-signin`,
 		`Continue with GitHub`,
@@ -639,6 +639,23 @@ func TestAdminChangePassword(t *testing.T) {
 	}, nil, "")
 	if res.StatusCode != http.StatusUnauthorized {
 		t.Fatalf("unauthenticated change: %d %v", res.StatusCode, m)
+	}
+}
+
+func TestRailwayButtonAsset(t *testing.T) {
+	hs, done := newTestServer(t)
+	defer done()
+	res, err := http.Get(hs.URL + "/assets/railway-button.svg")
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, _ := io.ReadAll(res.Body)
+	res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("railway button status %d", res.StatusCode)
+	}
+	if !bytes.Contains(b, []byte("Deploy on Railway")) && !bytes.Contains(b, []byte("<svg")) {
+		t.Fatalf("railway button is not an svg: %q", b[:min(80, len(b))])
 	}
 }
 
