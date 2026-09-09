@@ -43,8 +43,8 @@ func TestLandingIsMobileAndDarkThemeSafe(t *testing.T) {
 	if !strings.Contains(html, `id="landing-menu"`) || !strings.Contains(html, "landing-nav") {
 		t.Fatal("landing is missing a mobile menu")
 	}
-	if !strings.Contains(html, "@media (max-width: 800px)") {
-		t.Fatal("landing is missing a mobile breakpoint")
+	if !strings.Contains(html, "@media (max-width: 1080px)") || !strings.Contains(html, "@media (max-width: 800px)") {
+		t.Fatal("landing is missing tablet and phone breakpoints")
 	}
 }
 

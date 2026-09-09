@@ -593,12 +593,11 @@
       0%, 100% { transform: scale(1); }
       20% { transform: scale(1.18); }
     }
-    @media (max-width: 800px) {
+    @media (max-width: 1080px) {
       html { scroll-padding-top: 72px; }
-      .wrap { padding: 16px; }
       .site-head {
         flex-wrap: wrap;
-        padding: 12px 16px;
+        padding: 12px 20px;
         gap: 10px;
       }
       .menu-toggle { display: inline-flex; margin-left: auto; }
@@ -618,6 +617,10 @@
       }
       .nav-chip span { display: inline; }
       .nav-chip { padding: 10px 14px; }
+    }
+    @media (max-width: 800px) {
+      .wrap { padding: 16px; }
+      .site-head { padding: 12px 16px; }
       .hero { padding: 20px 16px 36px; }
       .hero h1 { font-size: clamp(32px, 12vw, 48px); }
       .lede { font-size: 17px; margin-bottom: 24px; }
@@ -977,7 +980,7 @@ function bindLandingMenu() {
     a.addEventListener("click", closeLandingMenu);
   });
   window.addEventListener("resize", () => {
-    if (window.innerWidth > 800) closeLandingMenu();
+    if (window.innerWidth > 1080) closeLandingMenu();
   });
 }
 function bindLandingAnalytics() {
