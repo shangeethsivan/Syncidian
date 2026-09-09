@@ -75,6 +75,7 @@
   </script>
   <style>
     :root, :root[data-theme="light"] {
+      color-scheme: light;
       --bg: #fbfbfd;
       --bg2: #ffffff;
       --card: #ffffff;
@@ -90,14 +91,16 @@
       --obsidian-a: #7852ee;
       --obsidian-b: #9270ff;
       --obsidian-c: #086ddd;
+      --section: #f7f5fb;
     }
     :root[data-theme="dark"] {
+      color-scheme: dark;
       --bg: #000000;
       --bg2: #1d1d1f;
       --card: #1d1d1f;
       --line: rgba(255,255,255,.12);
       --text: #f5f5f7;
-      --muted: #a1a1a6;
+      --muted: #c4c4c8;
       --accent: #f5f5f7;
       --accent-fg: #1d1d1f;
       --danger: #ff6b7a;
@@ -107,10 +110,11 @@
       --obsidian-a: #7852ee;
       --obsidian-b: #a882ff;
       --obsidian-c: #027aff;
+      --section: #0c0b10;
     }
     * { box-sizing: border-box; }
     html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text); font: 17px/1.47 ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif; }
-    html { scroll-behavior: smooth; scroll-padding-top: 84px; }
+    html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; scroll-padding-top: 84px; }
     a { color: var(--text); }
     button, input, select, textarea { font: inherit; }
     .wrap { max-width: 1080px; margin: 0 auto; padding: 24px; }
@@ -141,9 +145,10 @@
     .stat { background: var(--bg2); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
     .stat b { display: block; font-size: 22px; margin-top: 6px; }
     label { display: block; font-size: 13px; color: var(--muted); margin: 12px 0 6px; }
-    input, textarea {
+    input, textarea, select {
       width: 100%; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px;
     }
+    input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
     textarea.token { min-height: 96px; }
     table { width: 100%; border-collapse: collapse; }
     th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
@@ -215,6 +220,24 @@
       background: #ffffff;
       border-color: rgba(29, 29, 31, .1);
     }
+    :root[data-theme="dark"] .waitlist-box,
+    :root[data-theme="dark"] .email-box,
+    :root[data-theme="dark"] #landing .arch div,
+    :root[data-theme="dark"] .privacy-store {
+      background: color-mix(in srgb, var(--card) 92%, transparent);
+      color: var(--text);
+    }
+    :root[data-theme="dark"] .waitlist-copy,
+    :root[data-theme="dark"] .arch span,
+    :root[data-theme="dark"] .story > p,
+    :root[data-theme="dark"] .devices > p {
+      color: var(--muted);
+    }
+    .story, .devices, .privacy, .founding {
+      background: var(--section);
+      box-shadow: 0 0 0 100vmax var(--section);
+      clip-path: inset(0 -100vmax);
+    }
     :root[data-theme="light"] .story,
     :root[data-theme="light"] .devices,
     :root[data-theme="light"] .privacy,
@@ -222,6 +245,24 @@
       background: #f7f5fb;
       box-shadow: 0 0 0 100vmax #f7f5fb;
       clip-path: inset(0 -100vmax);
+    }
+    :root[data-theme="dark"] .story,
+    :root[data-theme="dark"] .devices,
+    :root[data-theme="dark"] .privacy,
+    :root[data-theme="dark"] .founding {
+      background: var(--section);
+      box-shadow: 0 0 0 100vmax var(--section);
+      clip-path: inset(0 -100vmax);
+    }
+    :root[data-theme="dark"] .privacy-claim h2,
+    :root[data-theme="dark"] .founding h2,
+    :root[data-theme="dark"] .story h2,
+    :root[data-theme="dark"] .devices h2 { color: #f7f4ff; }
+    :root[data-theme="dark"] .privacy-claim p,
+    :root[data-theme="dark"] .founding p:not(.pull):not(.signoff) { color: #c8c6d4; }
+    :root[data-theme="dark"] .cinematic-footer-wrap {
+      background: #05030a;
+      z-index: 2;
     }
     :root[data-theme="light"] .privacy-claim h2,
     :root[data-theme="light"] .founding h2 { color: #1a1230; }
@@ -308,7 +349,9 @@
     .howto ol, .howto ul { margin: 8px 0 0; padding-left: 20px; }
     .howto li { margin: 6px 0; }
     .allow-box {
-      background: #123528; border: 1px solid #245c3e; border-radius: 12px;
+      background: color-mix(in srgb, var(--ok) 14%, var(--card));
+      border: 1px solid color-mix(in srgb, var(--ok) 35%, var(--line));
+      border-radius: 12px;
       padding: 12px 14px; margin: 14px 0;
     }
     .allow-box .check { margin: 0; align-items: flex-start; }
@@ -324,7 +367,7 @@
     }
     .help-fab:hover { border-color: var(--accent); color: var(--accent); }
     .help-fab .q {
-      width: 22px; height: 22px; border-radius: 50%; background: var(--accent); color: #042015;
+      width: 22px; height: 22px; border-radius: 50%; background: var(--accent); color: var(--accent-fg);
       display: grid; place-items: center; font-size: 14px; font-weight: 800;
     }
     .help-overlay {
@@ -352,7 +395,7 @@
       background: var(--bg); color: var(--muted); border: 1px solid var(--line);
       border-radius: 999px; padding: 4px 10px; font-size: 12px; cursor: pointer;
     }
-    .help-progress button.on { color: #042015; background: var(--accent); border-color: var(--accent); font-weight: 700; }
+    .help-progress button.on { color: var(--accent-fg); background: var(--accent); border-color: var(--accent); font-weight: 700; }
     .help-nav {
       display: flex; justify-content: space-between; gap: 8px; padding: 14px 22px 18px;
       border-top: 1px solid var(--line);
@@ -363,6 +406,11 @@
       display: flex; align-items: center; justify-content: space-between; gap: 16px;
       padding: 22px 40px; position: sticky; top: 0; background: color-mix(in srgb, var(--bg) 86%, transparent);
       backdrop-filter: saturate(180%) blur(20px); z-index: 8;
+    }
+    .menu-toggle {
+      display: none;
+      min-height: 44px;
+      min-width: 44px;
     }
     .hero {
       flex: 1; display: grid; place-items: center; text-align: center; padding: 32px 24px 48px;
@@ -546,18 +594,86 @@
       20% { transform: scale(1.18); }
     }
     @media (max-width: 800px) {
-      .site-head { padding: 16px; }
+      html { scroll-padding-top: 72px; }
+      .wrap { padding: 16px; }
+      .site-head {
+        flex-wrap: wrap;
+        padding: 12px 16px;
+        gap: 10px;
+      }
+      .menu-toggle { display: inline-flex; margin-left: auto; }
+      .landing-nav {
+        display: none;
+        width: 100%;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
+      }
+      .site-head.nav-open .landing-nav { display: flex; }
+      .landing-nav .ghost,
+      .landing-nav .nav-chip {
+        width: 100%;
+        justify-content: center;
+        min-height: 44px;
+      }
+      .nav-chip span { display: inline; }
+      .nav-chip { padding: 10px 14px; }
+      .hero { padding: 20px 16px 36px; }
+      .hero h1 { font-size: clamp(32px, 12vw, 48px); }
+      .lede { font-size: 17px; margin-bottom: 24px; }
       .arch { grid-template-columns: 1fr; }
-      .hero-actions { flex-direction: column; align-items: center; }
-      .nav-chip span { display: none; }
-      .nav-chip { padding: 8px 10px; }
+      .hero-actions { flex-direction: column; align-items: stretch; }
+      .hero-actions .btn,
+      .hero-actions .nav-chip { width: 100%; min-height: 44px; }
       .hero-source span { display: inline; }
       .hero-source { padding: 12px 20px; }
       .waitlist-row { flex-direction: column; }
       .waitlist-row .btn { width: 100%; min-height: 44px; }
+      .email-box .row { flex-direction: column; align-items: stretch; }
+      .email-box .row .btn { width: 100%; min-height: 44px; }
+      .story, .devices, .privacy, .founding { padding: 24px 16px 56px; }
+      .privacy-claim h2, .founding h2 { font-size: clamp(26px, 8vw, 36px); }
       .device-stage { grid-template-columns: 1fr; }
       .privacy-inner { grid-template-columns: 1fr; }
+      .phone { max-width: 100%; }
+      .cinematic-footer-wrap,
+      .cinematic-footer { height: auto; min-height: 72vh; }
       .footer-giant { font-size: 22vw; }
+      .footer-center { padding: 48px 16px 16px; }
+      .footer-center h2 { font-size: clamp(28px, 10vw, 48px); }
+      .footer-pills { flex-direction: column; align-items: stretch; width: min(360px, 100%); }
+      .footer-pill { justify-content: center; min-height: 44px; }
+      .footer-bar {
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        padding: 16px 16px 28px;
+      }
+      header.app {
+        flex-wrap: wrap;
+        gap: 10px;
+        padding: 12px 16px;
+      }
+      header.app .brand { flex: 1; min-width: 0; }
+      header.app nav {
+        order: 3;
+        width: 100%;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+      }
+      header.app nav::-webkit-scrollbar { display: none; }
+      header.app nav button { flex: 0 0 auto; min-height: 40px; }
+      header.app .row { margin-left: auto; }
+      header.app .row .muted { display: none; }
+      .card { overflow-x: auto; }
+      table { min-width: 36rem; }
+      .row input { min-width: 0; }
+      .help-overlay { align-items: stretch; padding: 8px; }
+      .help-panel { max-height: 100%; border-radius: 16px; }
+      .help-fab { bottom: 12px; }
+      .btn { min-height: 44px; }
     }
   </style>
 </head>
@@ -566,7 +682,8 @@
   <div id="landing" class="hidden">
     <header class="site-head">
       <span class="brand" id="landing-brand"><img class="brand-logo" src="/assets/syncidian.png" width="36" height="36" alt="" /> Syncidian</span>
-      <div class="row">
+      <button class="ghost menu-toggle" type="button" id="landing-menu" aria-expanded="false" aria-controls="landing-nav">Menu</button>
+      <div class="row landing-nav" id="landing-nav">
         <button class="ghost theme-toggle" type="button">Theme</button>
         <a class="ghost" href="#privacy">Privacy</a>
         <a class="ghost" href="#origin">Story</a>
@@ -834,6 +951,34 @@ function initAnalytics(id) {
 function track(name, params) {
   if (typeof window.gtag !== "function") return;
   window.gtag("event", name, params || {});
+}
+function closeLandingMenu() {
+  const head = document.querySelector("#landing .site-head");
+  const btn = $("landing-menu");
+  if (!head || !btn) return;
+  head.classList.remove("nav-open");
+  btn.setAttribute("aria-expanded", "false");
+  btn.setAttribute("aria-label", "Open menu");
+  btn.textContent = "Menu";
+}
+function bindLandingMenu() {
+  const btn = $("landing-menu");
+  const head = document.querySelector("#landing .site-head");
+  const nav = $("landing-nav");
+  if (!btn || !head || !nav) return;
+  btn.setAttribute("aria-label", "Open menu");
+  btn.onclick = () => {
+    const open = head.classList.toggle("nav-open");
+    btn.setAttribute("aria-expanded", open ? "true" : "false");
+    btn.setAttribute("aria-label", open ? "Close menu" : "Open menu");
+    btn.textContent = open ? "Close" : "Menu";
+  };
+  nav.querySelectorAll("a").forEach((a) => {
+    a.addEventListener("click", closeLandingMenu);
+  });
+  window.addEventListener("resize", () => {
+    if (window.innerWidth > 800) closeLandingMenu();
+  });
 }
 function bindLandingAnalytics() {
   document.querySelectorAll("[data-cta]").forEach((el) => {
@@ -1200,6 +1345,7 @@ function paintNav() {
 
 async function boot() {
   applyTheme();
+  bindLandingMenu();
   document.querySelectorAll(".theme-toggle").forEach((b) => { b.onclick = toggleTheme; });
   const nerdsBtn = $("nerds-toggle");
   if (nerdsBtn) {
