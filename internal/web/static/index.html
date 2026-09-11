@@ -323,6 +323,13 @@
     .hero-source {
       padding: 12px 20px; border-radius: 14px; font-size: 15px; text-transform: lowercase;
     }
+    .railway-deploy {
+      display: inline-flex; align-items: center; line-height: 0;
+      border-radius: 8px; overflow: hidden;
+    }
+    .railway-deploy img { height: 40px; width: auto; display: block; }
+    .railway-note { margin: 14px 0 28px; font-size: 14px; }
+    .hero-actions { margin-bottom: 0; }
     #landing .arch div {
       background: color-mix(in srgb, var(--card) 58%, transparent);
       backdrop-filter: blur(18px);
@@ -706,6 +713,17 @@
         <p class="eyebrow">Obsidian, privately synced</p>
         <h1>Your data<br>stays with you.</h1>
         <p class="lede">Your vault. On your GitHub. Notes on every device.</p>
+        <div class="hero-actions">
+          <a class="btn github-signin hidden" id="gh-signup" href="/api/v1/auth/github/start?next=install" data-cta="github_signin" data-placement="hero">Continue with GitHub</a>
+          <a class="railway-deploy" href="https://railway.com/new/template?template=https://github.com/shangeethsivan/Syncidian&amp;utm_medium=integration&amp;utm_source=button&amp;utm_campaign=syncidian" target="_blank" rel="noopener" data-cta="railway" data-placement="hero">
+            <img src="/assets/railway-button.svg" alt="Deploy on Railway" width="183" height="40" />
+          </a>
+          <a class="nav-chip nav-chip-ghost hero-source" href="https://github.com/shangeethsivan/Syncidian" target="_blank" rel="noopener" data-cta="github" data-placement="view_source">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8"/></svg>
+            <span>view source</span>
+          </a>
+        </div>
+        <p class="muted railway-note">Self-host in one click. Attach a <code>/data</code> volume so users survive redeploys.</p>
         <div id="landing-persist" class="landing-flash"></div>
         <div id="landing-flash" class="landing-flash"></div>
         <form id="waitlist-form" class="waitlist-box hidden">
@@ -731,13 +749,6 @@
             <button class="btn secondary" id="su-login" type="button">I already have an email account</button>
           </div>
         </form>
-        <div class="hero-actions">
-          <a class="btn github-signin hidden" id="gh-signup" href="/api/v1/auth/github/start?next=install" data-cta="github_signin" data-placement="hero">Continue with GitHub</a>
-          <a class="nav-chip nav-chip-ghost hero-source" href="https://github.com/shangeethsivan/Syncidian" target="_blank" rel="noopener" data-cta="github" data-placement="view_source">
-            <svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8"/></svg>
-            <span>view source</span>
-          </a>
-        </div>
         <div class="arch">
           <div><b>Sign in</b><span id="arch-signin">GitHub.</span></div>
           <div><b>Connect a repo</b><span>Install the GitHub App.</span></div>
@@ -821,6 +832,7 @@
             <a class="footer-pill" href="#privacy">Privacy</a>
             <a class="footer-pill" href="#origin">Story</a>
             <a class="footer-pill github-signin hidden" href="/api/v1/auth/github/start?next=install" data-cta="github_signin" data-placement="footer">Continue with GitHub</a>
+            <a class="footer-pill" href="https://railway.com/new/template?template=https://github.com/shangeethsivan/Syncidian&amp;utm_medium=integration&amp;utm_source=button&amp;utm_campaign=syncidian" target="_blank" rel="noopener" data-cta="railway" data-placement="footer">Deploy on Railway</a>
             <a class="footer-pill" href="https://github.com/shangeethsivan/Syncidian" target="_blank" rel="noopener" data-cta="github" data-placement="footer">Source</a>
           </div>
         </div>
@@ -990,6 +1002,7 @@ function bindLandingAnalytics() {
       const placement = el.getAttribute("data-placement") || "";
       if (cta === "discord") track("click_discord", { placement });
       else if (cta === "github") track("click_github", { placement });
+      else if (cta === "railway") track("click_railway", { placement });
       else if (cta === "github_signin") track("click_github_signin", { placement });
       else if (cta === "waitlist") track("click_waitlist", { placement });
     });
@@ -1135,6 +1148,8 @@ const HELP_STEPS = [
       <p>The public site is a one-page story. On a self-hosted host, people sign in with email. On Syncidian.com they use GitHub (tap the app name six times to reveal it until public launch).</p>
       <p><b>Self-host operators:</b> open <code>/admin</code> on this same URL to create the first admin. Skip Tailscale — leave <code>SYNCIDIAN_ADMIN_HOST</code> unset, or set <code>SYNCIDIAN_ADMIN_PRIVATE=0</code>.</p>
       <p>A Tailscale-only hostname (<code>admin.syncidian.com</code>) is optional. Tailscale’s DNS page has no Extra records control — use a hosts file, Split DNS + Pi-hole, a public A to <code>100.x</code> on a self-hosted node, or <code>/admin</code> on Railway. See <code>docs/tailscale-admin.md</code>.</p>
+      <h2>Railway (one click)</h2>
+      <p><a href="https://railway.com/new/template?template=https://github.com/shangeethsivan/Syncidian&amp;utm_medium=integration&amp;utm_source=button&amp;utm_campaign=syncidian" target="_blank" rel="noopener">Deploy on Railway</a> from this GitHub repo, then attach a volume at <code>/data</code> before you create the admin.</p>
       <h2>Docker</h2>
       <pre>git clone https://github.com/shangeethsivan/Syncidian.git
 cd Syncidian

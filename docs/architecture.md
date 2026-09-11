@@ -541,7 +541,7 @@ One process. No extra services for the basic install. When `SYNCIDIAN_ADMIN_LIST
 
 Users, tokens, the instance GitHub App, per-user GitHub installs, and vault files all live under `SYNCIDIAN_DATA` (SQLite `syncidian.db` plus `vaults/`). A new deploy **replaces the container filesystem**, so that directory must be a named volume.
 
-Railway: mount a volume at `/data`. `railway.json` sets `requiredMountPath` to `/data` (deploys without a volume fail instead of wiping the instance) and `overlapSeconds` to `0` (SQLite is not opened by two replicas during a rollout). The image default `SYNCIDIAN_DATA=/data` no longer hides `RAILWAY_VOLUME_MOUNT_PATH` if the volume is mounted somewhere else. The Dockerfile does not declare `VOLUME` (that broke some builders). `/admin` and `GET /api/v1/setup` report when the data directory looks ephemeral. Leave `SYNCIDIAN_ADMIN_LISTEN_IP` unset on Railway so the public `PORT` still binds as today.
+Railway: the README and landing page link [Deploy on Railway](https://railway.com/new/template?template=https://github.com/shangeethsivan/Syncidian&utm_medium=integration&utm_source=button&utm_campaign=syncidian). After that click, mount a volume at `/data`. `railway.json` sets `requiredMountPath` to `/data` (deploys without a volume fail instead of wiping the instance) and `overlapSeconds` to `0` (SQLite is not opened by two replicas during a rollout). The image default `SYNCIDIAN_DATA=/data` no longer hides `RAILWAY_VOLUME_MOUNT_PATH` if the volume is mounted somewhere else. The Dockerfile does not declare `VOLUME` (that broke some builders). `/admin` and `GET /api/v1/setup` report when the data directory looks ephemeral. Leave `SYNCIDIAN_ADMIN_LISTEN_IP` unset on Railway so the public `PORT` still binds as today.
 
 ---
 

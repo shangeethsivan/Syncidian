@@ -10,6 +10,10 @@ Syncidian is a self-hosted sync server and MCP bridge for Obsidian. The same plu
 - **GitHub (Syncidian.com, after revealing it):** [Continue with GitHub](/api/v1/auth/github/start?next=install)
 - **Email (self-host):** use the email form on the [homepage](/). You do not need a GitHub App to create an account. The operator still creates the first admin at `/admin`.
 
+## Self-host on Railway
+
+One-click deploy: [Deploy on Railway](https://railway.com/new/template?template=https://github.com/shangeethsivan/Syncidian&utm_medium=integration&utm_source=button&utm_campaign=syncidian). Attach a volume at `/data` before creating the admin. `railway.json` requires that mount so a deploy without persistence fails instead of wiping users.
+
 ## For AI agents
 
 - MCP JSON-RPC: `POST /mcp` with `Authorization: Bearer sk_sync_…`
