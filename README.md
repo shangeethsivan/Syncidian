@@ -160,7 +160,13 @@ POST http://localhost:8080/api/v1/mcp/login
 {"username":"you","password":"…"}
 ```
 
-Dashboard session cookies also work on `/mcp`. **MCP does not save notes on the Syncidian server.** Create/update/delete write to your connected GitHub repository on `main` and notify live Obsidian clients. Connect GitHub before using write tools. Tools cover search, graph/backlinks, create/update/append, moving any vault file type (including images), and bulk organize when permissions allow.
+Dashboard session cookies also work on `/mcp`. **MCP does not save notes on the Syncidian server.** Every list, search, read, and write uses the connected GitHub repository on `main` and notifies live Obsidian clients. Connect GitHub before using MCP. Tools cover search, graph/backlinks, create/update/append, moving any vault file type (including images), and bulk organize when permissions allow.
+
+Agents that should use the vault well can install the `syncidian-mcp` skill. The same file is served at `/.well-known/agent-skills/syncidian-mcp/SKILL.md`. [skills.sh](https://skills.sh/) lists it after people install it; there is no separate submit step.
+
+```bash
+npx skills add shangeethsivan/Syncidian --skill syncidian-mcp
+```
 
 ---
 

@@ -404,7 +404,7 @@ Default permissions are **search + read**. Create and modify are off until the d
 | modify | `update_note`, `add_backlink`, `move_note`, `delete_note`, `bulk_move`, `bulk_add_links` |
 | create or modify | `append_to_note` |
 
-Writes go to the user’s GitHub repository (Contents API on `main`), not the server working copy. Connected Obsidian clients receive `file_changed` with the file body (large binaries are pulled over HTTP). `move_note` and `bulk_move` work for any vault file type, including images. `get_graph` returns JSON nodes/edges plus a Mermaid diagram for agents to render. MCP create/update fails until GitHub backup is connected.
+Reads and writes use the user’s GitHub repository (Contents API on `main`), not the server working copy. Connected Obsidian clients receive `file_changed` with the file body (large binaries are pulled over HTTP). `move_note` and `bulk_move` work for any vault file type, including images. `get_graph` returns JSON nodes/edges plus a Mermaid diagram for agents to render. MCP fails until GitHub backup is connected. How agents should call these tools is `skills/syncidian-mcp/SKILL.md`, also served at `/.well-known/agent-skills/syncidian-mcp/SKILL.md`.
 
 ---
 

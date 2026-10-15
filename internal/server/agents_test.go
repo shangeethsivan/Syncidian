@@ -1,11 +1,13 @@
 package server
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"io"
 	"net/http"
+	"os"
 	"strings"
 	"testing"
 
@@ -115,9 +117,11 @@ func TestAgentDiscovery(t *testing.T) {
 	res, body = getBody(t, hs.URL+"/.well-known/agent-skills/index.json", "")
 	var idx struct {
 		Skills []struct {
-			SHA256 string `json:"sha256"`
-			Digest string `json:"digest"`
-			Type   string `json:"type"`
+			Name        string `json:"name"`
+			Description string `json:"description"`
+			SHA256      string `json:"sha256"`
+			Digest      string `json:"digest"`
+			Type        string `json:"type"`
 		} `json:"skills"`
 	}
 	if err := json.Unmarshal(body, &idx); err != nil {
@@ -134,6 +138,17 @@ func TestAgentDiscovery(t *testing.T) {
 	want := hex.EncodeToString(sum[:])
 	if idx.Skills[0].SHA256 != want || idx.Skills[0].Digest != "sha256:"+want {
 		t.Fatalf("digest mismatch got %s want %s", idx.Skills[0].Digest, want)
+	}
+	name, description := skillFrontmatter(raw)
+	if idx.Skills[0].Name != name || idx.Skills[0].Description != description {
+		t.Fatalf("index meta %+v want %s / %s", idx.Skills[0], name, description)
+	}
+	published, err := os.ReadFile("../../skills/syncidian-mcp/SKILL.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(raw, published) {
+		t.Fatal("skills/syncidian-mcp/SKILL.md must match the served skill")
 	}
 }
 
