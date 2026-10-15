@@ -284,20 +284,54 @@ func (s *Server) handleAgentSkillsIndex(w http.ResponseWriter, r *http.Request) 
 	}
 	sum := sha256.Sum256(raw)
 	hexSum := hex.EncodeToString(sum[:])
+	name, description := skillFrontmatter(raw)
 	skillURL := origin + "/.well-known/agent-skills/syncidian-mcp/SKILL.md"
 	writeJSONCORS(w, map[string]any{
 		"$schema": "https://schemas.agentskills.io/discovery/0.2.0/schema.json",
 		"skills": []map[string]any{
 			{
-				"name":        "syncidian-mcp",
+				"name":        name,
 				"type":        "skill-md",
-				"description": "Connect to this Syncidian instance’s MCP server to search, read, and optionally write Obsidian notes.",
+				"description": description,
 				"url":         skillURL,
 				"digest":      "sha256:" + hexSum,
 				"sha256":      hexSum,
 			},
 		},
 	}, "application/json")
+}
+
+// skillFrontmatter reads the single-line name and description from a SKILL.md.
+func skillFrontmatter(raw []byte) (name, description string) {
+	name = "syncidian-mcp"
+	description = "Search, read, link, and write an Obsidian vault through Syncidian MCP."
+	text := string(raw)
+	if !strings.HasPrefix(text, "---\n") {
+		return name, description
+	}
+	rest := strings.TrimPrefix(text, "---\n")
+	end := strings.Index(rest, "\n---")
+	if end < 0 {
+		return name, description
+	}
+	for _, line := range strings.Split(rest[:end], "\n") {
+		key, val, ok := strings.Cut(line, ":")
+		if !ok {
+			continue
+		}
+		val = strings.Trim(strings.TrimSpace(val), `"'`)
+		switch strings.TrimSpace(key) {
+		case "name":
+			if val != "" {
+				name = val
+			}
+		case "description":
+			if val != "" {
+				description = val
+			}
+		}
+	}
+	return name, description
 }
 
 func (s *Server) handleAgentSkillMD(w http.ResponseWriter, r *http.Request) {
