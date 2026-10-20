@@ -1,4 +1,4 @@
-# Syncidian agent authentication
+# Syncidian auth.md
 
 Agents do not use a browser cookie. Call protected APIs with an access token.
 

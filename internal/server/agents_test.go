@@ -87,6 +87,7 @@ func TestAgentDiscovery(t *testing.T) {
 		path string
 		want string
 	}{
+		{"/auth.md", "# Syncidian auth.md"},
 		{"/auth.md", "Bearer token"},
 		{"/.well-known/api-catalog", "linkset"},
 		{"/.well-known/oauth-protected-resource", "bearer_methods_supported"},
@@ -97,7 +98,8 @@ func TestAgentDiscovery(t *testing.T) {
 		{"/.well-known/mcp.json", "syncidian"},
 		{"/.well-known/agent-skills/index.json", "syncidian-mcp"},
 		{"/.well-known/skills/index.json", "$schema"},
-		{"/.well-known/ai-catalog.json", "specVersion"},
+		{"/.well-known/ai-catalog.json", `"identifier"`},
+		{"/.well-known/poppy.json", `"protocol_version"`},
 		{"/openapi.json", "openapi"},
 		{"/.well-known/agent-skills/syncidian-mcp/SKILL.md", "name: syncidian-mcp"},
 	}

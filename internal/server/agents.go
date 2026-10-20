@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"strconv"
 	"strings"
@@ -343,23 +344,31 @@ func (s *Server) handleAgentSkillMD(w http.ResponseWriter, r *http.Request) {
 	writePublic(w, http.StatusOK, "text/markdown; charset=utf-8", raw)
 }
 
-func (s *Server) handleAICatalog(w http.ResponseWriter, r *http.Request) {
-	origin := s.publicOrigin(r)
+func discoveryHost(origin string) string {
 	host := strings.TrimPrefix(strings.TrimPrefix(origin, "https://"), "http://")
 	if i := strings.IndexByte(host, '/'); i >= 0 {
 		host = host[:i]
 	}
+	if name, _, err := net.SplitHostPort(host); err == nil {
+		host = name
+	}
+	return host
+}
+
+func (s *Server) handleAICatalog(w http.ResponseWriter, r *http.Request) {
+	origin := s.publicOrigin(r)
+	host := discoveryHost(origin)
 	writeJSONCORS(w, map[string]any{
-		"specVersion": "0.1",
+		"specVersion": "1.0",
 		"host": map[string]any{
-			"name": "Syncidian",
-			"url":  origin,
+			"displayName": "Syncidian",
+			"identifier":  "did:web:" + host,
 		},
 		"entries": []map[string]any{
 			{
-				"id":          "urn:air:" + host + ":mcp:syncidian",
+				"identifier":  "urn:air:" + host + ":server:syncidian",
 				"displayName": "Syncidian MCP",
-				"type":        "application/json",
+				"type":        "application/mcp-server-card+json",
 				"url":         origin + "/.well-known/mcp/server-card.json",
 				"representativeQueries": []string{
 					"search my Obsidian notes",
@@ -369,7 +378,7 @@ func (s *Server) handleAICatalog(w http.ResponseWriter, r *http.Request) {
 				},
 			},
 			{
-				"id":          "urn:air:" + host + ":docs:auth",
+				"identifier":  "urn:air:" + host + ":docs:auth",
 				"displayName": "Syncidian agent auth",
 				"type":        "text/markdown",
 				"url":         origin + "/auth.md",
@@ -379,6 +388,17 @@ func (s *Server) handleAICatalog(w http.ResponseWriter, r *http.Request) {
 				},
 			},
 		},
+	}, "application/json")
+}
+
+func (s *Server) handlePoppy(w http.ResponseWriter, r *http.Request) {
+	writeJSONCORS(w, map[string]any{
+		"protocol_version": "0.1",
+		"organization": map[string]any{
+			"name":   "Syncidian",
+			"domain": discoveryHost(s.publicOrigin(r)),
+		},
+		"web": map[string]any{},
 	}, "application/json")
 }
 
