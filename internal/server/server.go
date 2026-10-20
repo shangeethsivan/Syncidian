@@ -190,6 +190,7 @@ func (s *Server) Handler() http.Handler {
 		mux.HandleFunc("GET /.well-known/skills/index.json", s.handleAgentSkillsIndex)
 		mux.HandleFunc("GET /.well-known/agent-skills/syncidian-mcp/SKILL.md", s.handleAgentSkillMD)
 		mux.HandleFunc("GET /.well-known/ai-catalog.json", s.handleAICatalog)
+		mux.HandleFunc("GET /.well-known/poppy.json", s.handlePoppy)
 	}
 
 	return s.noIndexOperator(s.adminHostGate(s.cors(mux)))
