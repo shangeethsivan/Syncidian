@@ -157,8 +157,8 @@ func TestPricingPageIsStaticTwoDollars(t *testing.T) {
 	if !strings.Contains(landing, "$2") {
 		t.Fatal("homepage pricing section must show $2")
 	}
-	const existingRailway = `https://railway.com/new/template?template=https://github.com/shangeethsivan/Syncidian`
-	if !strings.Contains(landing, existingRailway) {
-		t.Fatal("must not rewrite existing Railway hrefs on the homepage")
+	const railway = `https://railway.com/new/template/earnest-empathy`
+	if !strings.Contains(landing, railway) {
+		t.Fatal("homepage Railway hrefs must use the earnest-empathy template")
 	}
 }
