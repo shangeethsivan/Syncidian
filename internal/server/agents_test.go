@@ -68,7 +68,7 @@ func TestAgentDiscovery(t *testing.T) {
 	if !strings.Contains(string(body), "MCP JSON-RPC") {
 		t.Fatalf("landing markdown: %s", body)
 	}
-	if !strings.Contains(string(body), "railway.com/new/template?template=https://github.com/shangeethsivan/Syncidian") {
+	if !strings.Contains(string(body), "railway.com/new/template/earnest-empathy") {
 		t.Fatalf("landing markdown missing Railway one-click deploy: %s", body)
 	}
 	if res.Header.Get("Link") == "" {

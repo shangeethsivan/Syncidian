@@ -12,7 +12,7 @@ Syncidian is a self-hosted sync server and MCP bridge for Obsidian. The same plu
 
 ## Self-host on Railway
 
-One-click deploy: [Deploy on Railway](https://railway.com/new/template?template=https://github.com/shangeethsivan/Syncidian&utm_medium=integration&utm_source=button&utm_campaign=syncidian). Attach a volume at `/data` before creating the admin. `railway.json` requires that mount so a deploy without persistence fails instead of wiping users.
+One-click deploy: [Deploy on Railway](https://railway.com/new/template/earnest-empathy?utm_medium=integration&utm_source=button&utm_campaign=syncidian). Attach a volume at `/data` before creating the admin. `railway.json` requires that mount so a deploy without persistence fails instead of wiping users.
 
 ## For AI agents
 

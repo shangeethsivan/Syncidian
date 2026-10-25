@@ -489,7 +489,7 @@ func TestDashboardServed(t *testing.T) {
 		`id="landing-brand"`,
 		`github-signin`,
 		`Deploy on Railway`,
-		`railway.com/new/template?template=https://github.com/shangeethsivan/Syncidian`,
+		`railway.com/new/template/earnest-empathy`,
 		`/assets/railway-button.svg`,
 		`data-cta="railway"`,
 		`syncidian-github-signin`,
