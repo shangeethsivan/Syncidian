@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Pricing — Syncidian</title>
+  <meta name="description" content="Hosted Syncidian is $2/month with a 14-day trial. Self-host stays free." />
+  <link rel="icon" type="image/png" href="/assets/syncidian.png" />
+  <link rel="apple-touch-icon" href="/assets/syncidian.png" />
+  <meta property="og:title" content="Pricing — Syncidian" />
+  <meta property="og:description" content="Hosted Syncidian is $2/month with a 14-day trial. Self-host stays free." />
+  <meta property="og:image" content="/assets/syncidian.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <script>
+    (function () {
+      var t = localStorage.getItem("syncidian-theme");
+      if (!t) t = matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+      document.documentElement.dataset.theme = t;
+    })();
+  </script>
+  <style>
+    :root, :root[data-theme="light"] {
+      color-scheme: light;
+      --bg: #fbfbfd;
+      --bg2: #ffffff;
+      --card: #ffffff;
+      --line: rgba(0,0,0,.1);
+      --text: #1d1d1f;
+      --muted: #6e6e73;
+      --purple: #7852ee;
+      --purple-light: #9270ff;
+      --section: #f7f5fb;
+    }
+    :root[data-theme="dark"] {
+      color-scheme: dark;
+      --bg: #000000;
+      --bg2: #1d1d1f;
+      --card: #1d1d1f;
+      --line: rgba(255,255,255,.12);
+      --text: #f5f5f7;
+      --muted: #c4c4c8;
+      --purple: #7852ee;
+      --purple-light: #a882ff;
+      --section: #0c0b10;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0; padding: 0; background: var(--bg); color: var(--text);
+      font: 17px/1.5 "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+    }
+    a { color: var(--purple); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .site-head {
+      display: flex; align-items: center; justify-content: space-between; gap: 16px;
+      padding: 16px 24px; border-bottom: 1px solid var(--line); background: var(--bg2);
+      position: sticky; top: 0; z-index: 5;
+    }
+    .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; color: inherit; text-decoration: none; letter-spacing: -.02em; }
+    .brand:hover { text-decoration: none; }
+    .brand-logo { width: 36px; height: 36px; border-radius: 8px; }
+    .nav { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+    .ghost {
+      background: transparent; color: var(--muted); border: 1px solid transparent;
+      padding: 8px 12px; border-radius: 980px; cursor: pointer; text-decoration: none; font: inherit;
+    }
+    .ghost:hover, .ghost.active { color: var(--text); background: var(--card); border-color: var(--line); text-decoration: none; }
+    .btn {
+      background: var(--purple); color: #fff; border: 0; padding: 12px 22px; border-radius: 980px;
+      font-weight: 600; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; justify-content: center;
+    }
+    .btn:hover { background: var(--purple-light); text-decoration: none; }
+    .btn.secondary { background: transparent; color: var(--text); border: 1px solid var(--line); }
+    .wrap { max-width: 880px; margin: 0 auto; padding: 48px 24px 80px; }
+    .eyebrow { text-transform: uppercase; letter-spacing: .08em; font-size: 12px; font-weight: 700; color: var(--purple); margin: 0 0 12px; }
+    h1 { font-size: clamp(36px, 6vw, 52px); letter-spacing: -.04em; line-height: 1.1; margin: 0 0 12px; }
+    .lede { color: var(--muted); font-size: 19px; max-width: 34em; margin: 0 0 36px; }
+    .plan {
+      background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 32px;
+    }
+    .plan-top { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; align-items: flex-start; }
+    .plan-name { font-size: 15px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+    .price { font-size: 48px; font-weight: 800; letter-spacing: -.04em; line-height: 1; }
+    .price span { font-size: 18px; font-weight: 600; color: var(--muted); }
+    .trial { margin: 8px 0 0; color: var(--muted); }
+    .lists { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; margin: 28px 0 0; }
+    .lists h2 { font-size: 15px; margin: 0 0 12px; }
+    .lists ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 10px; }
+    .lists li { color: var(--text); padding-left: 20px; position: relative; }
+    .lists li::before { position: absolute; left: 0; }
+    .in li::before { content: "✓"; color: var(--purple); }
+    .out li::before { content: "–"; color: var(--muted); }
+    .out li { color: var(--muted); }
+    .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 28px; }
+    .selfhost {
+      margin-top: 28px; padding-top: 24px; border-top: 1px solid var(--line);
+    }
+    .selfhost h2 { font-size: 18px; margin: 0 0 8px; }
+    .selfhost p { color: var(--muted); margin: 0 0 16px; }
+    .faq { margin-top: 56px; }
+    .faq h2 { font-size: 28px; letter-spacing: -.03em; margin: 0 0 20px; }
+    details { border-top: 1px solid var(--line); padding: 16px 0; }
+    details:last-child { border-bottom: 1px solid var(--line); }
+    summary { cursor: pointer; font-weight: 600; }
+    details p { color: var(--muted); margin: 10px 0 0; }
+    .site-foot {
+      border-top: 1px solid var(--line); padding: 20px 24px 32px;
+      display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; color: var(--muted); font-size: 14px;
+    }
+    .menu-toggle { display: none; }
+    @media (max-width: 800px) {
+      .lists { grid-template-columns: 1fr; }
+      .menu-toggle { display: inline-flex; }
+      .nav { display: none; }
+      .site-head.nav-open .nav { display: flex; flex-direction: column; width: 100%; }
+      .site-head { flex-wrap: wrap; }
+    }
+  </style>
+</head>
+<body>
+  <header class="site-head" id="head">
+    <a class="brand" href="/"><img class="brand-logo" src="/assets/syncidian.png" width="36" height="36" alt="" /> Syncidian</a>
+    <button class="ghost menu-toggle" type="button" id="menu" aria-expanded="false" aria-controls="nav">Menu</button>
+    <nav class="nav" id="nav">
+      <button class="ghost theme-toggle" type="button">Theme</button>
+      <a class="ghost active" href="/pricing">Pricing</a>
+      <a class="ghost" href="/#privacy">Privacy</a>
+      <a class="ghost" href="/#origin">Story</a>
+      <a class="btn" href="https://app.syncidian.com">Log in</a>
+    </nav>
+  </header>
+  <main class="wrap">
+    <p class="eyebrow">Pricing</p>
+    <h1>One plan. $2/month.</h1>
+    <p class="lede">Hosted Syncidian on app.syncidian.com. A 14-day trial, then Polar checkout. Self-host stays free.</p>
+
+    <section class="plan" aria-labelledby="plan-name">
+      <div class="plan-top">
+        <div>
+          <p class="plan-name" id="plan-name">Hosted Syncidian</p>
+          <p class="price">$2<span>/month</span></p>
+          <p class="trial">14-day trial. Cancel anytime. Access stays until the period ends.</p>
+        </div>
+      </div>
+      <div class="lists">
+        <div class="in">
+          <h2>Included</h2>
+          <ul>
+            <li>Managed app.syncidian.com</li>
+            <li>GitHub identity login</li>
+            <li>Device sync without a paid repo</li>
+            <li>Plugin tokens for Obsidian</li>
+            <li>GitHub repo backup after you subscribe and connect a repository</li>
+          </ul>
+        </div>
+        <div class="out">
+          <h2>Not included</h2>
+          <ul>
+            <li>Social scheduling</li>
+            <li>Email or password login</li>
+            <li>A public operator dashboard</li>
+            <li>Extra paid tiers</li>
+          </ul>
+        </div>
+      </div>
+      <div class="actions">
+        <a class="btn" href="https://app.syncidian.com">Start trial</a>
+        <a class="btn secondary" href="https://app.syncidian.com">Log in</a>
+      </div>
+      <div class="selfhost">
+        <h2>Self-host is free</h2>
+        <p>Run the open-source server yourself. No monthly fee. Deploy with Railway if you want a one-click host.</p>
+        <a class="btn secondary" href="https://railway.com/new/template/earnest-empathy?utm_medium=integration&amp;utm_source=button&amp;utm_campaign=syncidian">Deploy on Railway</a>
+      </div>
+    </section>
+
+    <section class="faq" aria-labelledby="faq-title">
+      <h2 id="faq-title">FAQ</h2>
+      <details>
+        <summary>What is the difference between hosted and self-host?</summary>
+        <p>Hosted is $2/month on app.syncidian.com. We run the server. Self-host is free: you run the open-source server on your own machine or Railway.</p>
+      </details>
+      <details>
+        <summary>How long is the trial?</summary>
+        <p>14 days. After that, Polar checkout on app.syncidian.com. Trialing still lets you connect a repository.</p>
+      </details>
+      <details>
+        <summary>What does GitHub login read?</summary>
+        <p>Your GitHub profile and email so we can sign you in. No repository access at that step. Connecting a repo is a later, optional step after you subscribe.</p>
+      </details>
+      <details>
+        <summary>What happens if I cancel?</summary>
+        <p>You keep access until Polar marks the subscription revoked at the end of the paid period. There is no extra local grace clock.</p>
+      </details>
+      <details>
+        <summary>Do I need Polar to sync devices?</summary>
+        <p>No. Device sync works after waitlist and login. The paywall is only when you connect a GitHub repository.</p>
+      </details>
+    </section>
+  </main>
+  <footer class="site-foot">
+    <div>© 2026 Syncidian</div>
+    <div>
+      <a href="/">Home</a> ·
+      <a href="/pricing">Pricing</a> ·
+      <a href="/#privacy">Privacy</a>
+    </div>
+  </footer>
+  <script>
+    (function () {
+      document.querySelectorAll(".theme-toggle").forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          var next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+          document.documentElement.dataset.theme = next;
+          localStorage.setItem("syncidian-theme", next);
+        });
+      });
+      var head = document.getElementById("head");
+      var menu = document.getElementById("menu");
+      if (menu && head) {
+        menu.addEventListener("click", function () {
+          var open = head.classList.toggle("nav-open");
+          menu.setAttribute("aria-expanded", open ? "true" : "false");
+        });
+      }
+    })();
+  </script>
+</body>
+</html>

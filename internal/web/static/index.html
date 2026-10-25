@@ -230,10 +230,11 @@
     :root[data-theme="dark"] .waitlist-copy,
     :root[data-theme="dark"] .arch span,
     :root[data-theme="dark"] .story > p,
-    :root[data-theme="dark"] .devices > p {
+    :root[data-theme="dark"] .devices > p,
+    :root[data-theme="dark"] .pricing > p {
       color: var(--muted);
     }
-    .story, .devices, .privacy, .founding {
+    .story, .devices, .privacy, .founding, .pricing {
       background: var(--section);
       box-shadow: 0 0 0 100vmax var(--section);
       clip-path: inset(0 -100vmax);
@@ -241,7 +242,8 @@
     :root[data-theme="light"] .story,
     :root[data-theme="light"] .devices,
     :root[data-theme="light"] .privacy,
-    :root[data-theme="light"] .founding {
+    :root[data-theme="light"] .founding,
+    :root[data-theme="light"] .pricing {
       background: #f7f5fb;
       box-shadow: 0 0 0 100vmax #f7f5fb;
       clip-path: inset(0 -100vmax);
@@ -249,7 +251,8 @@
     :root[data-theme="dark"] .story,
     :root[data-theme="dark"] .devices,
     :root[data-theme="dark"] .privacy,
-    :root[data-theme="dark"] .founding {
+    :root[data-theme="dark"] .founding,
+    :root[data-theme="dark"] .pricing {
       background: var(--section);
       box-shadow: 0 0 0 100vmax var(--section);
       clip-path: inset(0 -100vmax);
@@ -257,7 +260,8 @@
     :root[data-theme="dark"] .privacy-claim h2,
     :root[data-theme="dark"] .founding h2,
     :root[data-theme="dark"] .story h2,
-    :root[data-theme="dark"] .devices h2 { color: #f7f4ff; }
+    :root[data-theme="dark"] .devices h2,
+    :root[data-theme="dark"] .pricing h2 { color: #f7f4ff; }
     :root[data-theme="dark"] .privacy-claim p,
     :root[data-theme="dark"] .founding p:not(.pull):not(.signoff) { color: #c8c6d4; }
     :root[data-theme="dark"] .cinematic-footer-wrap {
@@ -454,14 +458,22 @@
     }
     .landing-flash { max-width: 36em; margin: 0 auto; }
     .landing-flash:not(:empty) { margin-bottom: 28px; }
-    .story, .devices, .privacy, .founding {
+    .story, .devices, .privacy, .founding, .pricing {
       position: relative; z-index: 2; max-width: 1080px; margin: 0 auto;
       padding: 24px 24px 72px; width: 100%;
     }
-    .story h2, .devices h2, .privacy h2 {
+    .story h2, .devices h2, .privacy h2, .pricing h2 {
       font-size: clamp(28px, 5vw, 42px); letter-spacing: -.03em; margin: 0 0 12px; text-align: center;
     }
-    .story > p, .devices > p { text-align: center; color: var(--muted); max-width: 36em; margin: 0 auto 32px; }
+    .story > p, .devices > p, .pricing > p { text-align: center; color: var(--muted); max-width: 36em; margin: 0 auto 32px; }
+    .pricing-card {
+      max-width: 520px; margin: 0 auto; background: var(--card); border: 1px solid var(--line);
+      border-radius: 16px; padding: 28px; text-align: left;
+    }
+    .pricing-card .plan-label { font-size: 13px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); margin: 0 0 8px; }
+    .pricing-card .price { font-size: 40px; font-weight: 800; letter-spacing: -.04em; margin: 0; }
+    .pricing-card .price span { font-size: 16px; font-weight: 600; color: var(--muted); }
+    .pricing-card .row { margin: 20px 0 12px; }
     .privacy-inner {
       display: grid; grid-template-columns: 1fr 1fr; gap: 28px; align-items: start;
     }
@@ -641,7 +653,7 @@
       .waitlist-row .btn { width: 100%; min-height: 44px; }
       .email-box .row { flex-direction: column; align-items: stretch; }
       .email-box .row .btn { width: 100%; min-height: 44px; }
-      .story, .devices, .privacy, .founding { padding: 24px 16px 56px; }
+      .story, .devices, .privacy, .founding, .pricing { padding: 24px 16px 56px; }
       .privacy-claim h2, .founding h2 { font-size: clamp(26px, 8vw, 36px); }
       .device-stage { grid-template-columns: 1fr; }
       .privacy-inner { grid-template-columns: 1fr; }
@@ -695,6 +707,7 @@
       <button class="ghost menu-toggle" type="button" id="landing-menu" aria-expanded="false" aria-controls="landing-nav">Menu</button>
       <div class="row landing-nav" id="landing-nav">
         <button class="ghost theme-toggle" type="button">Theme</button>
+        <a class="ghost" href="/pricing">Pricing</a>
         <a class="ghost" href="#privacy">Privacy</a>
         <a class="ghost" href="#origin">Story</a>
         <a class="ghost github-signin hidden" href="/api/v1/auth/github/start" data-cta="github_signin" data-placement="header">Log in</a>
@@ -813,6 +826,21 @@
       <p class="pull">The history of all your notes should be real history. We all know that no one else does it better than Git.</p>
       <p class="signoff">Cheers to Linus Torvalds.<br><em>— Shangeeth</em></p>
     </section>
+    <section class="pricing" id="pricing">
+      <p class="eyebrow">Hosted</p>
+      <h2>One plan. $2/month.</h2>
+      <p>Managed sync on app.syncidian.com. 14-day trial. Self-host stays free.</p>
+      <div class="pricing-card">
+        <p class="plan-label">Hosted Syncidian</p>
+        <p class="price">$2<span>/month</span></p>
+        <p class="muted">14-day trial. Device sync, plugin tokens, and GitHub backup after you subscribe.</p>
+        <div class="row">
+          <a class="btn" href="https://app.syncidian.com">Start trial</a>
+          <a class="btn secondary" href="/pricing">See what's included</a>
+        </div>
+        <p class="muted">Or self-host for free. <a href="https://railway.com/new/template/earnest-empathy?utm_medium=integration&amp;utm_source=button&amp;utm_campaign=syncidian">Deploy on Railway</a></p>
+      </div>
+    </section>
     <div class="cinematic-footer-wrap" id="cinematic-footer">
       <footer class="cinematic-footer">
         <div class="footer-aurora"></div>
@@ -829,6 +857,7 @@
           <div class="footer-pills">
             <a class="footer-pill hidden" id="waitlist-footer" href="#waitlist-form" data-cta="waitlist" data-placement="footer">Join the waitlist</a>
             <a class="footer-pill hidden" id="email-footer" href="#email-form">Email login</a>
+            <a class="footer-pill" href="/pricing">Pricing</a>
             <a class="footer-pill" href="#privacy">Privacy</a>
             <a class="footer-pill" href="#origin">Story</a>
             <a class="footer-pill github-signin hidden" href="/api/v1/auth/github/start?next=install" data-cta="github_signin" data-placement="footer">Continue with GitHub</a>

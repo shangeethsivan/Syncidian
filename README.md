@@ -33,7 +33,7 @@ docker run -d \
   syncidian
 ```
 
-**Self-host Syncidian for free.** A managed service is planned at $1/month; it is not available yet.
+**Self-host Syncidian for free.** A managed service is planned at $2/month; it is not available yet.
 
 [![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/new/template/earnest-empathy?utm_medium=integration&utm_source=button&utm_campaign=syncidian)
 
@@ -1181,7 +1181,9 @@ A managed Syncidian service is in development. It is not for sale yet.
 
 ### Planned pricing
 
-> **Starting at $1/month**
+> **Starting at $2/month**
+
+The self-hosted version remains free.
 
 The hosted service will provide:
 
@@ -1302,7 +1304,7 @@ The self-hosted version will remain free and open source.
 * [ ] Device management
 * [ ] Monitoring
 * [ ] Billing
-* [ ] Launch at $1/month
+* [ ] Launch at $2/month
 
 ---
 
@@ -1338,7 +1340,7 @@ Connect Obsidian knowledge to AI tools through MCP.
 
 ### Phase 6 — Hosted Syncidian
 
-Provide a managed experience starting at $1/month.
+Provide a managed experience starting at $2/month.
 
 ### Phase 7 — AI Conflict Resolution
 
@@ -1362,7 +1364,7 @@ Use small LLMs to automatically resolve safe conflicts and fall back to human re
 | AI-assisted conflict resolution | 🚧 Planned        | —             |
 | Hosted service                  | Planned           | ✅             |
 | Self-hosted cost                | **Free**          | —             |
-| Hosted Syncidian                | **From $1/month** | —             |
+| Hosted Syncidian                | **From $2/month** | —             |
 
 Syncidian isn't trying to reproduce every feature of Obsidian Sync.
 

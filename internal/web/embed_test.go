@@ -120,3 +120,45 @@ func TestLandingHasPostHogWithoutGA(t *testing.T) {
 		}
 	}
 }
+
+func TestPricingPageIsStaticTwoDollars(t *testing.T) {
+	b, err := FS.ReadFile("static/pricing.html")
+	if err != nil {
+		t.Fatal("pricing.html must be embedded")
+	}
+	html := string(b)
+	if !strings.Contains(html, "$2") || !strings.Contains(html, "/month") {
+		t.Fatal("pricing page must show $2/month")
+	}
+	if strings.Contains(html, "$20") || strings.Contains(html, "$1/month") {
+		t.Fatal("pricing page must not show $20 or $1 as the hosted price")
+	}
+	if !strings.Contains(html, "https://app.syncidian.com") {
+		t.Fatal("pricing page must CTA to app.syncidian.com")
+	}
+	if !strings.Contains(html, "https://railway.com/new/template/earnest-empathy") {
+		t.Fatal("new Railway CTA must use the earnest-empathy template URL")
+	}
+	if strings.Contains(html, "sandbox.polar") || strings.Contains(html, "polar.sh") {
+		t.Fatal("pricing page must not fetch Polar")
+	}
+
+	home, err := FS.ReadFile("static/index.html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	landing := string(home)
+	if !strings.Contains(landing, `id="pricing"`) {
+		t.Fatal("homepage is missing #pricing")
+	}
+	if !strings.Contains(landing, `href="/pricing"`) {
+		t.Fatal("homepage must link to /pricing")
+	}
+	if !strings.Contains(landing, "$2") {
+		t.Fatal("homepage pricing section must show $2")
+	}
+	const existingRailway = `https://railway.com/new/template?template=https://github.com/shangeethsivan/Syncidian`
+	if !strings.Contains(landing, existingRailway) {
+		t.Fatal("must not rewrite existing Railway hrefs on the homepage")
+	}
+}
