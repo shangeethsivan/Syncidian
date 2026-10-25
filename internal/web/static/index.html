@@ -1566,20 +1566,64 @@ if (landingBrand) {
 }
 const waitlistForm = $("waitlist-form");
 if (waitlistForm) {
+  const waitlistEmail = $("waitlist-email");
+  const waitlistBtn = $("waitlist-btn");
+  const setWaitlistEnabled = (on) => {
+    if (waitlistEmail) waitlistEmail.disabled = !on;
+    if (waitlistBtn) waitlistBtn.disabled = !on;
+  };
+  const waitlistOffline = () => {
+    if (navigator.onLine) return false;
+    setWaitlistEnabled(false);
+    flash($("waitlist-flash"), "Reconnect to join the waitlist.");
+    return true;
+  };
+  window.addEventListener("offline", () => { waitlistOffline(); });
+  window.addEventListener("online", () => {
+    setWaitlistEnabled(true);
+    flash($("waitlist-flash"), "");
+  });
+  waitlistOffline();
   waitlistForm.addEventListener("submit", async (e) => {
     e.preventDefault();
-    const btn = $("waitlist-btn");
+    if (waitlistBtn && waitlistBtn.disabled) return;
     flash($("waitlist-flash"), "");
+    if (waitlistOffline()) return;
+    const email = String(waitlistEmail && waitlistEmail.value || "").trim();
+    if (!email || (waitlistEmail && !waitlistEmail.checkValidity())) {
+      flash($("waitlist-flash"), "Enter a valid email.");
+      if (waitlistEmail) waitlistEmail.reportValidity();
+      return;
+    }
+    setWaitlistEnabled(false);
     try {
-      if (btn) btn.disabled = true;
-      await api("/api/v1/waitlist", { method: "POST", body: JSON.stringify({ email: $("waitlist-email").value }) });
-      track("join_waitlist", { placement: "hero" });
-      flash($("waitlist-flash"), "You're on the list. We'll write when it's ready.", "ok");
-      $("waitlist-email").value = "";
-    } catch (err) {
-      flash($("waitlist-flash"), err.message);
+      const hosted = isHostedPublicSite();
+      const url = hosted ? "https://app.syncidian.com/api/v1/waitlist" : "/api/v1/waitlist";
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+        credentials: hosted ? "omit" : "same-origin",
+      });
+      if (res.ok) {
+        track("join_waitlist", { placement: "hero" });
+        flash($("waitlist-flash"), "You're on the list. We'll write when it's ready.", "ok");
+        if (waitlistEmail) waitlistEmail.value = "";
+        return;
+      }
+      if (res.status === 400) {
+        flash($("waitlist-flash"), "Enter a valid email.");
+        return;
+      }
+      if (res.status === 429) {
+        flash($("waitlist-flash"), "Try again later.");
+        return;
+      }
+      flash($("waitlist-flash"), "Reconnect to join the waitlist.");
+    } catch {
+      flash($("waitlist-flash"), "Reconnect to join the waitlist.");
     } finally {
-      if (btn) btn.disabled = false;
+      if (navigator.onLine) setWaitlistEnabled(true);
     }
   });
 }
