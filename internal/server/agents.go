@@ -125,7 +125,7 @@ func (s *Server) handleRobots(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleSitemap(w http.ResponseWriter, r *http.Request) {
 	origin := s.publicOrigin(r)
-	paths := []string{"/", "/auth.md", "/openapi.json", "/.well-known/mcp/server-card.json", "/.well-known/api-catalog", "/assets/obsidian.zip"}
+	paths := []string{"/", "/pricing", "/auth.md", "/openapi.json", "/.well-known/mcp/server-card.json", "/.well-known/api-catalog", "/assets/obsidian.zip"}
 	var b strings.Builder
 	b.WriteString(`<?xml version="1.0" encoding="UTF-8"?>` + "\n")
 	b.WriteString(`<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">` + "\n")

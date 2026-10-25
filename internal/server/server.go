@@ -164,6 +164,12 @@ func (s *Server) Handler() http.Handler {
 			}
 			http.ServeFileFS(w, r, static, "index.html")
 		})
+		mux.HandleFunc("GET /pricing", func(w http.ResponseWriter, r *http.Request) {
+			http.ServeFileFS(w, r, static, "pricing.html")
+		})
+		mux.HandleFunc("GET /pricing/{$}", func(w http.ResponseWriter, r *http.Request) {
+			http.ServeFileFS(w, r, static, "pricing.html")
+		})
 		admin := s.adminPath()
 		mux.HandleFunc("GET "+admin, serveHTML)
 		mux.HandleFunc("GET "+admin+"/{$}", serveHTML)

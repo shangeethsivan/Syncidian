@@ -276,6 +276,7 @@ func NormalizeAdminPath(raw string) string {
 	reserved := []string{
 		"/api", "/assets", "/mcp", "/health", "/ready", "/auth.md",
 		"/openapi.json", "/robots.txt", "/sitemap.xml", "/favicon.ico",
+		"/pricing",
 	}
 	for _, r := range reserved {
 		if lower == r {
