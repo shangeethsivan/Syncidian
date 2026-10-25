@@ -71,7 +71,7 @@ func TestLandingHasRailwayDeploy(t *testing.T) {
 		t.Fatal(err)
 	}
 	html := string(b)
-	const deploy = `https://railway.com/new/template?template=https://github.com/shangeethsivan/Syncidian`
+	const deploy = `https://railway.com/new/template/earnest-empathy`
 	if !strings.Contains(html, deploy) {
 		t.Fatal("landing is missing the Railway one-click deploy URL")
 	}
@@ -90,5 +90,33 @@ func TestLandingHasRailwayDeploy(t *testing.T) {
 	}
 	if !strings.Contains(string(md), deploy) {
 		t.Fatal("landing markdown is missing the Railway one-click deploy URL")
+	}
+	if strings.Contains(html, "template=https://github.com/shangeethsivan/Syncidian") {
+		t.Fatal("landing still uses the GitHub template query that opens an empty Railway project")
+	}
+}
+
+func TestLandingHasPostHogWithoutGA(t *testing.T) {
+	b, err := FS.ReadFile("static/index.html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	html := string(b)
+	if !strings.Contains(html, "phc_tjUodg7vCd7qxPwtxzUgh4yErD8Vy9HNwTPKRXyA6NC9") {
+		t.Fatal("landing is missing the PostHog project key")
+	}
+	if !strings.Contains(html, "https://us.i.posthog.com") {
+		t.Fatal("landing is missing the PostHog US host")
+	}
+	if !strings.Contains(html, "initPostHog") || !strings.Contains(html, "window.posthog.capture") {
+		t.Fatal("landing is missing PostHog init or capture")
+	}
+	if strings.Contains(html, `if (typeof window.gtag !== "function") return;`) {
+		t.Fatal("track must still send PostHog events when ga_id is empty")
+	}
+	for _, name := range []string{"click_discord", "click_github", "click_railway", "click_github_signin", "click_waitlist"} {
+		if !strings.Contains(html, `"`+name+`"`) {
+			t.Fatalf("landing is missing CTA %s", name)
+		}
 	}
 }

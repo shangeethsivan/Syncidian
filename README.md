@@ -35,7 +35,7 @@ docker run -d \
 
 **Self-host Syncidian for free.** A managed service is planned at $1/month; it is not available yet.
 
-[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/new/template?template=https://github.com/shangeethsivan/Syncidian&utm_medium=integration&utm_source=button&utm_campaign=syncidian)
+[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/new/template/earnest-empathy?utm_medium=integration&utm_source=button&utm_campaign=syncidian)
 
 One click deploys this repo on [Railway](https://railway.com). Attach a volume at `/data` before you create the admin so users survive redeploys. Details: [Deploy on Railway](#deploy-on-railway).
 
@@ -71,7 +71,7 @@ Data is stored in `./data` by default (`SYNCIDIAN_DATA` to change it). Docker Co
 
 ### Deploy on Railway
 
-[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/new/template?template=https://github.com/shangeethsivan/Syncidian&utm_medium=integration&utm_source=button&utm_campaign=syncidian)
+[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/new/template/earnest-empathy?utm_medium=integration&utm_source=button&utm_campaign=syncidian)
 
 Users, GitHub App credentials, and vault files live in SQLite on disk. Railway’s container filesystem is **empty on every deploy** unless you attach a volume.
 
