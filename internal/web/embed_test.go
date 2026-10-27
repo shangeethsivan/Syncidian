@@ -162,3 +162,29 @@ func TestPricingPageIsStaticTwoDollars(t *testing.T) {
 		t.Fatal("homepage Railway hrefs must use the earnest-empathy template")
 	}
 }
+
+func TestHomepageWaitlistPostsToHostedApp(t *testing.T) {
+	b, err := FS.ReadFile("static/index.html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	html := string(b)
+	if !strings.Contains(html, `id="waitlist-form"`) || !strings.Contains(html, `id="waitlist-email"`) {
+		t.Fatal("homepage must keep Join the waitlist")
+	}
+	if !strings.Contains(html, `https://app.syncidian.com/api/v1/waitlist`) {
+		t.Fatal("marketing waitlist must POST to the hosted app list")
+	}
+	if strings.Contains(html, `api("/api/v1/waitlist", { method: "POST"`) {
+		t.Fatal("marketing waitlist must not dual-write same-origin /api/v1/waitlist")
+	}
+	if !strings.Contains(html, `credentials: hosted ? "omit"`) {
+		t.Fatal("marketing waitlist must omit cookies on the hosted POST")
+	}
+	if !strings.Contains(html, `navigator.onLine`) {
+		t.Fatal("waitlist must not POST while offline")
+	}
+	if !strings.Contains(html, `Enter a valid email.`) || !strings.Contains(html, `Try again later.`) {
+		t.Fatal("waitlist must map 400 and 429 without raw upstream text")
+	}
+}
